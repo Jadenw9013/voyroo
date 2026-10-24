@@ -109,7 +109,7 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
               <button
                 type="button"
                 onClick={() => go({ tab: "trip" })}
-                className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-white/15 bg-[#131728]/80 px-3 py-1.5 text-xs font-semibold text-[#f2f4fc] backdrop-blur-md transition-colors hover:bg-[#1b2138]"
+                className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-white/15 bg-[#131728]/80 px-3 py-1.5 text-xs font-semibold text-[#f2f4fc] backdrop-blur-md transition-colors hover:bg-[#1b2138]"
               >
                 <Icon name="image" className="size-3.5 text-[#a78bfa]" />
                 Edit Trip
@@ -129,7 +129,7 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
                     type="button"
                     onClick={() => go({ tab: "trip" })}
                     aria-label={`People: ${people.join(", ")}`}
-                    className="flex shrink-0 -space-x-2 rounded-full bg-[#131728]/80 p-1 pr-2.5 backdrop-blur-md transition-colors hover:bg-[#1b2138]"
+                    className="flex min-h-10 shrink-0 items-center -space-x-2 rounded-full bg-[#131728]/80 p-1 pr-3 backdrop-blur-md transition-colors hover:bg-[#1b2138]"
                   >
                     {people.slice(0, 5).map((p) => (
                       <span key={p} className="rounded-full ring-2 ring-[#0f1322]">
@@ -144,7 +144,7 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
                     <button
                       type="button"
                       onClick={onShare}
-                      className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-white/15 bg-[#1b2138]/90 px-3.5 py-1 text-xs font-bold text-white backdrop-blur-md transition-colors hover:bg-[#252d4a]"
+                      className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-white/15 bg-[#1b2138]/90 px-3.5 py-1.5 text-xs font-bold text-white backdrop-blur-md transition-colors hover:bg-[#252d4a]"
                     >
                       <Icon name="users" className="size-3.5 text-[#a78bfa]" />
                       Invite
@@ -153,7 +153,7 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="grid grid-cols-1 gap-2 min-[400px]:flex min-[400px]:flex-wrap min-[400px]:items-center">
                 <button
                   type="button"
                   onClick={() =>
@@ -281,16 +281,16 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
         {/* Left Column: Main Tabpanel + Ask Voyroo Card */}
         <div className="flex min-w-0 flex-col gap-6" role="tabpanel">
-          <div className="flex flex-col gap-6 rounded-3xl border border-line bg-surface p-4 shadow-lift sm:p-6">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-xl font-extrabold tracking-tight">
+          <div className="flex flex-col gap-5 rounded-3xl border border-line bg-surface p-3.5 shadow-lift sm:gap-6 sm:p-6">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="min-w-0 truncate text-lg font-extrabold tracking-tight sm:text-xl">
                 {section === "days" ? "Upcoming Itinerary" : section === "ideas" ? "Saved Places & Ideas" : "Saved Posts"}
               </h2>
               {section === "days" && (
                 <button
                   type="button"
                   onClick={() => go({ tab: "today" })}
-                  className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line bg-sunken px-3.5 text-xs font-bold text-ink transition-colors hover:border-accent"
+                  className="inline-flex min-h-10 shrink-0 items-center gap-1 rounded-full border border-line bg-sunken px-3 text-xs font-bold whitespace-nowrap text-ink transition-colors hover:border-accent"
                 >
                   Day-by-Day View
                   <Icon name="chevronRight" className="size-3.5" />
@@ -375,7 +375,7 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
           {/* Ask Voyroo Card (matching bottom-left of reference image) */}
           <section
             aria-label="Ask Voyroo"
-            className="relative overflow-hidden rounded-3xl border border-line bg-surface p-5 shadow-lift"
+            className="relative overflow-hidden rounded-3xl border border-line bg-surface p-4 shadow-lift sm:p-5"
           >
             <div
               aria-hidden="true"
@@ -403,12 +403,12 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
                   onChange={(e) => setAskText(e.target.value)}
                   placeholder="Plan, find, or ask anything about your trip…"
                   aria-label="Ask Voyroo anything about your trip"
-                  className="min-h-10 min-w-0 flex-1 bg-transparent text-sm text-ink placeholder:text-muted focus:outline-none"
+                  className="min-h-11 min-w-0 flex-1 bg-transparent text-base text-ink placeholder:text-muted focus:outline-none sm:text-sm"
                 />
                 <button
                   type="submit"
                   aria-label="Send to Voyroo"
-                  className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent text-on-accent transition-transform active:scale-95"
+                  className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-accent text-on-accent transition-transform active:scale-95"
                 >
                   <Icon name="send" className="size-4" />
                 </button>
@@ -425,7 +425,7 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
                     key={labelText}
                     type="button"
                     onClick={() => compose({ ask: true, text: prompt })}
-                    className="min-h-9 rounded-full border border-line bg-sunken/70 px-3.5 py-1.5 text-xs font-semibold text-muted transition-colors hover:border-accent hover:bg-accent-soft hover:text-accent"
+                    className="min-h-10 rounded-full border border-line bg-sunken/70 px-3.5 py-1.5 text-xs font-semibold text-muted transition-colors hover:border-accent hover:bg-accent-soft hover:text-accent"
                   >
                     {labelText}
                   </button>

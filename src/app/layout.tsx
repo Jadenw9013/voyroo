@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   applicationName: PRODUCT_NAME,
   description: PRODUCT_DESCRIPTION,
   robots: { index: false, follow: false },
-  appleWebApp: { capable: true, title: PRODUCT_NAME, statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: PRODUCT_NAME, statusBarStyle: "black-translucent" },
   openGraph: { title: PRODUCT_NAME, description: PRODUCT_DESCRIPTION, siteName: PRODUCT_NAME, type: "website", images: [{ url: "/brand/voyroo-social.png", width: 1200, height: 630, alt: "Voyroo — A little further, together." }] },
   icons: {
     icon: [{ url: "/brand/voyroo-mark.svg", type: "image/svg+xml" }, { url: "/icon-192.png?v=voyroo", sizes: "192x192", type: "image/png" }],
@@ -36,8 +36,8 @@ export const viewport: Viewport = {
   // Android: the keyboard resizes the page instead of covering it.
   interactiveWidget: "resizes-content",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f1f3f2" },
-    { media: "(prefers-color-scheme: dark)", color: "#0f1214" },
+    { media: "(prefers-color-scheme: light)", color: "#f5f6fb" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b0d17" },
   ],
 };
 

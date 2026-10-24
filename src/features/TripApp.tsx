@@ -53,7 +53,7 @@ function Screens({ tripId, serverNow }: { tripId: string; serverNow: number }) {
   }, [compose]);
 
   return (
-    <div className="trip-app-shell min-h-dvh w-full pt-16 md:pl-56 lg:pl-64">
+    <div className="trip-app-shell min-h-dvh w-full pt-[calc(4rem+env(safe-area-inset-top))] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] md:pl-56 lg:pl-64">
       <TopBar onShare={() => setSharing(true)} onGo={go} />
       <Sidebar active={active} view={view} onPick={(t) => go({ tab: t } as View)} onGo={go} onShare={() => setSharing(true)} />
       <main id="main" className="mx-auto w-full max-w-6xl min-w-0 pb-[calc(6rem+env(safe-area-inset-bottom))] md:px-6 md:pt-4 md:pb-16">
@@ -78,7 +78,7 @@ function AddButton({ big }: { big?: boolean }) {
       onClick={() => compose({})}
       aria-label="Add or ask"
       className={`flex items-center justify-center gap-2 rounded-full bg-accent font-bold text-on-accent shadow-lift transition-transform active:scale-95 ${
-        big ? "size-14 ring-4 ring-canvas" : "min-h-10 px-4 text-sm"
+        big ? "size-14 ring-4 ring-canvas" : "min-h-11 px-4 text-sm"
       }`}
     >
       <Icon name="plus" className={big ? "size-7" : "size-4"} />
@@ -108,7 +108,10 @@ function BottomBar({ active, onPick }: { active: Tab; onPick: (t: Tab) => void }
     </li>
   );
   return (
-    <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden">
+    <nav
+      aria-label="Main"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] backdrop-blur-xl md:hidden"
+    >
       <ul className="mx-auto flex max-w-lg items-center px-2">
         {left.map(tab)}
         <li className="flex flex-1 justify-center">
@@ -254,8 +257,8 @@ function TopBar({ onShare, onGo }: { onShare: () => void; onGo: (v: View) => voi
   const { me } = useTrip();
   const compose = useCompose();
   return (
-    <header className="fixed inset-x-0 top-0 z-40 h-16 border-b border-line bg-surface/90 backdrop-blur-xl">
-      <div className="flex h-full w-full items-center justify-between gap-2 px-3 sm:px-5">
+    <header className="fixed inset-x-0 top-0 z-40 h-[calc(4rem+env(safe-area-inset-top))] border-b border-line bg-surface/90 pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] backdrop-blur-xl">
+      <div className="flex h-16 w-full items-center justify-between gap-2 px-3 sm:px-5">
         <div className="flex items-center gap-4">
           <Brand />
         </div>
@@ -263,7 +266,7 @@ function TopBar({ onShare, onGo }: { onShare: () => void; onGo: (v: View) => voi
         <button
           type="button"
           onClick={() => compose({})}
-          className="hidden max-w-md flex-1 items-center gap-2.5 rounded-full border border-line bg-sunken/80 px-4 py-2 text-left text-sm text-muted transition-colors hover:border-accent/50 hover:text-ink lg:flex"
+          className="hidden min-h-11 max-w-md flex-1 items-center gap-2.5 rounded-full border border-line bg-sunken/80 px-4 py-2 text-left text-sm text-muted transition-colors hover:border-accent/50 hover:text-ink lg:flex"
         >
           <Icon name="search" className="size-4 text-muted" />
           <span className="truncate">Search trip, add places, or ask Voyroo…</span>
@@ -274,7 +277,7 @@ function TopBar({ onShare, onGo }: { onShare: () => void; onGo: (v: View) => voi
             type="button"
             aria-label="Share trip"
             onClick={onShare}
-            className="flex min-h-10 items-center gap-1.5 rounded-xl border border-line bg-sunken/60 px-2.5 text-xs font-semibold text-ink transition-colors hover:bg-sunken sm:px-3 sm:text-sm"
+            className="flex min-h-11 items-center gap-1.5 rounded-xl border border-line bg-sunken/60 px-2.5 text-xs font-semibold text-ink transition-colors hover:bg-sunken sm:px-3 sm:text-sm"
           >
             <Icon name="share" className="size-4 text-accent" />
             <span className="hidden min-[360px]:inline">Share trip</span>
@@ -282,7 +285,7 @@ function TopBar({ onShare, onGo }: { onShare: () => void; onGo: (v: View) => voi
           <Link
             href="/?new=1"
             prefetch={false}
-            className="flex min-h-10 items-center gap-1 rounded-xl bg-accent-soft px-2.5 text-xs font-bold text-accent transition-colors hover:bg-accent hover:text-on-accent sm:px-3 sm:text-sm"
+            className="flex min-h-11 items-center gap-1 rounded-xl bg-accent-soft px-2.5 text-xs font-bold text-accent transition-colors hover:bg-accent hover:text-on-accent sm:px-3 sm:text-sm"
           >
             <Icon name="plus" className="size-4" />
             New trip
@@ -294,7 +297,7 @@ function TopBar({ onShare, onGo }: { onShare: () => void; onGo: (v: View) => voi
             type="button"
             onClick={() => onGo({ tab: "trip" })}
             aria-label={`Signed in as ${me}`}
-            className="hidden rounded-full ring-2 ring-line transition-shadow hover:ring-accent sm:inline-flex"
+            className="hidden min-h-11 min-w-11 items-center justify-center rounded-full ring-2 ring-line transition-shadow hover:ring-accent sm:inline-flex"
           >
             <Avatar name={me} />
           </button>
