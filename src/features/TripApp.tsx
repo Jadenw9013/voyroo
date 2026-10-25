@@ -260,14 +260,14 @@ function Sidebar({
   );
 }
 
-/** Top header bar with Brand, quick search/ask bar on desktop, Share trip, New trip, and Add or ask. */
+/** Top header bar with Brand, quick search/ask bar on desktop, and sleek circular actions on mobile. */
 function TopBar({ onShare, onGo }: { onShare: () => void; onGo: (v: View) => void }) {
   const { me } = useTrip();
   const compose = useCompose();
   return (
-    <header className="fixed inset-x-0 top-0 z-40 h-[calc(4rem+env(safe-area-inset-top))] border-b border-line bg-surface/90 pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] backdrop-blur-xl">
-      <div className="flex h-16 w-full items-center justify-between gap-2 px-3 sm:px-5">
-        <div className="flex items-center gap-4">
+    <header className="fixed inset-x-0 top-0 z-40 h-[calc(3.75rem+env(safe-area-inset-top))] border-b border-line bg-surface/90 pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] backdrop-blur-xl sm:h-[calc(4rem+env(safe-area-inset-top))]">
+      <div className="flex h-15 w-full items-center justify-between gap-2 px-3 sm:h-16 sm:px-5">
+        <div className="flex items-center gap-3">
           <Brand />
         </div>
 
@@ -283,20 +283,29 @@ function TopBar({ onShare, onGo }: { onShare: () => void; onGo: (v: View) => voi
         <div className="flex items-center gap-1.5 sm:gap-2.5">
           <button
             type="button"
+            aria-label="Ask Voyroo"
+            onClick={() => compose({ ask: true, text: "" })}
+            className="flex size-10 items-center justify-center rounded-full border border-line bg-sunken/70 text-accent transition-colors hover:bg-sunken lg:hidden"
+          >
+            <Icon name="sparkles" className="size-4" />
+          </button>
+          <button
+            type="button"
             aria-label="Share trip"
             onClick={onShare}
-            className="flex min-h-11 items-center gap-1.5 rounded-xl border border-line bg-sunken/60 px-2.5 text-xs font-semibold text-ink transition-colors hover:bg-sunken sm:px-3 sm:text-sm"
+            className="flex size-10 items-center justify-center gap-1.5 rounded-full border border-line bg-sunken/70 text-xs font-semibold text-ink transition-colors hover:bg-sunken sm:min-h-11 sm:w-auto sm:rounded-xl sm:px-3 sm:text-sm"
           >
             <Icon name="share" className="size-4 text-accent" />
-            <span className="hidden min-[360px]:inline">Share trip</span>
+            <span className="hidden sm:inline">Share trip</span>
           </button>
           <Link
             href="/?new=1"
             prefetch={false}
-            className="flex min-h-11 items-center gap-1 rounded-xl bg-accent-soft px-2.5 text-xs font-bold text-accent transition-colors hover:bg-accent hover:text-on-accent sm:px-3 sm:text-sm"
+            aria-label="New trip"
+            className="flex size-10 items-center justify-center gap-1 rounded-full border border-line bg-sunken/70 text-xs font-bold text-ink transition-colors hover:bg-accent hover:text-on-accent sm:min-h-11 sm:w-auto sm:rounded-xl sm:border-transparent sm:bg-accent-soft sm:px-3 sm:text-sm sm:text-accent"
           >
             <Icon name="plus" className="size-4" />
-            New trip
+            <span className="sr-only sm:not-sr-only">New trip</span>
           </Link>
           <div className="hidden md:block">
             <AddButton />
@@ -305,9 +314,9 @@ function TopBar({ onShare, onGo }: { onShare: () => void; onGo: (v: View) => voi
             type="button"
             onClick={() => onGo({ tab: "trip" })}
             aria-label={`Signed in as ${me}`}
-            className="hidden min-h-11 min-w-11 items-center justify-center rounded-full ring-2 ring-line transition-shadow hover:ring-accent sm:inline-flex"
+            className="inline-flex size-10 items-center justify-center rounded-full ring-2 ring-line transition-shadow hover:ring-accent sm:min-h-11 sm:min-w-11"
           >
-            <Avatar name={me} />
+            <Avatar name={me} size="sm" />
           </button>
         </div>
       </div>

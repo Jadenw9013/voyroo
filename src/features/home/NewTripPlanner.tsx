@@ -138,12 +138,12 @@ export function NewTripPlanner({ account, initialName, initialSnapshot }: { acco
         {draft.destination && (
           <div className="preview-photo">
             <Image
-              src={`/api/photo?title=${encodeURIComponent(draft.name || draft.destination)}&dest=${encodeURIComponent(draft.destination)}&kind=destination`}
+              src={`/api/photo?title=${encodeURIComponent(draft.name || draft.destination)}&dest=${encodeURIComponent(draft.destination)}&kind=destination&v=2`}
               alt=""
               fill
               sizes="(max-width: 850px) 100vw, 420px"
               unoptimized
-              className="object-cover"
+              className="size-full object-cover object-center"
             />
             <span className="preview-photo-caption">
               <Icon name="pin" className="size-4" />

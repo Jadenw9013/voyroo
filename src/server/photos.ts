@@ -136,9 +136,9 @@ async function refineQueryWithGemini(params: PhotoParams, fallbackQuery: string)
 async function searchWebPhotoUrls(query: string): Promise<string[]> {
   const urls: string[] = [];
 
-  // 1. Bing Image Search async endpoint (returns high-res mm.bing.net CDN thumbnails + original murls)
+  // 1. Bing Image Search async endpoint (returns unpadded full-bleed mm.bing.net CDN thumbnails + original murls)
   try {
-    const bingUrl = `https://www.bing.com/images/async?q=${encodeURIComponent(query)}&first=1&count=8&adlt=strict&qft=+filterui:aspect-wide+filterui:imagesize-large`;
+    const bingUrl = `https://www.bing.com/images/async?q=${encodeURIComponent(query)}&first=1&count=8&adlt=strict`;
     const res = await fetch(bingUrl, {
       headers: {
         "User-Agent":
@@ -150,7 +150,7 @@ async function searchWebPhotoUrls(query: string): Promise<string[]> {
     if (res.ok) {
       const html = await res.text();
       for (const match of html.matchAll(/turl&quot;:&quot;(https:\/\/[^&]+?)&amp;/g)) {
-        urls.push(`${match[1]}&w=800&h=600&c=7`);
+        urls.push(match[1]);
       }
       for (const match of html.matchAll(/murl&quot;:&quot;(https:\/\/[^&]+?\.(?:jpg|jpeg|png|webp))&quot;/gi)) {
         urls.push(match[1]);
@@ -220,7 +220,7 @@ export async function getContextualPhoto(params: PhotoParams): Promise<CachedPho
   if (isMock()) return null;
 
   const baseQuery = cleanPhotoQuery(params);
-  const cacheKey = `${baseQuery}::${params.idx ?? 0}`;
+  const cacheKey = `v2::${baseQuery}::${params.idx ?? 0}`;
   const hit = photoCache.get(cacheKey);
   if (hit && Date.now() - hit.at < PHOTO_TTL_MS) {
     return hit;

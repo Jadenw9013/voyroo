@@ -363,6 +363,7 @@
   color: var(--muted);
   padding: 0 12px;
   border-radius: 12px;
+  white-space: nowrap;
   transition: background 0.15s, color 0.15s;
 }
 .workspace-nav:hover {
@@ -1067,13 +1068,16 @@
 }
 .account-control {
   position: relative;
+  flex-shrink: 0;
 }
 .google-sign-in {
-  display: flex;
-  min-height: 43px;
-  gap: 8px;
+  display: inline-flex;
+  flex-shrink: 0;
+  white-space: nowrap;
+  min-height: 40px;
+  gap: 7px;
   align-items: center;
-  padding: 9px 14px;
+  padding: 8px 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--surface);
@@ -1185,32 +1189,38 @@
     font-size: 12px;
     padding: 0 8px;
   }
+  a.workspace-nav[href="#your-trips"] {
+    display: none;
+  }
   .google-sign-in {
     padding: 8px 10px;
     font-size: 11px;
     gap: 6px;
+    white-space: nowrap;
   }
   .account-name {
     display: none;
   }
   .workspace-intro {
-    padding-bottom: 22px;
+    padding-bottom: 14px;
   }
   .workspace-intro h1 {
-    letter-spacing: -1.4px;
-    font-size: 34px;
+    letter-spacing: -0.9px;
+    font-size: 26px;
+    line-height: 1.15;
   }
   .workspace-intro > p:last-child {
-    font-size: 14px;
-    max-width: 300px;
-    line-height: 1.65;
+    font-size: 13px;
+    max-width: 100%;
+    line-height: 1.5;
+    margin-top: 6px;
   }
   .welcome-line {
-    font-size: 12px;
-    margin-bottom: 12px;
+    font-size: 11px;
+    margin-bottom: 6px;
   }
   .planner-heading {
-    padding: 15px 16px;
+    padding: 12px 14px;
     gap: 9px;
   }
   .planner-heading p {
@@ -1228,38 +1238,49 @@
     font-size: 11px;
   }
   .planner-messages {
-    padding: 18px;
-    min-height: 185px;
-    max-height: 420px;
+    padding: 14px;
+    min-height: 130px;
+    max-height: 360px;
   }
   .planner-opening {
-    padding-top: 6px;
+    padding-top: 2px;
   }
   .planner-opening .opening-wave {
     display: none;
   }
   .planner-opening h3 {
-    font-size: 22px;
+    font-size: 18px;
   }
   .planner-opening p {
-    font-size: 14px;
+    font-size: 13px;
   }
   .planner-input-area {
-    padding: 0 15px 16px;
+    padding: 0 14px 14px;
+  }
+  .planner-suggestions {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 10px;
+  }
+  .planner-suggestions::-webkit-scrollbar {
+    display: none;
   }
   .planner-suggestions button {
+    flex-shrink: 0;
+    white-space: nowrap;
     font-size: 11px;
-    padding: 7px 11px;
+    padding: 7px 12px;
   }
   .planner-composer {
-    padding: 12px;
+    padding: 11px 12px;
   }
   .composer-bottom > span {
     max-width: 150px;
     font-size: 10px;
   }
   .planner-save-status {
-    line-height: 1.6;
+    line-height: 1.5;
     font-size: 10px;
   }
   .planner-preview {

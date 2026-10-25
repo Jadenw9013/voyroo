@@ -48,10 +48,10 @@ export function Today({ day: chosen, go, serverNow }: { day?: string; go: (v: Vi
   ];
 
   return (
-    <div className="flex flex-col gap-5 px-3 pt-3 sm:px-4 md:px-0">
+    <div className="flex flex-col gap-4 px-3 pt-2.5 sm:gap-5 sm:px-4 sm:pt-3 md:px-0">
       {/* Trip Hero Card (matching mobile & desktop reference image) */}
-      <header className="flex flex-col gap-4">
-        <div className="relative overflow-hidden rounded-3xl border border-line bg-[#0f1322] p-5 text-[#f2f4fc] shadow-lift sm:p-6">
+      <header className="flex flex-col gap-3.5 sm:gap-4">
+        <div className="relative overflow-hidden rounded-3xl border border-line bg-[#0f1322] p-4 text-[#f2f4fc] shadow-lift sm:p-6">
           <div className="cover-photo absolute inset-0">
             <Image
               src={coverSrc}
@@ -60,13 +60,13 @@ export function Today({ day: chosen, go, serverNow }: { day?: string; go: (v: Vi
               priority
               sizes="(max-width: 768px) 100vw, 72rem"
               unoptimized={coverSrc.startsWith("http") || coverSrc.startsWith("/api/")}
-              className="object-cover opacity-60"
+              className="size-full object-cover object-center opacity-65"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#0b0d17] via-[#0b0d17]/65 to-transparent" />
-            <div className="absolute inset-0 bg-gradient-to-r from-[#0b0d17]/80 via-[#0b0d17]/35 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#0b0d17] via-[#0b0d17]/60 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-r from-[#0b0d17]/80 via-[#0b0d17]/30 to-transparent" />
           </div>
 
-          <div className="relative z-10 flex flex-col gap-4">
+          <div className="relative z-10 flex flex-col gap-3 sm:gap-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-[#cbd5f5]">
@@ -105,18 +105,18 @@ export function Today({ day: chosen, go, serverNow }: { day?: string; go: (v: Vi
         </div>
 
         {/* Circular Quick-Action Pills (matching mobile mockup in reference image) */}
-        <div className="grid grid-cols-5 gap-2 py-1 md:hidden">
+        <div className="grid grid-cols-5 gap-1.5 pt-0.5 md:hidden">
           {quickCircles.map((q) => (
             <button
               key={q.label}
               type="button"
               onClick={q.onClick}
-              className="flex flex-col items-center gap-1.5 text-center"
+              className="flex flex-col items-center gap-1 text-center"
             >
               <span className={`flex size-12 items-center justify-center rounded-full border border-line ${q.tone}`}>
                 <Icon name={q.icon} className="size-5" />
               </span>
-              <span className="truncate text-[11px] font-semibold text-muted">{q.label}</span>
+              <span className="truncate text-[11px] font-semibold text-ink">{q.label}</span>
             </button>
           ))}
         </div>
@@ -131,9 +131,9 @@ export function Today({ day: chosen, go, serverNow }: { day?: string; go: (v: Vi
         />
       </header>
 
-      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1.3fr)]">
+      <div className="grid grid-cols-1 items-start gap-4 sm:gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1.3fr)]">
         {/* Highlighted Ticket + Tonight's Stay + Before Trip */}
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3.5 sm:gap-4">
           {ticketRow && (
             <Ticket
               row={ticketRow}
@@ -154,10 +154,10 @@ export function Today({ day: chosen, go, serverNow }: { day?: string; go: (v: Vi
 
           {when === "before" && day === trip.startDate && <BeforeTrip onTodo={() => go({ tab: "todo" })} />}
 
-          {/* Day's Google Map Card */}
+          {/* Day's Google Map Card (shown in left column on desktop) */}
           <section
             aria-label="Day map"
-            className="flex flex-col gap-3 rounded-3xl border border-line bg-surface p-4 shadow-lift sm:p-5"
+            className="hidden flex-col gap-3 rounded-3xl border border-line bg-surface p-4 shadow-lift sm:p-5 lg:flex"
           >
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -205,39 +205,91 @@ export function Today({ day: chosen, go, serverNow }: { day?: string; go: (v: Vi
           </section>
         </div>
 
-        {/* Selected Day Schedule Card */}
-        <div className="flex flex-col gap-4 rounded-3xl border border-line bg-surface p-5 shadow-lift">
-          <div className="flex items-baseline justify-between gap-3 border-b border-line pb-3">
-            <h2 className="text-xl font-extrabold">
-              {weekday(day, true)}, {monthDay(day)}
-              {isToday && <span className="ml-2 align-middle text-sm font-bold text-accent">Today</span>}
-            </h2>
-            <button
-              type="button"
-              onClick={() => compose({ day })}
-              className="inline-flex min-h-9 items-center gap-1 rounded-full bg-accent-soft px-3 text-xs font-bold text-accent transition-colors hover:bg-accent hover:text-on-accent"
-            >
-              <Icon name="plus" className="size-3.5" />
-              Add to {weekday(day)}
-            </button>
+        {/* Selected Day Schedule Card + Mobile Day Map */}
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3.5 rounded-3xl border border-line bg-surface p-4 shadow-lift sm:gap-4 sm:p-5">
+            <div className="flex items-baseline justify-between gap-3 border-b border-line pb-3">
+              <h2 className="text-lg font-extrabold sm:text-xl">
+                {weekday(day, true)}, {monthDay(day)}
+                {isToday && <span className="ml-2 align-middle text-sm font-bold text-accent">Today</span>}
+              </h2>
+              <button
+                type="button"
+                onClick={() => compose({ day })}
+                className="inline-flex min-h-9 items-center gap-1 rounded-full bg-accent-soft px-3 text-xs font-bold text-accent transition-colors hover:bg-accent hover:text-on-accent"
+              >
+                <Icon name="plus" className="size-3.5" />
+                Add to {weekday(day)}
+              </button>
+            </div>
+
+            <section aria-label={`Everything on ${formatDay(day)}`}>
+              {rows.length === 0 ? (
+                <p className="py-4 text-base text-muted">Nothing planned yet for this day.</p>
+              ) : (
+                <ol className="flex flex-col gap-1.5">
+                  {timed.map((r) => (
+                    <ItemRow key={r.key} row={r} item={r.item} onOpen={() => open(r.item)} />
+                  ))}
+                  {untimed.map((r) => (
+                    <ItemRow key={r.key} row={r} item={r.item} onOpen={() => open(r.item)} />
+                  ))}
+                </ol>
+              )}
+            </section>
+
+            <SyncLine />
           </div>
 
-          <section aria-label={`Everything on ${formatDay(day)}`}>
-            {rows.length === 0 ? (
-              <p className="py-4 text-base text-muted">Nothing planned yet for this day.</p>
-            ) : (
-              <ol className="flex flex-col gap-1.5">
-                {timed.map((r) => (
-                  <ItemRow key={r.key} row={r} item={r.item} onOpen={() => open(r.item)} />
-                ))}
-                {untimed.map((r) => (
-                  <ItemRow key={r.key} row={r} item={r.item} onOpen={() => open(r.item)} />
-                ))}
-              </ol>
-            )}
+          {/* Mobile Day Map (placed right below the day's schedule on mobile so schedule items stay above the fold) */}
+          <section
+            aria-label="Mobile day map"
+            className="flex flex-col gap-3 rounded-3xl border border-line bg-surface p-4 shadow-lift lg:hidden"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="flex size-8 items-center justify-center rounded-xl bg-accent-soft text-accent">
+                  <Icon name="pin" className="size-4" />
+                </span>
+                <div>
+                  <h2 className="text-sm font-extrabold">{weekday(day)} Map</h2>
+                  <p className="text-xs text-muted">
+                    {ticketRow?.item.place?.name || stay?.place?.name || trip.destination}
+                  </p>
+                </div>
+              </div>
+              <a
+                href={
+                  routeUrl(
+                    rows.map((r) => r.item),
+                    trip,
+                  ) ?? mapsSearchUrl(ticketRow?.item.place?.name || stay?.place?.name || trip.destination)
+                }
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line bg-sunken px-3 text-xs font-bold text-accent hover:bg-accent-soft"
+              >
+                Google Maps
+                <Icon name="external" className="size-3.5" />
+              </a>
+            </div>
+            <div className="h-44 w-full overflow-hidden rounded-2xl border border-line bg-[#0d1324]">
+              <iframe
+                src={mapsEmbedUrl(
+                  ticketRow?.item.place?.address ||
+                    ticketRow?.item.place?.name ||
+                    stay?.place?.address ||
+                    stay?.place?.name ||
+                    trip.destination,
+                  12,
+                )}
+                title={`Mobile Google Map for ${formatDay(day)}`}
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                className="size-full border-0 [filter:invert(90%)_hue-rotate(180deg)_brightness(95%)_contrast(92%)]"
+              />
+            </div>
           </section>
-
-          <SyncLine />
         </div>
       </div>
     </div>
@@ -272,7 +324,7 @@ function DayStrip({
     ref.current?.querySelector("[aria-current='date']")?.scrollIntoView({ block: "nearest", inline: "center" });
   }, [selected]);
   return (
-    <ul ref={ref} className="no-scrollbar flex gap-2 overflow-x-auto pb-1" aria-label="Trip days">
+    <ul ref={ref} className="no-scrollbar flex gap-1.5 overflow-x-auto pb-1 sm:gap-2" aria-label="Trip days">
       {days.map((d) => {
         const sel = d === selected;
         return (
@@ -282,14 +334,14 @@ function DayStrip({
               onClick={() => onPick(d)}
               aria-current={sel ? "date" : undefined}
               aria-label={`${weekday(d, true)} ${monthDay(d)}${d === today ? ", today" : ""}${noBed.has(d) ? ", nowhere to stay yet" : ""}`}
-              className={`flex h-16 w-13 flex-col items-center justify-center rounded-2xl border leading-none transition-colors ${
+              className={`flex h-15 w-12.5 flex-col items-center justify-center rounded-2xl border leading-none transition-colors sm:h-16 sm:w-13 ${
                 sel
                   ? "border-accent bg-accent text-on-accent shadow-lift"
                   : "border-line bg-surface text-ink hover:bg-sunken"
               } ${d === today && !sel ? "ring-2 ring-accent ring-inset" : ""}`}
             >
-              <span className="text-xs font-semibold">{weekday(d)}</span>
-              <span className="tnum mt-1 text-lg font-extrabold">{Number(d.slice(8))}</span>
+              <span className="text-[11px] font-semibold sm:text-xs">{weekday(d)}</span>
+              <span className="tnum mt-1 text-base font-extrabold sm:text-lg">{Number(d.slice(8))}</span>
               <span aria-hidden="true" className={`mt-0.5 size-1.5 rounded-full ${noBed.has(d) ? "bg-todo" : "bg-transparent"}`} />
             </button>
           </li>
@@ -310,15 +362,15 @@ function Ticket({ row, label, minutes, onOpen }: { row: Row; label: string; minu
   const c = item.contact;
   return (
     <section aria-label={label} className="overflow-hidden rounded-3xl bg-ticket text-on-ticket shadow-lift">
-      <button type="button" onClick={onOpen} className="flex w-full flex-col gap-1 px-5 pt-4 pb-5 text-left">
+      <button type="button" onClick={onOpen} className="flex w-full flex-col gap-0.5 px-4 pt-3.5 pb-4 text-left sm:gap-1 sm:px-5 sm:pt-4 sm:pb-5">
         <span className="flex items-baseline justify-between gap-3">
-          <span className="text-base font-bold">{label}</span>
-          {minutes !== null && minutes >= 0 && <span className="text-base font-semibold">in {formatDuration(minutes)}</span>}
+          <span className="text-sm font-bold sm:text-base">{label}</span>
+          {minutes !== null && minutes >= 0 && <span className="text-sm font-semibold sm:text-base">in {formatDuration(minutes)}</span>}
         </span>
-        <time className="tnum text-5xl leading-none font-bold tracking-tight">{row.when.time ? formatTime(row.when.time) : "Anytime"}</time>
-        {row.when.tz && row.when.tz !== trip.tz && <span className="text-sm font-semibold">{timeLabel(row.when, trip)?.replace(/^[\d:]+ [AP]M /, "")}</span>}
-        <span className="mt-2 text-xl leading-snug font-bold">{rowTitle(row)}</span>
-        {place && <span className="text-base">{place}</span>}
+        <time className="tnum text-3xl leading-none font-bold tracking-tight sm:text-5xl">{row.when.time ? formatTime(row.when.time) : "Anytime"}</time>
+        {row.when.tz && row.when.tz !== trip.tz && <span className="text-xs font-semibold sm:text-sm">{timeLabel(row.when, trip)?.replace(/^[\d:]+ [AP]M /, "")}</span>}
+        <span className="mt-1.5 text-lg leading-snug font-bold sm:mt-2 sm:text-xl">{rowTitle(row)}</span>
+        {place && <span className="text-sm sm:text-base">{place}</span>}
       </button>
       {(dir || c?.phone || c?.whatsapp || item.booking?.confirmation) && (
         <div className="perforation mx-5 flex flex-wrap gap-2 pt-4 pb-5">

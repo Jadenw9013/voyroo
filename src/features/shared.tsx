@@ -1,7 +1,7 @@
 "use client";
 
 import { rowVerb, type Row } from "@/domain/derive";
-import { isPost } from "@/domain/links";
+import { isPost, itemPhotoUrl } from "@/domain/links";
 import { formatDay, formatTime, zoneName } from "@/domain/time";
 import type { Item, Trip, When } from "@/domain/types";
 import { useTrip } from "@/client/store";
@@ -40,13 +40,13 @@ export function Marks({ item }: { item: Item }) {
       {item.booking?.state === "todo" && <StatusPill status="todo" />}
       {item.maybe && <StatusPill status="maybe" />}
       {posts > 0 && (
-        <span className="inline-flex items-center gap-1 text-sm text-muted">
+        <span className="inline-flex items-center gap-1 text-xs text-muted sm:text-sm">
           <Icon name="image" className="size-3.5" />
           {posts}
         </span>
       )}
       {links > 0 && (
-        <span className="inline-flex items-center gap-1 text-sm text-muted">
+        <span className="inline-flex items-center gap-1 text-xs text-muted sm:text-sm">
           <Icon name="link" className="size-3.5" />
           {links}
         </span>
@@ -55,7 +55,7 @@ export function Marks({ item }: { item: Item }) {
   );
 }
 
-/** One line in a day or a list: time, kind, title, where, status, and a saved post's picture. Taps through to the item. */
+/** One line in a day or a list: time, kind, title, where, status, and contextual photo/post thumbnail. Taps through to the item. */
 export function ItemRow({ row, item, onOpen, showDate }: { row?: Row; item: Item; onOpen: () => void; showDate?: boolean }) {
   const { trip, tripId, justChanged } = useTrip();
   const when = row ? row.when : item.start;
@@ -64,36 +64,53 @@ export function ItemRow({ row, item, onOpen, showDate }: { row?: Row; item: Item
   const place = item.place?.name || item.place?.address;
   const ending = row?.part === "end";
   const post = ending ? undefined : item.links?.find((l) => isPost(l.kind));
+  const photoUrl = ending ? undefined : itemPhotoUrl(item, trip);
   return (
     <li className={justChanged.has(item.id) ? "just-changed rounded-2xl" : ""}>
       <button
         type="button"
         onClick={onOpen}
-        className="flex w-full items-start gap-3 rounded-2xl border border-transparent bg-sunken/35 px-3 py-3 text-left transition-colors hover:border-line hover:bg-sunken"
+        className="flex w-full items-center gap-2.5 rounded-2xl border border-line/50 bg-sunken/40 p-2.5 text-left transition-colors hover:border-line hover:bg-sunken sm:items-start sm:gap-3 sm:px-3 sm:py-3"
       >
-        <span className="w-[4.75rem] shrink-0 pt-1.5 text-right whitespace-nowrap">
-          {showDate && when && <span className="block text-sm font-semibold text-muted">{formatDay(when.date)}</span>}
+        <span className="hidden w-[4.5rem] shrink-0 pt-1 text-right whitespace-nowrap sm:block">
+          {showDate && when && <span className="block text-xs font-semibold text-muted">{formatDay(when.date)}</span>}
           {when?.time ? (
-            <time className="block text-[0.95rem] leading-tight font-bold">{formatTime(when.time)}</time>
+            <time className="block text-sm leading-tight font-bold">{formatTime(when.time)}</time>
           ) : (
-            !showDate && <span className="block text-sm text-muted">Anytime</span>
+            !showDate && <span className="block text-xs text-muted">Anytime</span>
           )}
-          {zone && <span className="block text-xs text-muted">{zone}</span>}
+          {zone && <span className="block text-[11px] text-muted">{zone}</span>}
         </span>
         <span className={ending ? "opacity-60" : ""}>
           <KindChip kind={item.kind} />
         </span>
-        <span className="flex min-w-0 flex-1 flex-col gap-1 pt-0.5">
-          <span className={`text-base leading-snug font-bold ${ending ? "text-muted" : ""}`}>{title}</span>
-          {place && !ending && <span className="truncate text-sm text-muted">{place}</span>}
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5 sm:gap-1 sm:pt-0.5">
+          <span className="flex flex-wrap items-center gap-1.5 sm:hidden">
+            {showDate && when && <span className="text-[11px] font-bold text-accent">{formatDay(when.date)}</span>}
+            {when?.time ? (
+              <time className="tnum text-xs font-extrabold text-accent">
+                {formatTime(when.time)}
+                {zone ? ` ${zone}` : ""}
+              </time>
+            ) : (
+              !showDate && <span className="text-[11px] font-medium text-muted">Flexible time</span>
+            )}
+          </span>
+          <span className={`text-sm leading-snug font-bold sm:text-base ${ending ? "text-muted" : ""}`}>{title}</span>
+          {place && !ending && <span className="truncate text-xs text-muted sm:text-sm">{place}</span>}
           {!ending && <Marks item={item} />}
         </span>
         {post ? (
-          <span className="relative h-16 w-12 shrink-0 overflow-hidden rounded-xl bg-sunken" aria-hidden="true">
+          <span className="relative h-14 w-12 shrink-0 overflow-hidden rounded-xl border border-line bg-sunken" aria-hidden="true">
             <PostImage tripId={tripId} entry={{ link: post, item }} />
           </span>
+        ) : photoUrl ? (
+          <span className="relative size-12 shrink-0 overflow-hidden rounded-xl border border-line bg-sunken" aria-hidden="true">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={photoUrl} alt="" loading="lazy" className="size-full object-cover object-center" />
+          </span>
         ) : (
-          <Icon name="chevronRight" className="mt-2.5 size-4 text-muted" />
+          <Icon name="chevronRight" className="size-4 shrink-0 text-muted" />
         )}
       </button>
     </li>

@@ -28,10 +28,13 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
   const [askText, setAskText] = useState("");
   const [mapTab, setMapTab] = useState<"map" | "stops">("map");
   const [activeStop, setActiveStop] = useState<string | null>(null);
+  const [mobileMapOpen, setMobileMapOpen] = useState(false);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const open = (item: Item) => go({ tab: "item", itemId: item.id });
   const saved = ideas(trip);
   const posts = postsOf(trip);
   const days = tripDays(trip);
+  const visibleDays = selectedDay && days.includes(selectedDay) ? [selectedDay] : days;
   const planned = trip.items.filter((i) => i.start).length;
   const bookedItems = trip.items.filter((i) => i.booking?.state === "booked");
   const pendingBookings = toBook(trip);
@@ -52,7 +55,7 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
     ...trip.items.filter((i) => i.start && (i.kind === "flight" || i.kind === "transport")),
   ]
     .filter((item, index, arr) => arr.findIndex((x) => x.id === item.id) === index)
-    .slice(0, 4);
+    .slice(0, 6);
 
   // All unique stops across trip items
   const allStopNames = Array.from(
@@ -79,10 +82,10 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
     ) ?? mapsSearchUrl(trip.destination);
 
   return (
-    <div className="itinerary-view flex flex-col gap-5 px-3 pt-3 sm:px-4 md:px-0">
+    <div className="itinerary-view flex flex-col gap-4 px-3 pt-2.5 sm:gap-5 sm:px-4 sm:pt-3 md:px-0">
       {/* Hero Banner */}
-      <header className="flex flex-col gap-4">
-        <div className="relative min-h-48 overflow-hidden rounded-3xl border border-line bg-[#0f1322] p-5 text-[#f2f4fc] shadow-lift sm:min-h-60 sm:p-7">
+      <header className="flex flex-col gap-3.5 sm:gap-4">
+        <div className="relative min-h-42 overflow-hidden rounded-3xl border border-line bg-[#0f1322] p-4 text-[#f2f4fc] shadow-lift sm:min-h-60 sm:p-7">
           <div className="cover-photo absolute inset-0">
             <Image
               src={coverSrc}
@@ -91,13 +94,13 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
               priority
               sizes="(max-width: 768px) 100vw, 72rem"
               unoptimized={coverSrc.startsWith("http") || coverSrc.startsWith("/api/")}
-              className="object-cover opacity-65"
+              className="size-full object-cover object-center opacity-70"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#0b0d17] via-[#0b0d17]/65 to-transparent" />
-            <div className="absolute inset-0 bg-gradient-to-r from-[#0b0d17]/85 via-[#0b0d17]/35 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#0b0d17] via-[#0b0d17]/60 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-r from-[#0b0d17]/85 via-[#0b0d17]/30 to-transparent" />
           </div>
 
-          <div className="relative z-10 flex h-full min-h-36 flex-col justify-between gap-4 sm:min-h-44">
+          <div className="relative z-10 flex h-full min-h-34 flex-col justify-between gap-3 sm:min-h-44 sm:gap-4">
             <div className="flex items-start justify-between gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-[#131728]/85 px-3 py-1 text-xs font-semibold text-[#e2e8f0] backdrop-blur-md">
                 <Icon name="pin" className="size-3.5 text-[#a78bfa]" />
@@ -106,29 +109,29 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
               <button
                 type="button"
                 onClick={() => go({ tab: "trip" })}
-                className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-white/15 bg-[#131728]/80 px-3 py-1.5 text-xs font-semibold text-[#f2f4fc] backdrop-blur-md transition-colors hover:bg-[#1b2138]"
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-white/15 bg-[#131728]/80 px-3 py-1.5 text-xs font-semibold text-[#f2f4fc] backdrop-blur-md transition-colors hover:bg-[#1b2138] sm:min-h-10"
               >
                 <Icon name="image" className="size-3.5 text-[#a78bfa]" />
                 Edit Trip
               </button>
             </div>
 
-            <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+            <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end sm:gap-4">
               <div className="min-w-0">
                 <p className="text-xs font-semibold tracking-wide text-[#cbd5f5] sm:text-sm">
                   {formatRange(trip.startDate, trip.endDate)}, {trip.startDate.slice(0, 4)}
                 </p>
-                <h1 className="mt-1 text-2xl leading-tight font-extrabold tracking-tight text-white sm:text-4xl">
+                <h1 className="mt-0.5 text-2xl leading-tight font-extrabold tracking-tight text-white sm:mt-1 sm:text-4xl">
                   {trip.name}
                 </h1>
-                <div className="mt-3 flex flex-wrap items-center gap-2.5">
+                <div className="mt-2.5 flex flex-wrap items-center gap-2 sm:mt-3 sm:gap-2.5">
                   <button
                     type="button"
                     onClick={() => go({ tab: "trip" })}
                     aria-label={`People: ${people.join(", ")}`}
-                    className="flex min-h-10 shrink-0 items-center -space-x-2 rounded-full bg-[#131728]/80 p-1 pr-3 backdrop-blur-md transition-colors hover:bg-[#1b2138]"
+                    className="flex min-h-9 shrink-0 items-center -space-x-2 rounded-full bg-[#131728]/85 p-1 pr-3 backdrop-blur-md transition-colors hover:bg-[#1b2138] sm:min-h-10"
                   >
-                    {people.slice(0, 5).map((p) => (
+                    {people.slice(0, 4).map((p) => (
                       <span key={p} className="rounded-full ring-2 ring-[#0f1322]">
                         <Avatar name={p} size="sm" />
                       </span>
@@ -141,7 +144,7 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
                     <button
                       type="button"
                       onClick={onShare}
-                      className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-white/15 bg-[#1b2138]/90 px-3.5 py-1.5 text-xs font-bold text-white backdrop-blur-md transition-colors hover:bg-[#252d4a]"
+                      className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-white/15 bg-[#1b2138]/90 px-3 py-1 text-xs font-bold text-white backdrop-blur-md transition-colors hover:bg-[#252d4a] sm:min-h-10 sm:px-3.5 sm:py-1.5"
                     >
                       <Icon name="users" className="size-3.5 text-[#a78bfa]" />
                       Invite
@@ -150,7 +153,7 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-2 min-[400px]:flex min-[400px]:flex-wrap min-[400px]:items-center">
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() =>
@@ -159,22 +162,136 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
                       text: "Help me refine this itinerary. What would you adjust, and what still needs arranging?",
                     })
                   }
-                  className={btn.primary}
+                  className="inline-flex min-h-9.5 flex-1 items-center justify-center gap-1.5 rounded-2xl bg-accent px-3 py-2 text-xs font-bold whitespace-nowrap text-on-accent shadow-lift transition-transform active:scale-98 sm:min-h-11 sm:flex-initial sm:px-4 sm:text-sm"
                 >
-                  <Icon name="sparkles" className="size-4" />
-                  Plan with your assistant
+                  <Icon name="sparkles" className="size-3.5 shrink-0 sm:size-4" />
+                  <span>Plan with your assistant</span>
                 </button>
-                <button type="button" onClick={() => setPasting(true)} className={btn.secondary}>
-                  <Icon name="plan" className="size-4" />
-                  Paste a travel plan
+                <button
+                  type="button"
+                  onClick={() => setPasting(true)}
+                  className="inline-flex min-h-9.5 items-center justify-center gap-1.5 rounded-2xl border border-white/15 bg-[#131728]/85 px-3 py-2 text-xs font-bold whitespace-nowrap text-white backdrop-blur-md transition-colors hover:bg-[#1b2138] sm:min-h-11 sm:px-4 sm:text-sm"
+                >
+                  <Icon name="plan" className="size-3.5 shrink-0 text-[#a78bfa] sm:size-4" />
+                  <span>Paste a travel plan</span>
                 </button>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Section Tabs (Days / Ideas / Posts) */}
-        <div className="flex items-center justify-between gap-4 border-b border-line px-1">
+        {/* Mobile 5-Circle Quick-Action Hub (matching the mobile screen in the reference mockup) */}
+        <div className="grid grid-cols-5 gap-1.5 pt-0.5 sm:hidden">
+          <button
+            type="button"
+            onClick={() => {
+              setMobileMapOpen(false);
+              go({ tab: "plan", section: "days" });
+            }}
+            className="flex flex-col items-center gap-1 text-center"
+          >
+            <span
+              className={`relative flex size-12 items-center justify-center rounded-full border transition-colors ${
+                section === "days" && !mobileMapOpen
+                  ? "border-accent bg-accent text-on-accent shadow-lift"
+                  : "border-line bg-k-flight-soft text-k-flight"
+              }`}
+            >
+              <Icon name="today" className="size-5" />
+              <span className="tnum absolute -top-1 -right-1 rounded-full bg-surface px-1.5 py-0.2 text-[10px] font-extrabold text-ink ring-1 ring-line">
+                {days.length}
+              </span>
+            </span>
+            <span className="truncate text-[11px] font-semibold text-ink">Itinerary</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setMobileMapOpen((v) => !v)}
+            className="flex flex-col items-center gap-1 text-center"
+          >
+            <span
+              className={`relative flex size-12 items-center justify-center rounded-full border transition-colors ${
+                mobileMapOpen
+                  ? "border-accent bg-accent text-on-accent shadow-lift"
+                  : "border-line bg-k-activity-soft text-k-activity"
+              }`}
+            >
+              <Icon name="pin" className="size-5" />
+              <span className="tnum absolute -top-1 -right-1 rounded-full bg-surface px-1.5 py-0.2 text-[10px] font-extrabold text-ink ring-1 ring-line">
+                {allStopNames.length}
+              </span>
+            </span>
+            <span className="truncate text-[11px] font-semibold text-ink">Map</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => go({ tab: "todo" })}
+            className="flex flex-col items-center gap-1 text-center"
+          >
+            <span className="relative flex size-12 items-center justify-center rounded-full border border-line bg-todo-soft text-todo">
+              <Icon name="ticket" className="size-5" />
+              <span className="tnum absolute -top-1 -right-1 rounded-full bg-surface px-1.5 py-0.2 text-[10px] font-extrabold text-ink ring-1 ring-line">
+                {allBookings.length}
+              </span>
+            </span>
+            <span className="truncate text-[11px] font-semibold text-ink">Bookings</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setMobileMapOpen(false);
+              go({ tab: "plan", section: "ideas" });
+            }}
+            className="flex flex-col items-center gap-1 text-center"
+          >
+            <span
+              className={`relative flex size-12 items-center justify-center rounded-full border transition-colors ${
+                section === "ideas"
+                  ? "border-accent bg-accent text-on-accent shadow-lift"
+                  : "border-line bg-k-food-soft text-k-food"
+              }`}
+            >
+              <Icon name="heart" className="size-5" />
+              {saved.length > 0 && (
+                <span className="tnum absolute -top-1 -right-1 rounded-full bg-surface px-1.5 py-0.2 text-[10px] font-extrabold text-ink ring-1 ring-line">
+                  {saved.length}
+                </span>
+              )}
+            </span>
+            <span className="truncate text-[11px] font-semibold text-ink">Saved</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setMobileMapOpen(false);
+              go({ tab: "plan", section: "posts" });
+            }}
+            className="flex flex-col items-center gap-1 text-center"
+          >
+            <span
+              className={`relative flex size-12 items-center justify-center rounded-full border transition-colors ${
+                section === "posts"
+                  ? "border-accent bg-accent text-on-accent shadow-lift"
+                  : "border-line bg-k-stay-soft text-k-stay"
+              }`}
+            >
+              <Icon name="image" className="size-5" />
+              {posts.length > 0 && (
+                <span className="tnum absolute -top-1 -right-1 rounded-full bg-surface px-1.5 py-0.2 text-[10px] font-extrabold text-ink ring-1 ring-line">
+                  {posts.length}
+                </span>
+              )}
+            </span>
+            <span className="truncate text-[11px] font-semibold text-ink">Posts</span>
+          </button>
+        </div>
+
+        {/* Section Tabs (Days / Ideas / Posts — shown on sm+ desktop/tablet; mobile uses the 5-circle hub above) */}
+        <div className="hidden items-center justify-between gap-4 border-b border-line px-1 sm:flex">
           <div role="tablist" aria-label="Plan" className="flex flex-1 gap-2 sm:flex-initial sm:gap-4">
             {tabs.map((t) => (
               <button
@@ -183,7 +300,7 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
                 role="tab"
                 aria-selected={section === t.id}
                 onClick={() => go({ tab: "plan", section: t.id })}
-                className={`-mb-px flex min-h-11 flex-1 items-center justify-center gap-2 border-b-2 px-3 text-sm font-bold transition-colors sm:flex-initial sm:px-4 sm:text-base ${
+                className={`-mb-px flex min-h-10 flex-1 items-center justify-center gap-2 border-b-2 px-3 text-xs font-bold transition-colors sm:min-h-11 sm:flex-initial sm:px-4 sm:text-base ${
                   section === t.id ? "border-accent text-accent" : "border-transparent text-muted hover:text-ink"
                 }`}
               >
@@ -216,8 +333,8 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
           </div>
         </div>
 
-        {/* Stat Cards Row */}
-        <dl className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3.5">
+        {/* Stat Cards Row (Tablet & Desktop; on mobile, replaced by the 5-circle quick-action hub above) */}
+        <dl className="hidden grid-cols-2 gap-2.5 sm:grid sm:grid-cols-4 sm:gap-3.5">
           <div className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-3.5 shadow-lift">
             <dt className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-k-flight-soft text-k-flight">
               <span className="sr-only">Days</span>
@@ -274,11 +391,128 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
 
       {pasting && <PastePlan onClose={() => setPasting(false)} />}
 
+      {/* Mobile Instant Interactive Map Drawer (toggled by the Map circle icon above) */}
+      {mobileMapOpen && (
+        <section
+          aria-label="Mobile trip route map"
+          className="flex flex-col gap-3 rounded-3xl border border-accent/40 bg-[#0f1528] p-3.5 text-[#f2f4fc] shadow-lift sm:hidden"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="inline-flex rounded-full border border-white/10 bg-[#13182b] p-1 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setMapTab("map")}
+                className={`rounded-full px-3 py-1 transition-colors ${
+                  mapTab === "map" ? "bg-[#5b21b6] text-white" : "text-[#9ca6c7]"
+                }`}
+              >
+                Map
+              </button>
+              <button
+                type="button"
+                onClick={() => setMapTab("stops")}
+                className={`rounded-full px-3 py-1 transition-colors ${
+                  mapTab === "stops" ? "bg-[#5b21b6] text-white" : "text-[#9ca6c7]"
+                }`}
+              >
+                Stops ({allStopNames.length})
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMobileMapOpen(false)}
+              className="inline-flex min-h-8 items-center gap-1 rounded-full bg-white/10 px-2.5 text-xs font-semibold text-white"
+            >
+              Close
+            </button>
+          </div>
+          <div className="relative h-52 w-full overflow-hidden rounded-2xl border border-white/10 bg-[#0d1324]">
+            <iframe
+              key={`mob-${embedSrc}`}
+              src={embedSrc}
+              title={`Mobile Google Map of ${activeMapQuery}`}
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+              className="size-full border-0 [filter:invert(90%)_hue-rotate(180deg)_brightness(95%)_contrast(92%)]"
+            />
+          </div>
+          <div className="no-scrollbar flex gap-1.5 overflow-x-auto pb-0.5">
+            {allStopNames.map((stop) => {
+              const selected = activeStop === stop;
+              return (
+                <button
+                  key={stop}
+                  type="button"
+                  onClick={() => setActiveStop(selected ? null : stop)}
+                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold ${
+                    selected
+                      ? "border-[#a78bfa] bg-[#5b21b6] text-white"
+                      : "border-white/15 bg-[#13182b] text-white"
+                  }`}
+                >
+                  <Icon name="pin" className="size-3 text-[#a78bfa]" />
+                  <span>{stop}</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Mobile Top Saved Places Horizontal Swipeable Strip (matching phone mockup in reference image) */}
+      {section === "days" && highlightedPlaces.length > 0 && (
+        <section aria-label="Mobile saved places" className="flex flex-col gap-2.5 lg:hidden">
+          <div className="flex items-center justify-between px-1">
+            <h2 className="text-base font-extrabold tracking-tight">Top Saved Places</h2>
+            <button
+              type="button"
+              onClick={() => go({ tab: "plan", section: "ideas" })}
+              className="text-xs font-bold text-accent hover:underline"
+            >
+              See All
+            </button>
+          </div>
+          <ul className="no-scrollbar -mx-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-3 pb-1">
+            {highlightedPlaces.map((place, idx) => {
+              const thumbUrl = itemPhotoUrl(place, trip, idx);
+              return (
+                <li key={place.id} className="w-38 shrink-0 snap-start sm:w-44">
+                  <button
+                    type="button"
+                    onClick={() => open(place)}
+                    className="group flex w-full flex-col gap-1.5 rounded-2xl border border-line bg-surface p-2 text-left shadow-lift"
+                  >
+                    <span className="relative block aspect-[4/3] w-full overflow-hidden rounded-xl bg-sunken">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={thumbUrl}
+                        alt=""
+                        loading="lazy"
+                        className="size-full object-cover object-center transition-transform duration-300 group-hover:scale-105"
+                      />
+                      <span className="absolute right-1.5 bottom-1.5 flex size-6 items-center justify-center rounded-full bg-white text-[#e11d48] shadow">
+                        <Icon name="heart" className="size-3.5" />
+                      </span>
+                    </span>
+                    <span className="min-w-0 px-0.5">
+                      <span className="block truncate text-xs font-bold text-ink sm:text-sm">{place.title}</span>
+                      <span className="block truncate text-[11px] text-muted">
+                        {place.place?.name || KIND_LABEL[place.kind]}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
       {/* Two-Column Dashboard Content */}
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 items-start gap-5 sm:gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
         {/* Left Column: Main Tabpanel + Ask Voyroo Card */}
-        <div className="flex min-w-0 flex-col gap-6" role="tabpanel">
-          <div className="flex flex-col gap-5 rounded-3xl border border-line bg-surface p-3.5 shadow-lift sm:gap-6 sm:p-6">
+        <div className="flex min-w-0 flex-col gap-5 sm:gap-6" role="tabpanel">
+          <div className="flex flex-col gap-4 rounded-3xl border border-line bg-surface p-3.5 shadow-lift sm:gap-6 sm:p-6">
             <div className="flex items-center justify-between gap-2">
               <h2 className="min-w-0 truncate text-lg font-extrabold tracking-tight sm:text-xl">
                 {section === "days" ? "Upcoming Itinerary" : section === "ideas" ? "Saved Places & Ideas" : "Saved Posts"}
@@ -287,13 +521,47 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
                 <button
                   type="button"
                   onClick={() => go({ tab: "today" })}
-                  className="inline-flex min-h-10 shrink-0 items-center gap-1 rounded-full border border-line bg-sunken px-3 text-xs font-bold whitespace-nowrap text-ink transition-colors hover:border-accent"
+                  className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-full border border-line bg-sunken px-3 text-xs font-bold whitespace-nowrap text-ink transition-colors hover:border-accent sm:min-h-10"
                 >
                   Day-by-Day View
                   <Icon name="chevronRight" className="size-3.5" />
                 </button>
               )}
             </div>
+
+            {/* Horizontal Day Filter Pills for fast single-day focus on mobile */}
+            {section === "days" && days.length > 1 && (
+              <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+                <button
+                  type="button"
+                  onClick={() => setSelectedDay(null)}
+                  className={`min-h-8 shrink-0 rounded-full border px-3 py-1 text-xs font-bold transition-colors ${
+                    selectedDay === null
+                      ? "border-accent bg-accent text-on-accent"
+                      : "border-line bg-sunken/70 text-muted hover:text-ink"
+                  }`}
+                >
+                  All Days ({days.length})
+                </button>
+                {days.map((d) => {
+                  const active = selectedDay === d;
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setSelectedDay(active ? null : d)}
+                      className={`min-h-8 shrink-0 rounded-full border px-3 py-1 text-xs font-bold transition-colors ${
+                        active
+                          ? "border-accent bg-accent text-on-accent"
+                          : "border-line bg-sunken/70 text-muted hover:text-ink"
+                      }`}
+                    >
+                      {monthDay(d)}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             {trip.items.length === 0 && (
               <section aria-label="Start planning" className="flex flex-col gap-3 rounded-2xl border border-line bg-sunken/50 p-4">
@@ -316,8 +584,8 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
             )}
 
             {section === "days" && (
-              <div className="flex flex-col gap-7">
-                {days.map((d) => (
+              <div className="flex flex-col gap-6 sm:gap-7">
+                {visibleDays.map((d) => (
                   <Day key={d} date={d} last={d === trip.endDate} onOpen={open} onAdd={() => compose({ day: d })} />
                 ))}
               </div>
@@ -586,8 +854,8 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
             </div>
           </section>
 
-          {/* Top Saved Places Card */}
-          <section className="flex flex-col gap-4 rounded-3xl border border-line bg-surface p-5 shadow-lift">
+          {/* Top Saved Places Card (Desktop sidebar; mobile uses the horizontal carousel above) */}
+          <section className="hidden flex-col gap-4 rounded-3xl border border-line bg-surface p-5 shadow-lift lg:flex">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-base font-extrabold">Top Saved Places</h2>
               <button
@@ -602,8 +870,8 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
             {highlightedPlaces.length === 0 ? (
               <p className="text-sm text-muted">Save ideas or places to see them highlighted here.</p>
             ) : (
-              <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-2">
-                {highlightedPlaces.map((place, idx) => {
+              <ul className="grid grid-cols-2 gap-3">
+                {highlightedPlaces.slice(0, 4).map((place, idx) => {
                   const thumbUrl = itemPhotoUrl(place, trip, idx);
                   return (
                     <li key={place.id}>
@@ -612,14 +880,13 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
                         onClick={() => open(place)}
                         className="group flex w-full flex-col gap-2 text-left"
                       >
-                        <span className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl border border-line bg-sunken">
-                          <Image
+                        <span className="relative block aspect-[4/3] w-full overflow-hidden rounded-2xl border border-line bg-sunken">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
                             src={thumbUrl}
                             alt=""
-                            fill
-                            sizes="180px"
-                            unoptimized={thumbUrl.startsWith("http") || thumbUrl.startsWith("/api/")}
-                            className="object-cover transition-transform duration-300 group-hover:scale-105"
+                            loading="lazy"
+                            className="size-full object-cover object-center transition-transform duration-300 group-hover:scale-105"
                           />
                           <span className="absolute right-2 bottom-2 flex size-6 items-center justify-center rounded-full bg-white text-[#e11d48] shadow">
                             <Icon name="heart" className="size-3.5" />
