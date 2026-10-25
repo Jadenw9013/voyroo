@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRef } from "react";
+import { tripCoverUrl } from "@/domain/links";
 import { formatRange } from "@/domain/time";
 import type { PlannerSnapshot } from "@/domain/planner";
 import type { Account } from "@/server/auth";
@@ -34,7 +35,7 @@ export function Home({ trips, original, create = false, initialName = "", accoun
       </div>
       <section id="your-trips" aria-labelledby="your-trips-title" className="your-trips-section">
         <div className="flex items-end justify-between gap-3"><div><h2 id="your-trips-title">Your trips</h2><p className="text-muted">{account ? "Your plans, together in one place. Pick up where you left off." : "Trips you’ve joined on this browser."}</p></div><span className="trip-count">{trips.length} {trips.length === 1 ? "trip" : "trips"}</span></div>
-        {trips.length ? <ul className="trip-library">{trips.map((trip, index) => <li key={trip.id}><Link href={`/t/${trip.id}/plan`} className="library-trip"><div className="library-trip-image"><Image src={trip.cover || (index % 2 ? "/lake-atitlan-hero.jpg" : "/flight-sunset-wing.jpg")} alt="" fill sizes="(max-width: 640px) 100vw, 350px" unoptimized={!!trip.cover?.startsWith("http")} className="object-cover" /><span className="library-open"><Icon name="chevronRight" /></span></div><div className="library-trip-copy"><h3>{trip.name}</h3><p><Icon name="today" className="size-4" />{formatRange(trip.startDate, trip.endDate)}, {trip.startDate.slice(0, 4)}</p></div></Link></li>)}</ul> : <div className="library-empty"><Icon name="suitcase" className="size-6" /><p>Your next trip belongs here.<span>Start a conversation above and save the plan when it feels right.</span></p></div>}
+        {trips.length ? <ul className="trip-library">{trips.map((trip) => { const coverSrc = tripCoverUrl({ id: trip.id, name: trip.name, destination: trip.name, cover: trip.cover }); return <li key={trip.id}><Link href={`/t/${trip.id}/plan`} className="library-trip"><div className="library-trip-image"><Image src={coverSrc} alt="" fill sizes="(max-width: 640px) 100vw, 350px" unoptimized={coverSrc.startsWith("http") || coverSrc.startsWith("/api/")} className="object-cover" /><span className="library-open"><Icon name="chevronRight" /></span></div><div className="library-trip-copy"><h3>{trip.name}</h3><p><Icon name="today" className="size-4" />{formatRange(trip.startDate, trip.endDate)}, {trip.startDate.slice(0, 4)}</p></div></Link></li>; })}</ul> : <div className="library-empty"><Icon name="suitcase" className="size-6" /><p>Your next trip belongs here.<span>Start a conversation above and save the plan when it feels right.</span></p></div>}
         {original && <Link href={`/t/${original.id}/join`} className="existing-invite"><Icon name="users" className="size-4" /><span>Joining the {original.name} trip?</span><span className="font-semibold">Open invitation</span><Icon name="chevronRight" className="size-4" /></Link>}
       </section>
       <footer className="workspace-footer"><span>Voyroo. Made for the journey.</span><span>Plan together. Keep everything close.</span></footer>

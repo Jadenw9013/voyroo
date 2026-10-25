@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import type { TripState } from "@/domain/types";
+import { tripCoverUrl } from "@/domain/links";
 import { formatRange } from "@/domain/time";
 import { useView, type View } from "@/client/router";
 import { TripProvider, useTrip } from "@/client/store";
@@ -141,7 +142,7 @@ function Sidebar({
 }) {
   const { trip } = useTrip();
   const compose = useCompose();
-  const coverSrc = trip.cover || "/lake-atitlan-hero.jpg";
+  const coverSrc = tripCoverUrl(trip);
 
   return (
     <aside aria-label="Sidebar" className="fixed top-16 bottom-0 left-0 z-30 hidden w-56 flex-col justify-between border-r border-line bg-surface/65 p-3 backdrop-blur-xl md:flex lg:w-64 lg:p-4">
@@ -228,7 +229,14 @@ function Sidebar({
             className="group flex w-full items-center gap-3 rounded-2xl border border-line bg-sunken/70 p-2.5 text-left transition-colors hover:border-accent/50 hover:bg-sunken"
           >
             <span className="relative size-11 shrink-0 overflow-hidden rounded-xl bg-canvas">
-              <Image src={coverSrc} alt="" fill sizes="44px" unoptimized={coverSrc.startsWith("http")} className="object-cover" />
+              <Image
+                src={coverSrc}
+                alt=""
+                fill
+                sizes="44px"
+                unoptimized={coverSrc.startsWith("http") || coverSrc.startsWith("/api/")}
+                className="object-cover"
+              />
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-bold text-ink">{trip.name}</span>

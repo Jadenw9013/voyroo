@@ -270,3 +270,46 @@ describe("booked items", () => {
     expect(retime.ok).toBe(false);
   });
 });
+
+describe("contextual photos", () => {
+  it("resolves contextual photo URLs for non-Guatemala trips and items instead of hardcoded stock images", async () => {
+    const { tripCoverUrl, itemPhotoUrl } = await import("./links");
+    const { cleanPhotoQuery } = await import("@/server/photos");
+
+    const krabiTrip: Trip = {
+      ...seed,
+      id: "krabi-2026",
+      name: "Krabi & Ao Nang Escape",
+      destination: "Krabi, Thailand",
+      cover: undefined,
+    };
+
+    expect(tripCoverUrl(seed)).toBe("/guatemala-hero-sunset.jpg");
+    expect(tripCoverUrl({ ...krabiTrip, cover: "/guatemala-hero-sunset.jpg" })).toContain("/api/photo?");
+    const krabiCover = tripCoverUrl(krabiTrip);
+    expect(krabiCover).toContain("/api/photo?");
+    expect(decodeURIComponent(krabiCover)).toContain("Krabi, Thailand");
+
+    const hotelItem: Item = {
+      id: "stay-one",
+      kind: "stay",
+      title: "Stay at ONE Hotel Ao Nang",
+      place: { name: "ONE Hotel, Ao Nang" },
+    };
+    const photoUrl = itemPhotoUrl(hotelItem, krabiTrip, 0);
+    expect(photoUrl).toContain("/api/photo?");
+    expect(decodeURIComponent(photoUrl)).toContain("ONE Hotel, Ao Nang");
+
+    const cleaned = cleanPhotoQuery({
+      title: "Stay at ONE Hotel Ao Nang",
+      place: "ONE Hotel, Ao Nang",
+      dest: "Krabi, Thailand",
+      kind: "stay",
+    });
+    expect(cleaned).toContain("ONE Hotel");
+    expect(cleaned).toContain("Ao Nang");
+    expect(cleaned).toContain("Krabi");
+    expect(cleaned).not.toMatch(/^Stay at/i);
+  });
+});
+

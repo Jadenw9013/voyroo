@@ -134,7 +134,24 @@ export function NewTripPlanner({ account, initialName, initialSnapshot }: { acco
       {!draft ? <>
         <div className="preview-photo"><Image src="/flight-sunset-wing.jpg" alt="An airplane wing above the clouds at sunset" fill priority sizes="(max-width: 850px) 100vw, 420px" className="object-cover" /><span className="preview-photo-caption"><Icon name="plane" className="size-4" />Something to look forward to.</span></div>
         <div className="preview-empty"><span className="draft-label"><Icon name="plan" className="size-4" />Your trip, taking shape</span><h2>The details will<br />find their place.</h2><p>As we talk, your destination, dates and day-by-day plan will appear here.</p><div className="preview-placeholders"><span><Icon name="pin" />Somewhere worth going</span><span><Icon name="today" />Dates that work for you</span><span><Icon name="activity" />Days that feel like you</span></div></div>
-      </> : <div className="draft-content">
+      </> : <>
+        {draft.destination && (
+          <div className="preview-photo">
+            <Image
+              src={`/api/photo?title=${encodeURIComponent(draft.name || draft.destination)}&dest=${encodeURIComponent(draft.destination)}&kind=destination`}
+              alt=""
+              fill
+              sizes="(max-width: 850px) 100vw, 420px"
+              unoptimized
+              className="object-cover"
+            />
+            <span className="preview-photo-caption">
+              <Icon name="pin" className="size-4" />
+              {draft.destination}
+            </span>
+          </div>
+        )}
+        <div className="draft-content">
         <div className="draft-status"><span className="status-dot" />{created ? "Saved and ready to go" : "Your trip draft"}<Icon name={created ? "check" : "pencil"} className="size-4" /></div>
         <h2>{draft.name || draft.destination || "Your next adventure"}</h2>
         <p className="draft-destination"><Icon name="pin" className="size-4" />{draft.destination || "Still exploring destinations"}</p>
@@ -142,7 +159,7 @@ export function NewTripPlanner({ account, initialName, initialSnapshot }: { acco
         {draft.notes && <p className="draft-notes">{draft.notes}</p>}
         {draft.items.length > 0 && <div className="draft-itinerary"><h3>A first look at your days</h3><ol>{draft.items.map((item, index) => <li key={index}><span className="draft-item-icon"><Icon name={KIND_ICON[item.kind]} className="size-4" /></span><div><span className="draft-item-date">{item.start ? formatDay(item.start.date) + (item.start.time ? ` at ${item.start.time}` : "") : "An idea for later"}</span><p>{item.title}</p>{item.placeName && <span className="text-sm text-muted">{item.placeName}</span>}</div></li>)}</ol><p className="itinerary-caveat">Suggestions to make your own. Check details before booking.</p></div>}
         {created ? <div className="created-trip" role="status"><h3>{account ? "Saved to your trips." : "Your trip is ready."}</h3><p>{account ? "You can find it on any device when you sign in." : "This browser will remember your trip."}</p>{created.passcode && <div className="invite-code"><span>Group invite passcode</span><button type="button" onClick={async () => { try { await navigator.clipboard.writeText(created.passcode!); setCopied(true); } catch { setError("Select and copy the passcode below."); } }}>{created.passcode}<Icon name={copied ? "check" : "copy"} className="size-4" /></button><p>Share this with your trip link when inviting friends.</p></div>}<Link href={`/t/${created.id}/plan`} className="save-trip-button">Open your trip<Icon name="chevronRight" className="size-4" /></Link></div> : <div className="draft-save"><button type="button" className="save-trip-button" disabled={!canSave || busy || saving} onClick={() => void save()}>{saving ? "Saving your trip…" : "Save trip"}<Icon name="check" className="size-4" /></button><p>{canSave ? "Nothing is booked. Keep chatting to change any detail." : problems[0]}</p></div>}
-      </div>}
+      </div></>}
     </aside>
   </div>;
 }

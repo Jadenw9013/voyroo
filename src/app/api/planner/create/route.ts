@@ -6,6 +6,7 @@ import { PlannerSnapshotSchema, plannerProblems, plannerTrip } from "@/domain/pl
 import { isZone } from "@/domain/time";
 import { hashPasscode, newTripId, readAccount, readSession, writeSession } from "@/server/auth";
 import { firstName, getStore, jsonError, readJson, sameSite } from "@/server/http";
+import { resolveContextualPhotoUrl } from "@/server/photos";
 
 const schema = z.object({ snapshot: PlannerSnapshotSchema, homeTz: z.string().refine(isZone), homeCurrency: z.string().regex(/^[A-Z]{3}$/) });
 
@@ -24,6 +25,16 @@ export async function POST(request: Request) {
   const suffix = createHash("sha256").update(`${account?.id || "guest"}:${snapshot.id}`).digest("hex").slice(0, 16);
   const id = newTripId(snapshot.draft!.name || snapshot.draft!.destination!).replace(/-[^-]+$/, `-${suffix}`);
   const trip = plannerTrip(snapshot.draft!, { id, name, homeTz, homeCurrency });
+  if (!trip.cover) {
+    const resolvedCover = await resolveContextualPhotoUrl({
+      title: trip.name,
+      dest: trip.destination,
+      kind: "destination",
+    });
+    if (resolvedCover && /^https:\/\//.test(resolvedCover)) {
+      trip.cover = resolvedCover;
+    }
+  }
   const issues = tripProblems(trip);
   if (issues.length) return jsonError(400, issues.join(" "));
   const existing = await getStore().get(id);

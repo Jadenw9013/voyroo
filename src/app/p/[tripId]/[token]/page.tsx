@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { connection } from "next/server";
 import { notFound } from "next/navigation";
 import { previewTrip } from "@/server/preview";
+import { tripCoverUrl } from "@/domain/links";
 import { dayRange, formatDay, formatTime } from "@/domain/time";
 import type { Item } from "@/domain/types";
 import { Icon, KIND_ICON } from "@/ui/Icon";
@@ -23,7 +24,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ tripId
     <PreviewUpdates key={`${tripId}:${token}`} version={state.version} />
     <header className="presentation-toolbar"><Brand linked={false} /><div className="flex flex-wrap items-center justify-end gap-3"><span className="text-sm text-muted">View-only itinerary</span><PrintTrip /></div></header>
     <main id="main" className="presentation-main">
-      <div className="presentation-hero"><div><p className="presentation-destination"><Icon name="pin" />{trip.destination}</p><h1>{trip.name}</h1><p className="presentation-dates">{formatDay(trip.startDate)}, {trip.startDate.slice(0, 4)} — {formatDay(trip.endDate)}, {trip.endDate.slice(0, 4)}</p><p className="mt-4 text-sm text-muted">The group’s current plan. Times are local to {trip.tz} unless shown otherwise.</p></div><div className="presentation-cover" style={{ backgroundImage: `url(${JSON.stringify(trip.cover || "/flight-sunset-wing.jpg")})` }} /></div>
+      <div className="presentation-hero"><div><p className="presentation-destination"><Icon name="pin" />{trip.destination}</p><h1>{trip.name}</h1><p className="presentation-dates">{formatDay(trip.startDate)}, {trip.startDate.slice(0, 4)} — {formatDay(trip.endDate)}, {trip.endDate.slice(0, 4)}</p><p className="mt-4 text-sm text-muted">The group’s current plan. Times are local to {trip.tz} unless shown otherwise.</p></div><div className="presentation-cover" style={{ backgroundImage: `url(${JSON.stringify(tripCoverUrl(trip))})` }} /></div>
       <nav aria-label="Itinerary days" className="presentation-days">{days.map((day) => <a key={day} href={`#day-${day}`}>{formatDay(day)}</a>)}{ideas.length > 0 && <a href="#ideas">Ideas</a>}</nav>
       {days.map((day) => {
         const items = trip.items.filter((item) => item.start?.date === day).sort((a, b) => (a.start?.time || "").localeCompare(b.start?.time || ""));

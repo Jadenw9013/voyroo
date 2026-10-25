@@ -160,3 +160,31 @@ export function postInfo(url: string): PostInfo | null {
 export function hasContact(c: Contact | undefined): c is Contact {
   return !!c && Object.values(c).some(Boolean);
 }
+
+const GUATEMALA_STOCK_COVERS = new Set([
+  "/lake-atitlan-hero.jpg",
+  "/guatemala-hero-sunset.jpg",
+  "/antigua-hotel.jpg",
+  "/volcano-sidebar-night.jpg",
+]);
+
+/** Contextually accurate cover photo URL for a trip. */
+export function tripCoverUrl(trip: Pick<Trip, "id" | "name" | "destination" | "cover">): string {
+  const isGuatemala = trip.id === "guatemala" || /guatemala|atitl[aá]n|antigua/i.test(`${trip.destination} ${trip.name}`);
+  if (trip.cover && (isGuatemala || !GUATEMALA_STOCK_COVERS.has(trip.cover))) {
+    return trip.cover;
+  }
+  const dest = trip.destination || trip.name;
+  return `/api/photo?title=${encodeURIComponent(trip.name)}&dest=${encodeURIComponent(dest)}&kind=destination`;
+}
+
+/** Contextually accurate photo URL for a specific itinerary item or saved place. */
+export function itemPhotoUrl(item: Item, trip: Pick<Trip, "id" | "destination">, idx = 0): string {
+  const withImg = item.links?.find((l) => l.image);
+  if (withImg) {
+    return `/api/t/${encodeURIComponent(trip.id)}/thumb?item=${encodeURIComponent(item.id)}&link=${encodeURIComponent(withImg.id)}`;
+  }
+  const place = item.place?.name || item.place?.address || "";
+  return `/api/photo?title=${encodeURIComponent(item.title)}&place=${encodeURIComponent(place)}&dest=${encodeURIComponent(trip.destination)}&kind=${encodeURIComponent(item.kind)}&idx=${idx}`;
+}
+

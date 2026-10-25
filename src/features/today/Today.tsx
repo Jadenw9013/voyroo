@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useEffect, useRef } from "react";
 import { dayRows, nightOf, nights, nowNext, phase, stayOn, toBook, tripDays, type Row } from "@/domain/derive";
-import { directionsUrl, mapsEmbedUrl, mapsSearchUrl, routeUrl, telUrl, whatsappUrl } from "@/domain/links";
+import { directionsUrl, mapsEmbedUrl, mapsSearchUrl, routeUrl, telUrl, tripCoverUrl, whatsappUrl } from "@/domain/links";
 import { daysBetween, formatDay, formatDuration, formatRange, formatTime, monthDay, todayIn, weekday } from "@/domain/time";
 import type { Item } from "@/domain/types";
 import { useClock } from "@/client/hooks";
@@ -37,7 +37,7 @@ export function Today({ day: chosen, go, serverNow }: { day?: string; go: (v: Vi
   const stay = stayOn(trip, day);
   const open = (item: Item) => go({ tab: "item", itemId: item.id });
   const people = [...new Set([me, ...trip.people])];
-  const coverSrc = trip.cover || "/lake-atitlan-hero.jpg";
+  const coverSrc = tripCoverUrl(trip);
 
   const quickCircles: { label: string; icon: IconName; tone: string; onClick: () => void }[] = [
     { label: "Itinerary", icon: "today", tone: "bg-k-flight-soft text-k-flight", onClick: () => go({ tab: "plan" }) },
@@ -59,7 +59,7 @@ export function Today({ day: chosen, go, serverNow }: { day?: string; go: (v: Vi
               fill
               priority
               sizes="(max-width: 768px) 100vw, 72rem"
-              unoptimized={coverSrc.startsWith("http")}
+              unoptimized={coverSrc.startsWith("http") || coverSrc.startsWith("/api/")}
               className="object-cover opacity-60"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-[#0b0d17] via-[#0b0d17]/65 to-transparent" />

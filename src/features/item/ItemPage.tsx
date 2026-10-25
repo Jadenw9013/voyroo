@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { tripDays } from "@/domain/derive";
 import { newId } from "@/domain/ids";
-import { classifyLink, directionsUrl, extractUrls, hasContact, instagramUrl, isPost, mailUrl, mapsLink, placeEmbedUrl, telUrl, whatsappUrl } from "@/domain/links";
+import { classifyLink, directionsUrl, extractUrls, hasContact, instagramUrl, isPost, itemPhotoUrl, mailUrl, mapsLink, placeEmbedUrl, telUrl, whatsappUrl } from "@/domain/links";
 import type { Op } from "@/domain/ops";
 import type { ItemPatchT } from "@/domain/schema";
 import { formatDay, zoneName } from "@/domain/time";
@@ -47,6 +47,7 @@ export function ItemPage({ itemId, back, go }: { itemId: string; back: () => voi
   const dir = directionsUrl(item.place, trip);
   const posts = (item.links ?? []).filter((l) => isPost(l.kind)).map((link) => ({ link, item }));
   const coverLink = posts.length ? undefined : item.links?.find((l) => l.image);
+  const coverUrl = posts.length ? undefined : coverLink ? thumbSrc(trip.id, item.id, coverLink.id) : itemPhotoUrl(item, trip, 0);
 
   return (
     <article className="flex flex-col gap-4 px-3 pt-2 pb-6 sm:px-4 md:px-0">
@@ -61,10 +62,10 @@ export function ItemPage({ itemId, back, go }: { itemId: string; back: () => voi
       </div>
 
       <div className="overflow-hidden rounded-3xl border border-line bg-surface p-5 shadow-lift">
-        {coverLink && (
+        {coverUrl && (
           <div className="cover-photo -mx-5 -mt-5 mb-4 h-48 overflow-hidden bg-sunken">
             {/* eslint-disable-next-line @next/next/no-img-element -- through our own route; not worth the image optimizer */}
-            <img src={thumbSrc(trip.id, item.id, coverLink.id)} alt="" className="size-full object-cover" />
+            <img src={coverUrl} alt="" loading="lazy" className="size-full object-cover" />
           </div>
         )}
 

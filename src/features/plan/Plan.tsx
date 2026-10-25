@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useState } from "react";
 import { dayRows, ideas, nightOf, stayOn, toBook, tripDays } from "@/domain/derive";
-import { directionsUrl, mapsEmbedUrl, mapsSearchUrl, routeUrl } from "@/domain/links";
+import { directionsUrl, itemPhotoUrl, mapsEmbedUrl, mapsSearchUrl, routeUrl, tripCoverUrl } from "@/domain/links";
 import { formatDay, formatRange, formatTime, monthDay, weekday } from "@/domain/time";
 import type { Item } from "@/domain/types";
 import type { PlanSection, View } from "@/client/router";
@@ -16,15 +16,6 @@ import { PostGrid, postsOf } from "../posts/Posts";
 import { ItemRow } from "../shared";
 import { SyncLine } from "../SyncLine";
 import { PastePlan } from "./PastePlan";
-
-const PLACE_THUMBS = [
-  "/lake-atitlan-hero.jpg",
-  "/antigua-hotel.jpg",
-  "/guatemala-hero-sunset.jpg",
-  "/hotel-room-night.jpg",
-  "/volcano-sidebar-night.jpg",
-  "/flight-sunset-wing.jpg",
-];
 
 /**
  * Plan: redesigned Voyroo trip dashboard with hero cover banner, stat cards,
@@ -46,7 +37,7 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
   const pendingBookings = toBook(trip);
   const allBookings = [...bookedItems, ...pendingBookings];
   const people = [...new Set([me, ...trip.people])];
-  const coverSrc = trip.cover || "/lake-atitlan-hero.jpg";
+  const coverSrc = tripCoverUrl(trip);
 
   const tabs: { id: PlanSection; label: string; count: number }[] = [
     { id: "days", label: "Days", count: days.length },
@@ -54,8 +45,14 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
     { id: "posts", label: "Posts", count: posts.length },
   ];
 
-  // Places to highlight in Top Saved Places (saved ideas first, then activities/food/stays)
-  const highlightedPlaces = [...saved, ...trip.items.filter((i) => i.start && i.kind !== "flight")].slice(0, 4);
+  // Places to highlight in Top Saved Places (saved ideas first, then stays/food/activities)
+  const highlightedPlaces = [
+    ...saved,
+    ...trip.items.filter((i) => i.start && i.kind !== "flight" && i.kind !== "transport"),
+    ...trip.items.filter((i) => i.start && (i.kind === "flight" || i.kind === "transport")),
+  ]
+    .filter((item, index, arr) => arr.findIndex((x) => x.id === item.id) === index)
+    .slice(0, 4);
 
   // All unique stops across trip items
   const allStopNames = Array.from(
@@ -93,7 +90,7 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
               fill
               priority
               sizes="(max-width: 768px) 100vw, 72rem"
-              unoptimized={coverSrc.startsWith("http")}
+              unoptimized={coverSrc.startsWith("http") || coverSrc.startsWith("/api/")}
               className="object-cover opacity-65"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-[#0b0d17] via-[#0b0d17]/65 to-transparent" />
@@ -606,32 +603,36 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
               <p className="text-sm text-muted">Save ideas or places to see them highlighted here.</p>
             ) : (
               <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-2">
-                {highlightedPlaces.map((place, idx) => (
-                  <li key={place.id}>
-                    <button
-                      type="button"
-                      onClick={() => open(place)}
-                      className="group flex w-full flex-col gap-2 text-left"
-                    >
-                      <span className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl border border-line bg-sunken">
-                        <Image
-                          src={PLACE_THUMBS[idx % PLACE_THUMBS.length]}
-                          alt=""
-                          fill
-                          sizes="180px"
-                          className="object-cover transition-transform duration-300 group-hover:scale-105"
-                        />
-                        <span className="absolute right-2 bottom-2 flex size-6 items-center justify-center rounded-full bg-white text-[#e11d48] shadow">
-                          <Icon name="heart" className="size-3.5" />
+                {highlightedPlaces.map((place, idx) => {
+                  const thumbUrl = itemPhotoUrl(place, trip, idx);
+                  return (
+                    <li key={place.id}>
+                      <button
+                        type="button"
+                        onClick={() => open(place)}
+                        className="group flex w-full flex-col gap-2 text-left"
+                      >
+                        <span className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl border border-line bg-sunken">
+                          <Image
+                            src={thumbUrl}
+                            alt=""
+                            fill
+                            sizes="180px"
+                            unoptimized={thumbUrl.startsWith("http") || thumbUrl.startsWith("/api/")}
+                            className="object-cover transition-transform duration-300 group-hover:scale-105"
+                          />
+                          <span className="absolute right-2 bottom-2 flex size-6 items-center justify-center rounded-full bg-white text-[#e11d48] shadow">
+                            <Icon name="heart" className="size-3.5" />
+                          </span>
                         </span>
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm font-bold text-ink">{place.title}</span>
-                        <span className="block truncate text-xs text-muted">{place.place?.name || KIND_LABEL[place.kind]}</span>
-                      </span>
-                    </button>
-                  </li>
-                ))}
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-bold text-ink">{place.title}</span>
+                          <span className="block truncate text-xs text-muted">{place.place?.name || KIND_LABEL[place.kind]}</span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </section>
