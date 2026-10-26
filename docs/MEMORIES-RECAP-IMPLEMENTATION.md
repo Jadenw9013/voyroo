@@ -1,6 +1,6 @@
 # Voyroo Memories and Recap — Implementation Handoff
 
-Status: Planned; not implemented.
+Status: M0 and local M1 prototype prepared for review; media product disabled.
 Prepared: 2026-10-25.
 Repository: https://github.com/Jadenw9013/voyroo
 Local checkout: C:/Dev/Vacations/vacation-calendar
@@ -597,3 +597,39 @@ Recheck current documentation and terms when implementing:
 
 Study CapCut and GoPro Quik as output-quality benchmarks. Do not assume
 their editing engines are open source or available as embeddable APIs.
+
+## 16. Execution status — 2026-10-25
+
+The original handoff above was saved before implementation in isolated worktree
+`C:/Dev/Vacations/voyroo-recap-plan`, committed with only the README link, and
+opened as [documentation PR #4](https://github.com/Jadenw9013/voyroo/pull/4).
+The user's original checkout remains on main at f41c0b5.
+
+| Milestone | Status and evidence |
+| --- | --- |
+| M0 | [CI/flags PR #5](https://github.com/Jadenw9013/voyroo/pull/5), independent against main; local lint/typecheck, 101 unit/API, 23 development and 4 production browser checks passed. Linux CI exposed missing optional lockfile entries and a saved-post hydration race; both were repaired. Latest remote checks must be verified on the PR. |
+| M1 | [Local prototype PR #6](https://github.com/Jadenw9013/voyroo/pull/6), stacked on #5; shared preview/export, shot replacement, crops, must-include/exclusions, music-free and original audio. Three synthetic 1080x1920 MP4s each decoded to exactly 450 frames. Five domain groups and two editor tests passed. Desktop/phone-emulated Chromium playback passed. |
+| M2–M5 | Not started; no hosted storage/uploads, account-enforced media API, durable jobs, gallery, Gemini selection, hosted download or private pilot. |
+
+Review/merge CI #5 first, then update this documentation branch from main to
+acquire required CI checks; retarget prototype #6 after its foundation merges.
+No merge, production deployment or enablement was performed. Main branch
+protection was configured and read back: one approving review, three strict
+required CI checks, admins included, stale approvals dismissed, conversation
+resolution, and no force pushes/deletion. Vercel production-branch/promotion
+controls and Preview credential separation remain unverified; GitHub Production
+has no additional deployment protection rules.
+
+Synthetic evidence and measurements are committed under
+[`evals/recap/`](https://github.com/Jadenw9013/voyroo/tree/feat/recap-render-prototype/evals/recap).
+Local render times were 22–25 seconds; paid provider calls $0. Hosted cost,
+latency, accepted-export cost, actual-phone compatibility, music listening
+review and traveler shareability remain unmeasured. Remotion's special license
+was read for evaluation; commercial adoption and a production soundtrack
+require review. No private travel footage, secrets or signed URLs were committed.
+
+No permissioned collection has been identified. M1 creative-quality acceptance
+remains open until real contributors' footage is reviewed with actual travelers.
+Use the local setup guide in PR #6. Do not broaden toward a pilot or public
+launch based on the synthetic checks. A hosted-processing ADR is required before
+implementing M2 processing; the local ADR does not select or provision a queue.
