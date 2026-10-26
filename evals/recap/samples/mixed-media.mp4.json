@@ -1,0 +1,28 @@
+{
+  "template": "keepsake-v1",
+  "revision": 1,
+  "sourceHashes": {
+    "synthetic-1": "392e54b024a940805de411bf44b358daf62fe7a376933b9ef56343f3726e75db",
+    "synthetic-3": "102b5c53661a1491838a87ca6d208fd06c4120f29b373ae7da64ffa911e09546",
+    "synthetic-4": "41d4a84723c39bc9baeed14fdc17ff8b19994108bdd710804742383a00728859",
+    "synthetic-6": "dd485a182b16ad2bf6c87a1d3ca3dfd6525979a432ad9b446baf4ebff2729707",
+    "synthetic-video-2": "972cf74f8bcbf8500c87914aa39e89b65ef6339d4371593a3b850b9ee91f86eb",
+    "synthetic-video-5": "916aa97b6ef72d4d6b5a9be37e6051f83155d88dda8e54d17c994d121419d0a1"
+  },
+  "width": 1080,
+  "height": 1920,
+  "codec": "h264",
+  "pixelFormat": "yuv420p",
+  "frames": 450,
+  "fps": 30,
+  "seconds": 15,
+  "audioCodec": "aac",
+  "audioPeakDb": -23.679544,
+  "decode": "passed",
+  "unexpectedBlackFrames": false,
+  "verificationSeconds": 0.8804798000000009,
+  "totalSeconds": 24.2920872,
+  "providerCostUsd": 0,
+  "hostedCost": "unmeasured",
+  "humanEvaluation": "not performed"
+}
