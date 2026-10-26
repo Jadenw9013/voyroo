@@ -36,8 +36,11 @@ Final local verification: `npm run ci:checks` passed (lint, typecheck, 101
 unit/API tests); `npm run ci:browser` passed 23/23; `npm run e2e:production`
 passed 4/4 with its single production build. Two further development test
 selectors were updated for the existing mobile Saved button and the trip
-library region. A saved-post check failed once, then passed both a traced
-rerun and the complete suite; no application code was changed for it.
+library region. A saved-post check initially passed on rerun, then failed again
+in Linux CI: the server tile could receive a click before hydration attached
+its handler. Post tiles now stay disabled until hydration, using the server
+snapshot of useSyncExternalStore. The existing first-click browser assertion
+is retained; no retry or second click is added to mask it.
 
 ## Flags and future route/worker obligations
 
