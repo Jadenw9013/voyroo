@@ -1,6 +1,6 @@
 # Voyroo Memories and Recap — Implementation Handoff
 
-Status: M0 and local M1 prototype prepared for review; media product disabled.
+Status: M0/M1 prototype and evaluation tooling prepared for review; creative quality pending; Preview isolation failed audit; media product disabled.
 Prepared: 2026-10-25.
 Repository: https://github.com/Jadenw9013/voyroo
 Local checkout: C:/Dev/Vacations/vacation-calendar
@@ -616,9 +616,10 @@ acquire required CI checks; retarget prototype #6 after its foundation merges.
 No merge, production deployment or enablement was performed. Main branch
 protection was configured and read back: one approving review, three strict
 required CI checks, admins included, stale approvals dismissed, conversation
-resolution, and no force pushes/deletion. Vercel production-branch/promotion
-controls and Preview credential separation remain unverified; GitHub Production
-has no additional deployment protection rules.
+resolution, and no force pushes/deletion. The initial Vercel uncertainty was
+subsequently audited on 2026-10-26; see section 17 for verified controls and the
+failed Preview isolation result. GitHub Production had no additional deployment
+protection rules at the original inspection.
 
 Synthetic evidence and measurements are committed under
 [`evals/recap/`](https://github.com/Jadenw9013/voyroo/tree/feat/recap-render-prototype/evals/recap).
@@ -633,3 +634,80 @@ remains open until real contributors' footage is reviewed with actual travelers.
 Use the local setup guide in PR #6. Do not broaden toward a pilot or public
 launch based on the synthetic checks. A hosted-processing ADR is required before
 implementing M2 processing; the local ADR does not select or provision a queue.
+
+## 17. Continued M1 preparation and Vercel evidence — 2026-10-26
+
+No PR has been merged and no production deployment, promotion, enablement or
+Vercel secret/domain/settings mutation was performed. The original checkout
+remains clean at main f41c0b5. Work stays in separate worktrees/branches.
+
+### Deployment audit — isolation failed
+
+[Focused audit PR #7](https://github.com/Jadenw9013/voyroo/pull/7), branch
+`chore/recap-vercel-audit`, commit `64ddf76`, is stacked on foundation #5.
+It contains timestamped, sanitized API evidence, a repeatable read-only auditor,
+two redaction tests, an infrastructure note and exact-branch Git deployment guards.
+Its CI passed. The Vercel deployment list confirmed no audit-branch deployment.
+
+Verified: Git production branch main, automatic production-domain assignment,
+Vercel Authentication for non-custom deployment domains, fork protection, zero
+deploy hooks and **zero configured Vercel project checks**. The current operator
+has OWNER rights, including a manual production-promotion path outside GitHub
+merge protection; no promotion/bypass experiment was run. Anonymous preview HEAD
+redirected to Vercel Authentication; production HEAD returned 200. No trip body,
+authenticated preview, Redis or Gemini request was used for this audit.
+
+The same environment-variable records target both Production and Preview,
+without branch overrides: Redis URLs/tokens, SESSION_SECRET, GEMINI_API_KEY and
+legacy TRIP_PASSPHRASE. OAuth client/secret/redirect are Production-only. Values
+were not decrypted, printed, hashed or committed. **Preview is not isolated and
+must not be used for private footage or production-data testing.** Existing
+previews retain their captured configuration. A separate reviewed infrastructure
+change must separate credentials/backends and address old previews; this work
+does not change production sessions or rotate secrets.
+
+The same branch-specific vercel.json guard is present in the audit, new M1
+evaluation and this documentation branch, suppressing their automatic Git
+deployments while leaving main and other branches unchanged. It is containment,
+not a credential fix or a restriction on manual CLI/API promotion.
+
+### M1 real-footage tooling — no creative acceptance yet
+
+[Focused evaluation PR #8](https://github.com/Jadenw9013/voyroo/pull/8), branch
+`feat/recap-quality-evaluation`, is stacked on prototype #6. The guide is
+[`docs/RECAP-M1-EVALUATION.md`](https://github.com/Jadenw9013/voyroo/blob/feat/recap-quality-evaluation/docs/RECAP-M1-EVALUATION.md)
+and the repeatable checklist is
+[`evals/recap/QUALITY-CHECKLIST.md`](https://github.com/Jadenw9013/voyroo/blob/feat/recap-quality-evaluation/evals/recap/QUALITY-CHECKLIST.md).
+
+- Explicit per-file local consent and SDR declarations; originals remain intact.
+  Separate prepared copies support tested synthetic JPEG/PNG orientation,
+  metadata stripping, VFR/display-rotated MOV and SDR HEVC decoding. HDR/wide
+  gamut, HEIC and Live Photo packages require a reviewed external SDR export.
+  Native iPhone/Android formats are not certified by synthetic fixtures.
+- Human selection of 3–9 moments in order; the active draft survives loading a
+  new collection until selection is confirmed. Replacement/crops, exclusions,
+  must-include and original-sound controls remain manual. No AI selection.
+- Exact draft/source/MP4 binding, private review bundle with full uncropped
+  prepared sources and start/middle/end contact sheet, pending review record,
+  and counts-only summary. Crop changes or revoked eligibility invalidate it.
+- Checklist covers framing, full actions, pacing, sound and actual iPhone/Android
+  playback. Emulation/technical checks cannot mark traveler or device criteria
+  passed. An accepted example never declares the overall rendering style passed.
+- Local checks passed: TypeScript, eight domain groups, two actual preparation
+  groups, three editor tests and synthetic import-to-render-to-review smoke.
+  Remote evaluation CI results are recorded on #8. No paid provider calls;
+  hosted latency, storage/processing cost and cost per accepted export unmeasured.
+
+Exact missing input: a local folder of explicitly listed contributor-permitted
+JPEG/PNG and confirmed-SDR clips; stable uploader/editor IDs; permission for
+private recap/evaluation viewing; human shot preferences; an actual traveler;
+and real iPhone/Android device/browser versions for acceptance. Prefer 8–20 varied
+assets, including 5–15-second clips; a three-photo fallback is supported. No
+production passcodes, provider credentials or public uploads are needed. The
+example manifest intentionally cannot run until its permission placeholders
+are replaced after obtaining consent.
+
+There are **zero real traveler collections and zero physical-device evaluations**.
+Creative quality has not passed. M2 hosted storage/jobs and AI implementation
+remain separate until the rendering style is evaluated. Continue to report
+sample sizes, replacements and baseline preferences without overstating results.

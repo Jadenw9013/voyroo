@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "chore/recap-vercel-audit": false,
+      "feat/recap-quality-evaluation": false,
+      "docs/memories-recap-plan": false
+    }
+  }
+}
