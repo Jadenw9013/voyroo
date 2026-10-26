@@ -30,6 +30,13 @@ CI uses read-only contents permission, disables persisted checkout credentials,
 pins action commit SHAs and uses the committed npm lockfile. Browser failure
 reports are retained seven days. No secret context or pull_request_target.
 
+Final local verification: `npm run ci:checks` passed (lint, typecheck, 101
+unit/API tests); `npm run ci:browser` passed 23/23; `npm run e2e:production`
+passed 4/4 with its single production build. Two further development test
+selectors were updated for the existing mobile Saved button and the trip
+library region. A saved-post check failed once, then passed both a traced
+rerun and the complete suite; no application code was changed for it.
+
 ## Flags and future route/worker obligations
 
 `src/server/media/flags.ts` is server-only and evaluated at call time.
