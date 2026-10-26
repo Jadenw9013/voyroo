@@ -1,6 +1,7 @@
 # Voyroo Memories and Recap — Implementation Handoff
 
-Status: Planned; not implemented.
+Status: M0 foundation in progress; media product not implemented or enabled.
+Execution log: [Foundation, baseline and repository gates](RECAP-FOUNDATION.md).
 Prepared: 2026-10-25.
 Repository: https://github.com/Jadenw9013/voyroo
 Local checkout: C:/Dev/Vacations/vacation-calendar
