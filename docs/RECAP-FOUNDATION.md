@@ -2,11 +2,13 @@
 
 ## Status and branch dependencies
 
-2026-10-25: M0 foundation prepared on `chore/recap-ci-foundation`, stacked
-on `docs/memories-recap-plan` (PR #4). No media endpoint, upload, private
+2026-10-25: M0 foundation prepared on `chore/recap-ci-foundation`, targeting
+main independently of the documentation-only plan in PR #4. No media endpoint, upload, private
 storage, hosted worker, AI analysis or product UI is enabled by this change.
 The local rendering prototype is the next separate PR. Do not merge a stack
-out of order; retarget each child to main after its parent merges.
+out of order; retarget each child to main after its parent merges. Merge this
+reviewed, green CI foundation first so the plan PR can acquire required checks
+when updated from main. The handoff was saved and PR #4 opened before any code.
 
 ## Baseline and isolated checks
 
@@ -65,8 +67,15 @@ read back: strict required checks `Static and unit`, `Browser (dev)`,
 `Browser (production)`; one approving review with stale approvals dismissed;
 conversation resolution required; admins included; force pushes and deletion
 disabled. These check names first become available with this CI PR. PR #4
-does not contain CI, so these checks will remain pending on it until CI is
-present in its head; never bypass the review/check requirements to merge it.
+does not contain CI, so update it from main after the reviewed foundation
+merges; never bypass the review/check requirements to merge it first.
+
+Linux CI initially rejected the inherited lockfile because it omitted optional
+WASM resolver/sharp dependencies that Windows did not install. Regenerating
+the lock in an empty temporary directory restored the missing entries without
+changing declared application dependency versions. Remote static/unit and
+production-browser checks passed after that repair; the dev run was still in
+progress at this update.
 
 Vercel project settings, its production-branch selection, deployment promotion
 controls and Preview credentials have NOT been independently verified in this

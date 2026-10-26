@@ -145,8 +145,6 @@ To click through the assistant without a key, run `CHAT_MOCK=1 npm run dev`. Tha
 
 ## How it works
 
-Planned private media sharing and vacation recap work: [Memories and recap implementation handoff](docs/MEMORIES-RECAP-IMPLEMENTATION.md). This is a staged plan; the feature is not implemented or enabled.
-
 Read the architecture and the reasons behind it in [`docs/REBUILD-PLAN.md`](docs/REBUILD-PLAN.md). In short:
 
 - **One kind of thing.** Everything on a trip is an *item* (stay, flight, transport, activity, food) with optional details. Booking status is one of those details, never something you must choose to add a thing.
