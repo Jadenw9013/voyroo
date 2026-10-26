@@ -82,7 +82,7 @@ prove the color content is SDR. Any tone-map/color conversion must be visually
 reviewed; the tool deliberately does not apply a one-size-fits-all HDR filter.
 
 Preparation uses [sharp orientation handling](https://sharp.pixelplumbing.com/api-operation/#rotate)
-and fixed [FFmpeg filters](https://ffmpeg.org/ffmpeg-filters.html) / 
+and fixed [FFmpeg filters](https://ffmpeg.org/ffmpeg-filters.html) /
 [rotation and mapping options](https://ffmpeg.org/ffmpeg-doc.html). FFmpeg must
 include the needed decoders/libx264; tests exercise installed tools rather
 than claiming support from a filename. Local tested build is 8.1.2; CI checks

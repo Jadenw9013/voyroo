@@ -76,7 +76,10 @@ export async function importLocal(raw: unknown, workspace = process.cwd()) {
         const before = probe(original);
         const video = before.streams.find((stream: { codec_type: string }) => stream.codec_type === "video");
         if (!video || !["h264", "hevc"].includes(video.codec_name)) throw new Error("SDR video import requires H.264 or HEVC decoding support.");
-        if (["smpte2084", "arib-std-b67"].includes(video.color_transfer) || /2020/.test(video.color_primaries ?? "") || /2020/.test(video.color_space ?? "") || (video.side_data_list ?? []).some((item: { side_data_type?: string }) => /dovi|dolby|mastering display|content light/i.test(item.side_data_type ?? ""))) throw new Error("HDR/wide-gamut footage requires an externally reviewed SDR Rec.709 conversion. No automatic tone map was applied.");
+        if (["smpte2084", "arib-std-b67"].includes(video.color_transfer) ||
+          (video.color_primaries && !["bt709", "unknown", "unspecified"].includes(video.color_primaries)) ||
+          /2020/.test(video.color_space ?? "") ||
+          (video.side_data_list ?? []).some((item: { side_data_type?: string }) => /dovi|dolby|mastering display|content light/i.test(item.side_data_type ?? ""))) throw new Error("HDR/wide-gamut footage requires an externally reviewed SDR Rec.709 conversion. No automatic tone map was applied.");
         const duration = Number(video.duration ?? before.format.duration);
         if (!Number.isFinite(duration) || duration <= 0 || duration > 120 || video.width * video.height > 40_000_000) throw new Error("Video must be at most 120 seconds and 40 megapixels per frame.");
         runFfmpeg(["-protocol_whitelist", "file,pipe", "-i", original, "-map", "0:v:0", "-map", "0:a:0?",

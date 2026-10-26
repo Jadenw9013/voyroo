@@ -8,6 +8,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { execFileSync } from "node:child_process";
 import { validateEdit } from "../domain/edit";
 import { verifyExport } from "./verify";
+import { digest } from "./local-media";
 
 // Developer-operated local prototype only. No web endpoint or uploaded code.
 const draftPath = resolve(process.argv[2] || "fixtures/mixed-media.json");
@@ -29,7 +30,7 @@ process.once("SIGTERM", cancel);
 const selected = new Set(inputProps.draft.shots.map((shot) => shot.assetId));
 const hashes = new Map<string, string>();
 const files = new Map<string, string>();
-const hash = async (path: string) => createHash("sha256").update(await readFile(path)).digest("hex");
+const hash = digest;
 try {
   for (const asset of inputProps.collection.assets.filter((asset) => selected.has(asset.id))) {
     const source = await realpath(join(sourceRoot, asset.file));
