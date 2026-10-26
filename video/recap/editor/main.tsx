@@ -2,7 +2,8 @@ import { createRoot } from "react-dom/client";
 import { useRef, useState } from "react";
 import { Player, type PlayerRef } from "@remotion/player";
 import { Recap } from "../composition/Recap";
-import { FORMAT, TEMPLATE, collectionSchema, type Collection, type Draft, validateEdit, replaceShot } from "../domain/edit";
+import { FORMAT, collectionSchema, type Collection, type Draft, validateEdit, replaceShot } from "../domain/edit";
+import { createManualDraft } from "../domain/manual";
 import collectionJson from "../fixtures/collection.json";
 import draftJson from "../fixtures/mixed-media.json";
 import "./style.css";
@@ -18,6 +19,8 @@ function Editor() {
   const [draft, setDraft] = useState<Draft>(initial.draft);
   const [selected, setSelected] = useState(0);
   const [error, setError] = useState("");
+  const [pendingCollection, setPendingCollection] = useState<Collection | null>(null);
+  const [chosen, setChosen] = useState<string[]>([]);
   const player = useRef<PlayerRef>(null);
   const shot = draft.shots[selected];
   const asset = collection.assets.find((candidate) => candidate.id === shot.assetId)!;
@@ -32,15 +35,7 @@ function Editor() {
       if (kind === "draft") { setDraft(validateEdit(collection, json).draft); }
       else {
         const nextCollection = collectionSchema.parse(json);
-        const ready = nextCollection.assets.filter((candidate) => candidate.ready && candidate.recapAllowed && !candidate.deleted).slice(0, 6);
-        if (ready.length < 3) throw new Error("Add at least three permitted, ready assets for this prototype.");
-        let start = 0;
-        const next: Draft = { tripId: nextCollection.tripId, creatorAccountId: nextCollection.accountId, revision: 1, template: TEMPLATE, mustInclude: [], excluded: [], audio: "none", shots: ready.map((candidate, index) => {
-          const duration = Math.floor(450 / ready.length) + (index < 450 % ready.length ? 1 : 0);
-          const nextShot = { assetId: candidate.id, assetVersion: candidate.version, start, duration, sourceStart: 0, crop: { layout: "contain" as const, x: 0.5, y: 0.5 }, transition: "cut" as const, originalAudio: false };
-          start += duration; return nextShot;
-        }) };
-        validateEdit(nextCollection, next); setCollection(nextCollection); setDraft(next);
+        setPendingCollection(nextCollection); setChosen([]);
       }
       setSelected(0); setError(""); player.current?.pause(); player.current?.seekTo(0);
     } catch (failure) { setError(failure instanceof Error ? failure.message : "The file could not be opened."); }
@@ -51,6 +46,21 @@ function Editor() {
     <main>
       <div className="intro"><div><h1>Keep the moments<br /> that feel like your trip.</h1><p>Choose the shots. Give them room. Make fifteen seconds yours.</p></div><button className="primary" onClick={() => downloadJson(draft)}>Save edit for export</button></div>
       <p className="notice">This workshop runs on your computer. The default collection is synthetic test media. Real media needs contributor consent and a local collection manifest.</p>
+      {pendingCollection && <section aria-label="Choose collection moments" className="import-choices">
+        <h2>Choose your moments in order</h2>
+        <p>Choose 3–9 moments. Selection order becomes shot order. Your current edit stays open until you create the new one.</p>
+        {pendingCollection.assets.filter((candidate) => candidate.ready && candidate.recapAllowed && !candidate.deleted).map((candidate) => <label className="checkbox" key={candidate.id}>
+          <input type="checkbox" checked={chosen.includes(candidate.id)} disabled={!chosen.includes(candidate.id) && chosen.length === 9}
+            onChange={(event) => setChosen(event.target.checked ? [...chosen, candidate.id] : chosen.filter((id) => id !== candidate.id))} />
+          {candidate.id} ({candidate.kind}{candidate.durationFrames ? `, ${(candidate.durationFrames / 30).toFixed(1)}s` : ""})
+        </label>)}
+        <p aria-live="polite">Order: {chosen.join(" → ") || "No moments selected"}</p>
+        <button className="primary" onClick={() => {
+          try { const next = createManualDraft(pendingCollection, chosen); setCollection(pendingCollection); setDraft(next); setSelected(0); setPendingCollection(null); setError(""); player.current?.pause(); player.current?.seekTo(0); }
+          catch (failure) { setError((failure as Error).message); }
+        }}>Create edit from selected moments</button>{" "}
+        <button onClick={() => setPendingCollection(null)}>Keep current edit</button>
+      </section>}
       <div className="workspace">
         <section className="preview" aria-label="Recap preview">
           <Player ref={player} component={Recap} inputProps={{ collection, draft }} {...FORMAT} compositionWidth={FORMAT.width} compositionHeight={FORMAT.height}
@@ -74,7 +84,7 @@ function Editor() {
             <label className="checkbox"><input type="checkbox" checked={draft.mustInclude.includes(shot.assetId)} onChange={(event) => update({ ...draft, revision: draft.revision+1, mustInclude: event.target.checked ? [...draft.mustInclude, shot.assetId] : draft.mustInclude.filter((id) => id !== shot.assetId) })} />Must include this moment</label>
           </div>
           {shot.crop.layout === "cover" && <div className="sliders">{(["x", "y"] as const).map((axis) => <label key={axis}>{axis === "x" ? "Horizontal crop" : "Vertical crop"}<input type="range" min="0" max="1" step="0.01" value={shot.crop[axis]} onChange={(event) => modifyShot({ crop: { ...shot.crop, [axis]: Number(event.target.value) } })} /></label>)}</div>}
-          {asset.kind === "video" && <div className="framing"><label>Start in source (frames)<input type="number" min="0" max={(asset.durationFrames ?? 0)-shot.duration} value={shot.sourceStart} onChange={(event) => modifyShot({ sourceStart: Number(event.target.value) })} /></label><label className="checkbox"><input type="checkbox" checked={shot.originalAudio} onChange={(event) => modifyShot({ originalAudio: event.target.checked })} />Keep original sound</label></div>}
+          {asset.kind === "video" && <div className="framing"><label>Start in source (frames)<input type="number" min="0" max={(asset.durationFrames ?? 0)-shot.duration} value={shot.sourceStart} onChange={(event) => modifyShot({ sourceStart: Number(event.target.value) })} /></label><label className="checkbox"><input type="checkbox" disabled={asset.hasAudio === false} checked={shot.originalAudio} onChange={(event) => modifyShot({ originalAudio: event.target.checked })} />{asset.hasAudio === false ? "This source has no audio" : "Keep original sound"}</label></div>}
           <label>Soundtrack<select value={draft.audio} onChange={(event) => update({ ...draft, revision: draft.revision+1, audio: event.target.value as Draft["audio"] })}><option value="none">Music-free</option><option value="fixture-score">Diagnostic score (synthetic examples)</option></select></label>
           <details><summary>Excluded moments and local files</summary><label>Excluded asset IDs (comma separated)<input key={draft.excluded.join(",")} defaultValue={draft.excluded.join(", ")} onBlur={(event) => update({ ...draft, revision: draft.revision+1, excluded: event.target.value.split(",").map((id) => id.trim()).filter(Boolean) })} /></label><p className="hint">Replace a selected moment before excluding it. Must-include moments stay until you uncheck them.</p>
             <div className="file-controls"><label>Open collection<input type="file" accept="application/json,.json" onChange={(event) => void openFile(event.target.files?.[0], "collection")} /></label><label>Open saved edit<input type="file" accept="application/json,.json" onChange={(event) => void openFile(event.target.files?.[0], "draft")} /></label></div>

@@ -63,7 +63,9 @@ try {
   validateEdit(JSON.parse(await readFile(collectionPath, "utf8")), inputProps.draft);
   for (const [id, source] of files) if (await hash(source) !== hashes.get(id)) throw new Error("A source changed during render. Output was not published.");
   await link(temporaryOutput, output); // Atomic, refuses to overwrite an existing export.
-  const report = { template: inputProps.draft.template, revision: inputProps.draft.revision, sourceHashes: Object.fromEntries(hashes), ...technical, totalSeconds: (performance.now() - started) / 1000, providerCostUsd: 0, hostedCost: "unmeasured", humanEvaluation: "not performed" };
+  const report = { template: inputProps.draft.template, revision: inputProps.draft.revision,
+    draftHash: createHash("sha256").update(initialDraft).digest("hex"), exportHash: await hash(output),
+    sourceHashes: Object.fromEntries(hashes), ...technical, totalSeconds: (performance.now() - started) / 1000, providerCostUsd: 0, hostedCost: "unmeasured", humanEvaluation: "not performed" };
   await writeFile(`${output}.json`, JSON.stringify(report, null, 2) + "\n", { flag: "wx" });
   console.log(JSON.stringify({ output, ...report }, null, 2));
 } finally {

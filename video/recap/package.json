@@ -11,6 +11,10 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test domain/*.test.ts",
     "test:editor": "playwright test",
+    "test:media": "tsx --test scripts/*.test.ts",
+    "import:local": "tsx scripts/import-local.ts",
+    "evaluate": "tsx scripts/evaluate.ts",
+    "evaluate:summary": "tsx scripts/review-summary.ts",
     "fixtures": "tsx scripts/fixtures.ts",
     "render": "tsx scripts/render.ts",
     "verify": "tsx scripts/verify.ts"

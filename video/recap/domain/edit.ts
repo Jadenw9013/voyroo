@@ -8,6 +8,7 @@ export const assetSchema = z.object({
   kind: z.enum(["photo", "video"]), file: z.string().regex(/^(fixtures|private)\/[a-zA-Z0-9_-]+\.(jpg|png|mp4)$/),
   width: z.number().int().positive(), height: z.number().int().positive(),
   durationFrames: z.number().int().positive().optional(),
+  hasAudio: z.boolean().optional(),
   recapAllowed: z.boolean(), aiAllowed: z.boolean(), ready: z.boolean(), deleted: z.boolean(),
 }).strict();
 export const cropSchema = z.object({
@@ -53,6 +54,7 @@ export function validateEdit(rawCollection: unknown, rawDraft: unknown) {
     if (shot.start !== end) fail("Shots must form a continuous timeline without gaps or overlap.");
     if (asset!.kind === "video" && (asset!.durationFrames === undefined || shot.sourceStart + shot.duration > asset!.durationFrames)) fail("A video segment extends beyond the approved source.");
     if (asset!.kind === "photo" && (shot.sourceStart !== 0 || shot.originalAudio)) fail("Photos cannot have source offsets or audio.");
+    if (shot.originalAudio && asset!.hasAudio === false) fail("This source has no original audio track.");
     selected.add(shot.assetId);
     end += shot.duration;
   }

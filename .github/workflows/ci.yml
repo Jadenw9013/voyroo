@@ -28,7 +28,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: npm ci
       - run: npm run fixtures
-      - run: npm run typecheck && npm test
+      - run: npm run typecheck && npm test && npm run test:media
       # The hosted Ubuntu image already includes Chrome's runtime libraries;
       # FFmpeg is installed above. Avoid a second apt update for the browser.
       - run: npx playwright install chromium
@@ -36,6 +36,7 @@ jobs:
       - run: npm run test:editor
       - run: npm run render -- fixtures/mixed-media.json fixtures/collection.json artifacts/ci-mixed-media.mp4
       - run: npx tsx scripts/playback.ts artifacts/ci-mixed-media.mp4
+      - run: npx tsx scripts/smoke-local-evaluation.ts
       - if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:

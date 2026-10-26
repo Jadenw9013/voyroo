@@ -55,6 +55,14 @@ use; this install time is excluded from the reported warm render timings.
 
 ## Permissioned local examples
 
+Use the [local import and quality-evaluation guide](../../docs/RECAP-M1-EVALUATION.md)
+and [repeatable checklist](../../evals/recap/QUALITY-CHECKLIST.md). The importer
+requires explicit per-file permission, preserves originals, normalizes supported
+SDR inputs, and records preparation separately. The evaluation bundle starts
+pending and requires real traveler and physical-phone review. No real collection
+has been provided. The detailed manual-copy workflow below is retained for already
+normalized inputs; new imports should use `npm run import:local`.
+
 No real trip collection has been supplied or evaluated yet. Do not search the
 user's other files for footage or reuse destination/context photos as memories.
 Only a developer with permission from contributors should prepare this input.
@@ -67,20 +75,20 @@ Only a developer with permission from contributors should prepare this input.
    source version, and set consent only after obtaining permission. Each asset
    path must be `private/<filename>.jpg`, `.png` or `.mp4`. Mark ready/eligible
    explicitly; set `aiAllowed: false` since this prototype performs no AI work.
-3. Use **Open collection** to load that manifest. It starts a manual edit using
-   the first six ready eligible assets, full-image framing and music-free audio.
-   At least three assets are required by this template. Short videos must be
-   long enough for their assigned slot; adjust the source/selection if rejected.
+3. Use **Open collection** to load that manifest and explicitly choose 3–9
+   moments in order, then create the new edit. The existing edit remains until
+   you confirm that selection. Short videos must fit their assigned slots;
+   adjust the selection if rejected. Framing starts full-image and music-free.
 4. Review every shot, save the edit into `private/`, and pass those two local
    JSON paths to `npm run render`. Nothing is uploaded. Do not commit any of
    these inputs, screenshots, exports or hashes. Keep private manifests out of
    `fixtures/`, which is committed and embedded in the diagnostic render bundle.
 
-Local source checks support tested JPEG/PNG stills and normalized SDR H.264
-MP4 at 30fps only. This is not an upload validator. HEIC, HEVC, Live Photos,
-variable frame rate, HDR, phone rotation metadata, corrupt/untrusted uploads
-and real iPhone/Android capture formats remain untested. Preparation in a
-restricted worker is M2 work. Do not claim native phone format support.
+Direct rendering still expects normalized JPEG/PNG and 30fps SDR H.264 MP4.
+The local importer additionally exercises synthetic SDR HEVC, VFR MOV and
+rotation normalization. Native phone capture formats/devices remain unverified;
+HDR, HEIC and Live Photo packages are rejected. Corrupt/untrusted upload
+inspection in a restricted worker is M2 work. Do not claim native phone support.
 
 The tool stages only selected assets for rendering and rejects path traversal,
 remote URLs and symlink escapes from the local public directory. It checks
