@@ -11,7 +11,7 @@ concurrency:
 jobs:
   recap:
     name: Recap prototype
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
       run:
@@ -29,7 +29,10 @@ jobs:
       - run: npm ci
       - run: npm run fixtures
       - run: npm run typecheck && npm test
-      - run: npx playwright install --with-deps chromium
+      # The hosted Ubuntu image already includes Chrome's runtime libraries;
+      # FFmpeg is installed above. Avoid a second apt update for the browser.
+      - run: npx playwright install chromium
+        timeout-minutes: 5
       - run: npm run test:editor
       - run: npm run render -- fixtures/mixed-media.json fixtures/collection.json artifacts/ci-mixed-media.mp4
       - run: npx tsx scripts/playback.ts artifacts/ci-mixed-media.mp4
