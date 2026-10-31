@@ -1,5 +1,10 @@
 # M1 local prototype evidence
 
+Continuation: [real-footage preparation and review tooling](../../docs/RECAP-M1-EVALUATION.md)
+and [repeatable quality checklist](QUALITY-CHECKLIST.md). Synthetic normalization
+and review-package checks are added; real traveler collections and physical
+phones remain unevaluated. Creative quality has not passed.
+
 Prepared 2026-10-25. Synthetic diagnostics only; no traveler sample or preference
 evaluation. No claim of shareability, production safety or completion of M1.
 

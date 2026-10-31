@@ -39,3 +39,22 @@ test("phone editor has no horizontal overflow and private responses are uncached
   expect(await page.evaluate(() => navigator.serviceWorker.getRegistrations().then((items) => items.length))).toBe(0);
   await page.screenshot({ path: "artifacts/editor-mobile.png", fullPage: true });
 });
+
+test("importing a collection keeps the existing draft until moments are explicitly chosen", async ({ page }) => {
+  await page.goto("/");
+  await page.getByText("Excluded moments and local files", { exact: true }).click();
+  await page.getByLabel("Open collection").setInputFiles({ name: "collection.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(collection)) });
+  const picker = page.getByRole("region", { name: "Choose collection moments" });
+  await expect(picker).toBeVisible();
+  await expect(page.getByLabel("Replace this shot")).toHaveValue("synthetic-1");
+  await picker.getByLabel("synthetic-8", { exact: false }).check();
+  await picker.getByLabel("synthetic-3", { exact: false }).check();
+  await picker.getByLabel("synthetic-1", { exact: false }).check();
+  await picker.getByRole("button", { name: "Create edit from selected moments" }).click();
+  await expect(picker).not.toBeVisible();
+  await expect(page.getByLabel("Replace this shot")).toHaveValue("synthetic-8");
+  await page.getByRole("button", { name: "Edit shot 2", exact: true }).click();
+  await expect(page.getByLabel("Replace this shot")).toHaveValue("synthetic-3");
+  await page.getByLabel("Replace this shot").selectOption("synthetic-2");
+  await expect(page.getByLabel("Replace this shot")).toHaveValue("synthetic-2");
+});

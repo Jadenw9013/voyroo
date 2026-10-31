@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "sourceRoot": "REPLACE_WITH_ABSOLUTE_CONSENTED_FOLDER",
+  "tripId": "private-eval-trip",
+  "editorAccountId": "editor-stable-id",
+  "permittedAccountIds": ["editor-stable-id"],
+  "consent": "PENDING_CONTRIBUTOR_APPROVAL",
+  "initialSelection": ["moment-01", "moment-02", "moment-03"],
+  "assets": [
+    { "id": "moment-01", "ownerAccountId": "uploader-stable-id", "source": "photo-01.jpg", "contributorPermission": "PENDING_CONTRIBUTOR_APPROVAL", "recapAllowed": true, "aiAllowed": false, "colorMode": "CONFIRM_SDR_BEFORE_IMPORT" },
+    { "id": "moment-02", "ownerAccountId": "uploader-stable-id", "source": "clip-02.mov", "contributorPermission": "PENDING_CONTRIBUTOR_APPROVAL", "recapAllowed": true, "aiAllowed": false, "colorMode": "CONFIRM_SDR_BEFORE_IMPORT" },
+    { "id": "moment-03", "ownerAccountId": "uploader-stable-id", "source": "photo-03.png", "contributorPermission": "PENDING_CONTRIBUTOR_APPROVAL", "recapAllowed": true, "aiAllowed": false, "colorMode": "CONFIRM_SDR_BEFORE_IMPORT" }
+  ]
+}
