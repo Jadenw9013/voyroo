@@ -17,7 +17,6 @@ export function JoinForm({
   people,
   initialName = "",
   hasAccount = false,
-  googleConfigured: _googleConfigured = false,
 }: {
   tripId: string;
   tripName: string;
