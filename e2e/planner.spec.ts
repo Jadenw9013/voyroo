@@ -34,7 +34,7 @@ test("signed-in planning resumes across devices and saves under the right person
     await expect(resumed.getByText("Saved to your trips.", { exact: true })).toBeVisible();
     await resumed.getByRole("link", { name: "Open your trip" }).click();
     await resumed.getByRole("link", { name: "Voyroo home", exact: true }).click();
-    await expect(resumed.getByRole("link", { name: /Oaxaca escape/ })).toBeVisible();
+    await expect(resumed.locator("#your-trips").getByRole("link", { name: /Oaxaca escape/ })).toBeVisible();
     const memberships = await (await resumed.request.get("/api/trips")).json();
     expect(memberships.trips).toHaveLength(1);
     const state = await (await resumed.request.get(`/api/t/${memberships.trips[0].id}`)).json();
