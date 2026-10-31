@@ -109,6 +109,26 @@ Sign-in uses the [Google Auth Library](https://github.com/googleapis/google-auth
 
 Pictures are kept on the phone by the service worker, so the grid still shows offline. The videos themselves need a connection.
 
+## Travel time between stops
+
+Between two stops on a day that both have coordinates, Today, the Plan and the item page ("From previous stop") show how to get from one to the next: "About 25 min drive · 12 km · Leave by 8:35 AM". Under 1.5 km it's a walk. When the gap is shorter than the trip plus ten minutes, it says so in words with a clock icon: "Tight: 40 min drive, 30 min gap". The first timed stop of a day also gets a line from where you slept. Nothing is drawn to or from a flight, out of a shuttle or boat (it carries you; its place is usually the pickup), or between untimed things whose order isn't known. Stops without coordinates just have no line.
+
+Road times come from [openrouteservice](https://openrouteservice.org) (HeiGIT, OpenStreetMap data). We compared:
+
+| Service | Key | Cost and limits | Fit |
+|---|---|---|---|
+| OSRM demo server | None | Free, 1 request a second, non-commercial, no uptime promise | Not meant for apps |
+| FOSSGIS OSRM / Valhalla | None | Free, 1 request a second, a single donated server, high-traffic sites not allowed | Not meant for apps |
+| **openrouteservice** | **Free key** | **2,000 routes a day, 40 a minute; drive and walk; OpenStreetMap data (ODbL), so results can be kept with attribution** | **Chosen** |
+| Google Routes API | Key and a billing account | About 10,000 free a month, then about $5 per 1,000; the terms limit caching | Can't be kept on the phone for offline |
+
+The first three share OpenStreetMap's roads, which cover Guatemala's highways and the towns around Antigua, Atitlán and the capital; Google adds live traffic, which this kind of trip rarely needs. Boats across the lake aren't roads: add the boat as a transport item and no drive is drawn after it.
+
+- The key is `OPENROUTESERVICE_API_KEY`, read on the server only (get one free at [account.heigit.org](https://account.heigit.org)). Without it, phones show a straight-line guess marked "(estimate)", and the item page says why.
+- `GET /api/t/{id}/routes` works out the legs from the stored trip, so it can't be used to route anywhere else. Each (from, to, mode) is cached in Redis for 90 days ("no road" for 7). Lookups are limited to 150 per trip per hour and 1,500 a day for the whole site, under the free plan's 2,000.
+- The phone keeps every leg's route for the whole trip in localStorage (`trip:{id}:routes`), next to the trip, so the lines show with no signal.
+- `ROUTING_MOCK=1` (never in production) gives made-up road times with no network, for local testing and the browser tests.
+
 ## Privacy
 
 Each trip has its own link and a passcode the group shares. Joining asks for your first name and the passcode, and sets a cookie for that trip only. An editing invite alone doesn't open the trip. An explicitly enabled viewing link does open a limited itinerary for anyone who has it; it can be revoked in **Share trip**.
@@ -186,6 +206,7 @@ Private trip routes require a remembered account membership or a trip cookie fro
 | `POST /api/t/{id}/undo` | `{ entryId }`. Undoes that change on top of whatever happened since |
 | `GET /api/t/{id}/history` | The change log, newest first |
 | `POST /api/t/{id}/unfurl` | `{ url }`. A link's title, picture and kind |
+| `GET /api/t/{id}/routes` | `{ routes: { key: { s, m } \| null }, pending, provider }`. Road times for every leg on the trip, cached and rationed |
 | `GET /api/t/{id}/thumb` | `?item=&link=` a saved link's picture, or `?post=` a post's picture before saving (post links only) |
 | `POST /api/t/{id}/chat` | The assistant (AI SDK UI message stream) |
 | `POST /api/t/{id}/import` | `{ image, index, total }`. Reads one booking screenshot and records what it shows. One per request, so ten screenshots stay well under Vercel's 4.5 MB request limit |
@@ -215,7 +236,7 @@ npm run summary      # the seed trip as the app sees it: nights, what's missing,
 
 1. Import the repo at vercel.com/new. Leave the build settings alone.
 2. Storage → Upstash for Redis → connect it. That sets `KV_REST_API_URL` and `KV_REST_API_TOKEN`.
-3. Settings → Environment Variables: `GEMINI_API_KEY`. Optionally also `SESSION_SECRET` and `TRIP_PASSCODE`.
+3. Settings → Environment Variables: `GEMINI_API_KEY`. Optionally also `SESSION_SECRET`, `TRIP_PASSCODE` and `OPENROUTESERVICE_API_KEY` (road times between stops).
 4. Redeploy. Environment variable changes only apply to new deployments.
 
 The first visit to `/t/guatemala` migrates the old trip if there is one, or seeds it from `src/data/trip.ts`.
