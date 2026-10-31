@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { checkPasscode, hashPasscode, writeSession } from "@/server/auth";
-import { firstName, getStore, jsonError, readJson, requireSession } from "@/server/http";
+import { firstName, getStore, jsonError, readJson, requester, requireSession } from "@/server/http";
+
+const MAX_TRIES = 10;
+const WINDOW_SECONDS = 15 * 60;
 
 /** Body: { name } to change your name, or { passcode, newPasscode } to change the trip's passcode. */
 export async function POST(request: Request, { params }: { params: Promise<{ tripId: string }> }) {
@@ -17,8 +20,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ tri
     }
     const store = getStore();
     const stored = await store.getPass(tripId);
-    if (stored && !auth.session.accountId && (typeof passcode !== "string" || !(await checkPasscode(passcode.trim(), stored)))) {
-      return jsonError(403, "The current passcode doesn't match.", { field: "passcode" });
+    // Changing it locks out anyone who hasn't joined yet, so it takes the current passcode, from
+    // everyone but the Google account that made the trip (a planner trip's passcode is generated).
+    const owner = !!auth.session.accountId && (await store.owner(tripId)) === auth.session.accountId;
+    if (stored && !owner) {
+      const failKey = `passcode:${tripId}:${await requester(request)}`;
+      if ((await store.count(failKey)) >= MAX_TRIES) return jsonError(429, "Too many wrong passcodes. Wait 15 minutes and try again.");
+      if (typeof passcode !== "string" || !(await checkPasscode(passcode.trim(), stored))) {
+        await store.hit(failKey, WINDOW_SECONDS);
+        return jsonError(403, "The current passcode doesn't match.", { field: "passcode" });
+      }
     }
     await store.setPass(tripId, await hashPasscode(newPasscode.trim()));
     return NextResponse.json({ ok: true });

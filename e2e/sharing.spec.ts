@@ -34,8 +34,11 @@ test("share a view-only itinerary without sign-up, then revoke it", async ({ pag
   const update = await page.request.post("/api/t/guatemala/ops", { data: { ops: [{ op: "trip.update", set: { notes: "PRIVATE-NOTE-NOT-FOR-PRESENTATION" } }] } });
   expect(update.ok()).toBe(true);
   const { trip } = await (await page.request.get("/api/t/guatemala")).json();
-  const reservation = await page.request.post("/api/t/guatemala/ops", { data: { confirmed: true, ops: [{ op: "item.update", id: trip.items[0].id, set: { booking: { state: "booked", confirmation: "PRIVATE-CONFIRMATION-NOT-FOR-PRESENTATION" } } }] } });
+  const reservation = await page.request.post("/api/t/guatemala/ops", { data: { confirmed: true, ops: [{ op: "item.update", id: trip.items[0].id, set: { booking: { state: "booked", confirmation: "PRIVATE-CONFIRMATION-NOT-FOR-PRESENTATION", by: "Privbooker" } } }] } });
   expect(reservation.ok()).toBe(true);
+  // Item notes are where door codes and wifi passwords go; contacts are phone numbers.
+  const itemPrivate = await page.request.post("/api/t/guatemala/ops", { data: { confirmed: true, ops: trip.items.slice(0, 3).map((item: { id: string }) => ({ op: "item.update", id: item.id, set: { notes: "Door code PRIVATE-ITEM-NOTE-NOT-FOR-PRESENTATION", contact: { phone: "+502 5555 0199" } } })) } });
+  expect(itemPrivate.ok()).toBe(true);
   await page.getByRole("button", { name: "Share trip", exact: true }).click();
   const sheet = page.getByRole("dialog", { name: "Share trip", exact: true });
   await sheet.getByRole("button", { name: "Copy invite", exact: true }).click();
@@ -57,6 +60,9 @@ test("share a view-only itinerary without sign-up, then revoke it", async ({ pag
     const html = await response!.text();
     expect(html).not.toContain("PRIVATE-NOTE-NOT-FOR-PRESENTATION");
     expect(html).not.toContain("PRIVATE-CONFIRMATION-NOT-FOR-PRESENTATION");
+    expect(html).not.toContain("PRIVATE-ITEM-NOTE-NOT-FOR-PRESENTATION");
+    expect(html).not.toContain("Privbooker");
+    expect(html).not.toContain("5555 0199");
     await expect(viewer.getByText("Shared Travel Guide", { exact: true })).toBeVisible();
     await expect(viewer.getByRole("heading", { level: 1 })).toBeVisible();
     await expect(viewer.getByRole("button", { name: "Print itinerary", exact: true })).toBeVisible();
@@ -71,6 +77,10 @@ test("share a view-only itinerary without sign-up, then revoke it", async ({ pag
     await expect(viewer.getByRole("heading", { name: "Updated public booking", exact: true })).toBeVisible();
     await expect(viewer.getByRole("textbox")).toHaveCount(0);
     await expect(viewer.getByText("PRIVATE-NOTE-NOT-FOR-PRESENTATION")).toHaveCount(0);
+    await expect(viewer.getByText(/PRIVATE-ITEM-NOTE-NOT-FOR-PRESENTATION/)).toHaveCount(0);
+    // Its pictures load through the viewing link, without a trip session.
+    const photo = viewer.locator("img[src^='/api/photo?']").first();
+    await expect(photo).toHaveAttribute("src", /&trip=guatemala&token=[a-f0-9]{64}$/);
     expect((await guest.request.get("http://localhost:3200/api/t/guatemala")).status()).toBe(401);
     expect((await guest.request.post("http://localhost:3200/api/t/guatemala/ops", { data: { ops: [] } })).status()).toBe(401);
     expect((await guest.cookies()).some((cookie) => cookie.name.startsWith("trip_") || cookie.name === "travel_account")).toBe(false);

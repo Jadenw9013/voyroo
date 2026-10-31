@@ -163,7 +163,7 @@ describe("Google accounts and trip access", () => {
     expect(await joinedTrips()).toEqual([]);
   });
 
-  it("only adds users with valid Google accounts to the planners group when Google is configured", async () => {
+  it("adds passcode-only friends and Google members to the group when Google is configured", async () => {
     const store = getStore();
     await store.create({
       schema: 2, id: "google-trip", name: "Trip", destination: "Tokyo",
@@ -171,17 +171,17 @@ describe("Google accounts and trip access", () => {
       people: ["Creator"], items: [], todos: [],
     }, await hashPasscode("secretpass"));
 
-    // Attempting to join without a Google account allows access but does not add to planners group
+    // A friend with only the passcode is part of the group too
     const unauthReq = new Request("http://localhost/api/t/google-trip/join", {
       method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name: "Hacker", passcode: "secretpass" }),
+      body: JSON.stringify({ name: "Bea", passcode: "secretpass" }),
     });
     const unauthRes = await joinTrip(unauthReq, { params: Promise.resolve({ tripId: "google-trip" }) });
     expect(unauthRes.status).toBe(200);
     let state = await store.get("google-trip");
-    expect(state?.trip.people).toEqual(["Creator"]);
+    expect(state?.trip.people).toEqual(["Creator", "Bea"]);
 
-    // Joining with a valid Google account adds them to planners group
+    // Joining with Google adds them and records the account for the badge
     await writeAccount(accountA);
     const authReq = new Request("http://localhost/api/t/google-trip/join", {
       method: "POST", headers: { "content-type": "application/json" },
@@ -190,6 +190,7 @@ describe("Google accounts and trip access", () => {
     const authRes = await joinTrip(authReq, { params: Promise.resolve({ tripId: "google-trip" }) });
     expect(authRes.status).toBe(200);
     state = await store.get("google-trip");
-    expect(state?.trip.people).toEqual(["Creator", "Ana"]);
+    expect(state?.trip.people).toEqual(["Creator", "Bea", "Ana"]);
+    expect(await store.tripAccounts("google-trip")).toEqual({ Ana: accountA.id });
   });
 });

@@ -426,12 +426,18 @@ function ChangeCard({ result }: { result: ChangeResult }) {
   );
 }
 
-/** A change only a person can make: removing something, or moving something booked. */
-export function ConfirmCard({ pending }: { pending: { message: string; ops: Op[]; summary: string[] } }) {
+/**
+ * A change only a person can make: removing something, or moving something booked.
+ * With `onConfirm`/`onDismiss` the caller keeps track of the decision (the outbox
+ * does, for an edit made offline); otherwise this card applies it and remembers.
+ */
+export function ConfirmCard({ pending, onConfirm, onDismiss }: { pending: { message: string; ops: Op[]; summary: string[] }; onConfirm?: () => void; onDismiss?: () => void }) {
   const { apply, trip, tripId } = useTrip();
+  const owned = !!onConfirm;
   const opKey = pending.ops.map((o) => `${o.op}:${"id" in o ? o.id : ""}:${"itemId" in o ? o.itemId : ""}`).join("|") || JSON.stringify(pending.ops);
   const storageKey = `trip:${tripId}:pending:${opKey}`;
   const [state, setState] = useState<"idle" | "confirmed" | "dismissed">(() => {
+    if (owned) return "idle";
     try {
       const saved = localStorage.getItem(storageKey);
       if (saved === "confirmed" || saved === "dismissed") return saved;
@@ -458,6 +464,11 @@ export function ConfirmCard({ pending }: { pending: { message: string; ops: Op[]
       return false;
     });
 
+  // Someone already made this change: there's nothing left to decide.
+  useEffect(() => {
+    if (owned && alreadyDone) onDismiss?.();
+  }, [owned, alreadyDone, onDismiss]);
+
   if (state === "confirmed" || alreadyDone) return <p className="text-base font-semibold text-accent">Done.</p>;
   if (state === "dismissed") return <p className="text-base text-muted">Left as it was.</p>;
 
@@ -475,6 +486,11 @@ export function ConfirmCard({ pending }: { pending: { message: string; ops: Op[]
         <button
           type="button"
           onClick={async () => {
+            if (onConfirm) {
+              onConfirm();
+              setState("confirmed");
+              return;
+            }
             const r = await apply(pending.ops, { confirmed: true });
             if (r.ok || alreadyDone) {
               setState("confirmed");
@@ -493,6 +509,7 @@ export function ConfirmCard({ pending }: { pending: { message: string; ops: Op[]
           type="button"
           onClick={() => {
             setState("dismissed");
+            if (onDismiss) return onDismiss();
             try {
               localStorage.setItem(storageKey, "dismissed");
             } catch {

@@ -2,7 +2,7 @@ import "server-only";
 import { convertToModelMessages, createUIMessageStreamResponse, isStepCount, streamText, toUIMessageStream, type UIMessage } from "ai";
 import { readSession } from "../auth";
 import { getStore } from "../db";
-import { jsonError, readJson, sameSite, TRIP_ID } from "../http";
+import { jsonError, rateLimit, readJson, sameSite, TRIP_ID } from "../http";
 import { assistantModel, errorMessage, googleProvider, isMock, SETTINGS } from "./models";
 import { buildInstructions } from "./prompt";
 import { buildTools } from "./tools";
@@ -53,6 +53,8 @@ export async function handleChat(request: Request, tripId: string): Promise<Resp
   if (!TRIP_ID.test(tripId)) return jsonError(404, "No such trip.");
   const session = await readSession(tripId);
   if (!session) return jsonError(401, "Join the trip first.", { join: true });
+  const limited = await rateLimit(request, "chat", 120, 3600, "You've asked the assistant a lot this hour. Try again in a little while.");
+  if (limited) return limited;
 
   const parsed = await readJson(request, LIMITS.bodyBytes);
   if (!parsed.ok) return parsed.res;

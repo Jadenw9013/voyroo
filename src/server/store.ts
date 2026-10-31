@@ -49,6 +49,12 @@ export interface Backend {
   hit(key: string, ttlSeconds: number): Promise<number>;
   /** A counter's current value (0 when unset or expired). */
   count(key: string): Promise<number>;
+  /** A small cached value (photo lookups), or null when unset or expired. */
+  cached(key: string): Promise<string | null>;
+  cache(key: string, value: string, ttlSeconds: number): Promise<void>;
+  /** The Google account that created the trip, if one did. */
+  owner(id: string): Promise<string | null>;
+  setOwner(id: string, accountId: string): Promise<void>;
   /** The v1 trip, if the old single-trip keys exist. */
   legacy(): Promise<string | null>;
 }
@@ -80,9 +86,11 @@ export class TripStore {
     return { trip: parse<Trip>(row.state), version: row.version };
   }
 
-  async create(trip: Trip, passHash: string): Promise<boolean> {
+  /** `owner`: the Google account creating it, which may later change the passcode without knowing it. */
+  async create(trip: Trip, passHash: string, owner?: string): Promise<boolean> {
     if (!(await this.db.init(trip.id, JSON.stringify(trip)))) return false;
     await this.db.setPass(trip.id, passHash);
+    if (owner) await this.db.setOwner(trip.id, owner);
     await this.db.putIndex(trip.id, JSON.stringify(summaryOf(trip)));
     return true;
   }
@@ -146,6 +154,9 @@ export class TripStore {
   count(key: string) {
     return this.db.count(key);
   }
+  cached(key: string) { return this.db.cached(key); }
+  cache(key: string, value: string, ttlSeconds: number) { return this.db.cache(key, value, ttlSeconds); }
+  owner(id: string) { return this.db.owner(id); }
   accountTrips(accountId: string) { return this.db.accountTrips(accountId); }
   tripAccounts(tripId: string) { return this.db.tripAccounts(tripId); }
   rememberTrip(accountId: string, tripId: string, name: string) { return this.db.rememberTrip(accountId, tripId, name); }
@@ -169,6 +180,8 @@ export class MemoryBackend implements Backend {
   private planners = new Map<string, string>();
   private previews = new Map<string, string>();
   private counters = new Map<string, { n: number; until: number }>();
+  private kv = new Map<string, { value: string; until: number }>();
+  private owners = new Map<string, string>();
 
   constructor(private legacyTrip: string | null = null) {}
 
@@ -234,6 +247,15 @@ export class MemoryBackend implements Backend {
     const c = this.counters.get(key);
     return c && c.until > Date.now() ? c.n : 0;
   }
+  async cached(key: string) {
+    const c = this.kv.get(key);
+    return c && c.until > Date.now() ? c.value : null;
+  }
+  async cache(key: string, value: string, ttlSeconds: number) {
+    this.kv.set(key, { value, until: Date.now() + ttlSeconds * 1000 });
+  }
+  async owner(id: string) { return this.owners.get(id) ?? null; }
+  async setOwner(id: string, accountId: string) { this.owners.set(id, accountId); }
   async legacy() {
     return this.legacyTrip;
   }
@@ -242,7 +264,7 @@ export class MemoryBackend implements Backend {
 /** The subset of the @upstash/redis client used here. */
 export interface RedisLike {
   get(key: string): Promise<string | null>;
-  set(key: string, value: string, opts?: { nx?: true }): Promise<unknown>;
+  set(key: string, value: string, opts?: { nx?: true; ex?: number }): Promise<unknown>;
   del(key: string): Promise<unknown>;
   mget(...keys: string[]): Promise<(string | null)[]>;
   lrange(key: string, start: number, stop: number): Promise<string[]>;
@@ -251,7 +273,7 @@ export interface RedisLike {
   eval(script: string, keys: string[], args: string[]): Promise<unknown>;
 }
 
-const k = (id: string) => ({ state: `t:${id}:state`, version: `t:${id}:version`, log: `t:${id}:log`, pass: `t:${id}:pass` });
+const k = (id: string) => ({ state: `t:${id}:state`, version: `t:${id}:version`, log: `t:${id}:log`, pass: `t:${id}:pass`, owner: `t:${id}:owner` });
 
 /** Disabling SDK deserialization also disables HGETALL's object conversion.
  * Decode its alternating fields/values without parsing names or JSON twice. */
@@ -340,6 +362,14 @@ export class RedisBackend implements Backend {
   async count(key: string) {
     return Number((await this.redis.get(`rl:${key}`)) ?? 0);
   }
+  async cached(key: string) {
+    return this.redis.get(`cache:${key}`);
+  }
+  async cache(key: string, value: string, ttlSeconds: number) {
+    await this.redis.set(`cache:${key}`, value, { ex: ttlSeconds });
+  }
+  async owner(id: string) { return this.redis.get(k(id).owner); }
+  async setOwner(id: string, accountId: string) { await this.redis.set(k(id).owner, accountId); }
   async legacy() {
     const v = await this.redis.get("trip:v1:state");
     return v === null ? null : typeof v === "string" ? v : JSON.stringify(v);

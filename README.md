@@ -26,7 +26,7 @@ Choose the **Voyroo logo** to return to your personal workspace. **New trip** op
 
 Open **Share trip** in the navigation:
 
-- **Create viewing link** creates a presentation that opens immediately without sign-up or a passcode. It shows the current itinerary, places, times and booking status, and supports printing. It does not grant editing access. Private notes, contacts and reservation confirmations are excluded.
+- **Create viewing link** creates a presentation that opens immediately without sign-up or a passcode. It shows the current itinerary, places, times, whether each thing is booked and how many people are going, and supports printing. It does not grant editing access. It never includes notes (the trip's or an item's: door codes, wifi), contacts, saved links, confirmation numbers, prices, who booked or runs what, checklists, to-dos or the group's names. The page is built from an allowlist of fields (`publicTrip` in `src/server/preview.ts`), so a new field stays private until it's added there.
 - An open preview checks for saved changes every 15 seconds while visible, and again when the viewer returns to the tab or reconnects. The existing page refreshes automatically without changing its layout or resetting scroll. Disabling a link also closes the itinerary in an open preview. A version-only endpoint checks the token on every request and never sends private trip data.
 - **Copy viewing link** copies the existing link. **Turn off viewing link** revokes it; creating another link afterward produces a new token. Viewing pages are not cached for offline use, so disabled links cannot be replayed from the offline page cache.
 - **Share invite / Copy invite** sends the group-editing invitation. New collaborators use the trip passcode; returning members use their remembered account.
@@ -113,8 +113,11 @@ Pictures are kept on the phone by the service worker, so the grid still shows of
 
 Each trip has its own link and a passcode the group shares. Joining asks for your first name and the passcode, and sets a cookie for that trip only. An editing invite alone doesn't open the trip. An explicitly enabled viewing link does open a limited itinerary for anyone who has it; it can be revoked in **Share trip**.
 
-- The original trip (`/t/guatemala`) takes its passcode from `TRIP_PASSCODE`, or from the first person to join.
-- Change the passcode under **Trip** → **Change passcode**. People already in stay in.
+- The original trip (`/t/guatemala`) takes its passcode from `TRIP_PASSCODE`, or from the first person to join. The name must be exactly `TRIP_PASSCODE`: a `TRIP_PASSPHRASE` variable (which some older deployments have) is not read. It only applies while the trip has no passcode stored yet.
+- Everyone who joins with the link and passcode is in the group, with or without Google. People who joined with Google get a check next to their name under **Trip**. Opening a trip never changes who's in it; removing someone is a logged change with **Undo**.
+- Change the passcode under **Trip** → **Change passcode**. It takes the current passcode; only the Google account that created the trip can leave it blank. Ten wrong tries lock it for 15 minutes. People already in stay in.
+- Things that cost money or reach other sites are rate limited per Google account, or per network address for guests: assistant messages, screenshot reading, link previews, new trips and picture lookups.
+- Item and cover pictures (`/api/photo`) are looked up only for someone with a trip or a valid viewing link; everyone else gets a stock picture. What's found is cached in Redis for every server, and every download goes through the same private-address guard as link previews.
 - Card numbers and CVV codes are stripped from anything saved. Confirmation numbers, phones and links are kept: that's what the app is for.
 - The assistant never sees confirmation numbers.
 
@@ -155,8 +158,9 @@ Read the architecture and the reasons behind it in [`docs/REBUILD-PLAN.md`](docs
 - **Offline first.**
   - The trip is kept in localStorage.
   - Edits show at once and wait in an outbox until there's a connection.
+  - An edit the server won't take as is is never dropped. One that touches something someone booked meanwhile waits as a card to confirm; one that can't apply waits as a card to retry or discard; server errors are retried with a growing wait (5 s up to 5 min), and after six tries the edit becomes a card too, so the edits behind it still go out (`src/client/outbox.ts`).
   - Moving between screens happens on the phone (`history.pushState`), so every screen opens with no signal. The service worker serves the trip's page when it can't reach the server.
-- **Storage.** Upstash Redis, one JSON document per trip with compare-and-set writes: `t:{id}:state`, `t:{id}:version`, `t:{id}:log`, `t:{id}:pass`, plus a `trips` index. The original v1 trip (`trip:v1:state`) is migrated on first read, so nothing typed on the old site is lost.
+- **Storage.** Upstash Redis, one JSON document per trip with compare-and-set writes: `t:{id}:state`, `t:{id}:version`, `t:{id}:log`, `t:{id}:pass`, `t:{id}:owner` (the Google account that created it), plus a `trips` index, `rl:*` rate-limit counters and `cache:photo:*` picture lookups. The original v1 trip (`trip:v1:state`) is migrated on first read, so nothing typed on the old site is lost.
 
 ```
 src/domain/     types, schemas, ops with inverses, derived views, quick-add parsing, v1 migration (pure, tested)
