@@ -1,0 +1,12 @@
+/node_modules/
+/artifacts/
+/private/
+/public/private/
+/public/fixtures/*.wav
+/public/fixtures/*.mp4
+/public/fixtures/*.jpg
+/public/fixtures/*.png
+/test-results/
+/playwright-report/
+
+# Only the small generated diagnostics are explicitly added for public CI.

@@ -1,0 +1,97 @@
+{
+  "tripId": "synthetic-trip",
+  "creatorAccountId": "fixture-editor",
+  "revision": 1,
+  "template": "keepsake-v1",
+  "mustInclude": [
+    "synthetic-1"
+  ],
+  "excluded": [],
+  "audio": "fixture-score",
+  "shots": [
+    {
+      "assetId": "synthetic-1",
+      "assetVersion": 1,
+      "start": 0,
+      "duration": 90,
+      "sourceStart": 0,
+      "crop": {
+        "layout": "contain",
+        "x": 0.5,
+        "y": 0.5
+      },
+      "transition": "cut",
+      "originalAudio": false
+    },
+    {
+      "assetId": "synthetic-video-2",
+      "assetVersion": 1,
+      "start": 90,
+      "duration": 60,
+      "sourceStart": 0,
+      "crop": {
+        "layout": "contain",
+        "x": 0.5,
+        "y": 0.5
+      },
+      "transition": "cut",
+      "originalAudio": false
+    },
+    {
+      "assetId": "synthetic-3",
+      "assetVersion": 1,
+      "start": 150,
+      "duration": 75,
+      "sourceStart": 0,
+      "crop": {
+        "layout": "contain",
+        "x": 0.5,
+        "y": 0.5
+      },
+      "transition": "cut",
+      "originalAudio": false
+    },
+    {
+      "assetId": "synthetic-4",
+      "assetVersion": 1,
+      "start": 225,
+      "duration": 75,
+      "sourceStart": 0,
+      "crop": {
+        "layout": "contain",
+        "x": 0.5,
+        "y": 0.5
+      },
+      "transition": "cut",
+      "originalAudio": false
+    },
+    {
+      "assetId": "synthetic-video-5",
+      "assetVersion": 1,
+      "start": 300,
+      "duration": 60,
+      "sourceStart": 0,
+      "crop": {
+        "layout": "contain",
+        "x": 0.5,
+        "y": 0.5
+      },
+      "transition": "cut",
+      "originalAudio": false
+    },
+    {
+      "assetId": "synthetic-6",
+      "assetVersion": 1,
+      "start": 360,
+      "duration": 90,
+      "sourceStart": 0,
+      "crop": {
+        "layout": "contain",
+        "x": 0.5,
+        "y": 0.5
+      },
+      "transition": "cut",
+      "originalAudio": false
+    }
+  ]
+}
