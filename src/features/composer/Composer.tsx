@@ -203,7 +203,7 @@ function ItemPreview({ draft, kindHint, onDone, onAsk }: { draft: Draft; kindHin
   const endDay = endDayEdit ?? draft.end?.date ?? (kind === "stay" && day ? addDays(day, 1) : "");
   const endTime = endTimeEdit ?? draft.end?.time ?? "";
   const start = day ? { date: day, ...(time ? { time } : {}), ...(draft.start?.tz ? { tz: draft.start.tz } : {}) } : null;
-  const outsideTrip = !!day && (day < trip.startDate || day > trip.endDate || !!endDay && endDay > trip.endDate);
+  const outsideTrip = !!day && (day < trip.startDate || day > trip.endDate || (!!endDay && endDay > trip.endDate));
   const canAdd = !!title.trim() && !busy;
 
   async function add() {
@@ -218,7 +218,15 @@ function ItemPreview({ draft, kindHint, onDone, onAsk }: { draft: Draft; kindHin
       ...(draft.placeName ? { place: { name: draft.placeName } } : {}),
       ...(booking !== "none" ? { booking: { state: booking, ...(booking === "booked" && confirmation.trim() ? { confirmation: confirmation.trim() } : {}) } } : {}),
     };
-    const r = await apply([{ op: "item.add", item }]);
+    const ops: Op[] = [{ op: "item.add", item }];
+    const effectiveEnd = endDay || day;
+    if (effectiveEnd && effectiveEnd > trip.endDate) {
+      ops.push({ op: "trip.update", set: { endDate: effectiveEnd } });
+    }
+    if (day && day < trip.startDate) {
+      ops.push({ op: "trip.update", set: { startDate: day } });
+    }
+    const r = await apply(ops);
     setBusy(false);
     if (r.ok) onDone();
     else setError(r.error);
@@ -239,7 +247,7 @@ function ItemPreview({ draft, kindHint, onDone, onAsk }: { draft: Draft; kindHin
             {draft.guessedTime && timeEdit === undefined && <span> (guessed; change the time below)</span>}
             {draft.placeName && <span>. At {draft.placeName}</span>}
           </p>
-          {outsideTrip && <p className="mt-1 text-sm font-semibold text-todo">These dates extend outside the trip. Adjust the trip dates to see all of this plan.</p>}
+          {outsideTrip && <p className="mt-1 text-sm font-semibold text-accent">Adding this will automatically extend your trip dates to include this day.</p>}
         </div>
       </div>
 

@@ -57,7 +57,7 @@ export function Marks({ item }: { item: Item }) {
 
 /** One line in a day or a list: time, kind, title, where, status, and contextual photo/post thumbnail. Taps through to the item. */
 export function ItemRow({ row, item, onOpen, showDate }: { row?: Row; item: Item; onOpen: () => void; showDate?: boolean }) {
-  const { trip, tripId, justChanged } = useTrip();
+  const { trip, tripId, justChanged, apply } = useTrip();
   const when = row ? row.when : item.start;
   const zone = when?.time && when.tz && when.tz !== trip.tz ? zoneName(when.tz).replace(/ Time$/, "") : null;
   const title = row ? rowTitle(row) : item.title;
@@ -65,12 +65,27 @@ export function ItemRow({ row, item, onOpen, showDate }: { row?: Row; item: Item
   const ending = row?.part === "end";
   const post = ending ? undefined : item.links?.find((l) => isPost(l.kind));
   const photoUrl = ending ? undefined : itemPhotoUrl(item, trip);
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const isBooked = item.booking?.state === "booked";
+    if (isBooked) {
+      const ok = window.confirm(`"${item.title}" is marked as booked. Delete it anyway?`);
+      if (!ok) return;
+    }
+    await apply([{ op: "item.remove", id: item.id }], {
+      confirmed: isBooked,
+      message: `Deleted "${item.title}"`,
+    });
+  };
+
   return (
-    <li className={justChanged.has(item.id) ? "just-changed rounded-2xl" : ""}>
+    <li className={`group/item relative flex items-center ${justChanged.has(item.id) ? "just-changed rounded-2xl" : ""}`}>
       <button
         type="button"
         onClick={onOpen}
-        className="flex w-full items-center gap-2.5 rounded-2xl border border-line/50 bg-sunken/40 p-2.5 text-left transition-colors hover:border-line hover:bg-sunken sm:items-start sm:gap-3 sm:px-3 sm:py-3"
+        className="flex w-full items-center gap-2.5 rounded-2xl border border-line/50 bg-sunken/40 p-2.5 pr-11 text-left transition-colors hover:border-line hover:bg-sunken sm:items-start sm:gap-3 sm:px-3 sm:py-3 sm:pr-12"
       >
         <span className="hidden w-[4.5rem] shrink-0 pt-1 text-right whitespace-nowrap sm:block">
           {showDate && when && <span className="block text-xs font-semibold text-muted">{formatDay(when.date)}</span>}
@@ -112,6 +127,17 @@ export function ItemRow({ row, item, onOpen, showDate }: { row?: Row; item: Item
         ) : (
           <Icon name="chevronRight" className="size-4 shrink-0 text-muted" />
         )}
+      </button>
+
+      {/* Quick Delete button directly accessible on every item card */}
+      <button
+        type="button"
+        onClick={handleDelete}
+        title="Delete item"
+        aria-label="Delete item"
+        className="absolute right-2 top-1/2 -translate-y-1/2 flex size-8 items-center justify-center rounded-xl bg-canvas/80 text-muted opacity-80 backdrop-blur-md transition-all hover:bg-danger/15 hover:text-danger hover:opacity-100 sm:opacity-0 sm:group-hover/item:opacity-100"
+      >
+        <Icon name="trash" className="size-3.5" />
       </button>
     </li>
   );

@@ -428,10 +428,39 @@ function ChangeCard({ result }: { result: ChangeResult }) {
 
 /** A change only a person can make: removing something, or moving something booked. */
 export function ConfirmCard({ pending }: { pending: { message: string; ops: Op[]; summary: string[] } }) {
-  const { apply } = useTrip();
-  const [state, setState] = useState<"idle" | "confirmed" | "dismissed">("idle");
-  if (state === "confirmed") return <p className="text-base font-semibold text-accent">Done.</p>;
+  const { apply, trip, tripId } = useTrip();
+  const opKey = pending.ops.map((o) => `${o.op}:${"id" in o ? o.id : ""}:${"itemId" in o ? o.itemId : ""}`).join("|") || JSON.stringify(pending.ops);
+  const storageKey = `trip:${tripId}:pending:${opKey}`;
+  const [state, setState] = useState<"idle" | "confirmed" | "dismissed">(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved === "confirmed" || saved === "dismissed") return saved;
+    } catch {
+      // Ignore localStorage read errors.
+    }
+    return "idle";
+  });
+
+  const alreadyDone =
+    pending.ops.length > 0 &&
+    pending.ops.every((o) => {
+      if (o.op === "item.remove") return !trip.items.some((i) => i.id === o.id);
+      if (o.op === "todo.remove") return !trip.todos.some((t) => t.id === o.id);
+      if (o.op === "item.update") {
+        const item = trip.items.find((i) => i.id === o.id);
+        if (!item) return true;
+        return Object.entries(o.set).every(([k, v]) => {
+          if (v === null || v === undefined) return (item as unknown as Record<string, unknown>)[k] === undefined;
+          if (typeof v === "object") return JSON.stringify((item as unknown as Record<string, unknown>)[k]) === JSON.stringify(v);
+          return (item as unknown as Record<string, unknown>)[k] === v;
+        });
+      }
+      return false;
+    });
+
+  if (state === "confirmed" || alreadyDone) return <p className="text-base font-semibold text-accent">Done.</p>;
   if (state === "dismissed") return <p className="text-base text-muted">Left as it was.</p>;
+
   return (
     <div className="flex flex-col gap-3 rounded-2xl border-2 border-todo bg-todo-soft p-4">
       <p className="text-base font-bold text-todo">{pending.message}</p>
@@ -447,13 +476,31 @@ export function ConfirmCard({ pending }: { pending: { message: string; ops: Op[]
           type="button"
           onClick={async () => {
             const r = await apply(pending.ops, { confirmed: true });
-            if (r.ok) setState("confirmed");
+            if (r.ok || alreadyDone) {
+              setState("confirmed");
+              try {
+                localStorage.setItem(storageKey, "confirmed");
+              } catch {
+                // Ignore storage errors.
+              }
+            }
           }}
           className={btn.primary}
         >
           Confirm
         </button>
-        <button type="button" onClick={() => setState("dismissed")} className={btn.secondary}>
+        <button
+          type="button"
+          onClick={() => {
+            setState("dismissed");
+            try {
+              localStorage.setItem(storageKey, "dismissed");
+            } catch {
+              // Ignore storage errors.
+            }
+          }}
+          className={btn.secondary}
+        >
           Keep it as is
         </button>
       </div>

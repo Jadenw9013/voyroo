@@ -10,7 +10,23 @@ import { Brand } from "@/ui/Brand";
  * One step in: your first name and the trip's passcode. An invite link can
  * carry the passcode after #code=, which never leaves the phone.
  */
-export function JoinForm({ tripId, tripName, hasPasscode, people, initialName = "" }: { tripId: string; tripName: string; hasPasscode: boolean; people: string[]; initialName?: string }) {
+export function JoinForm({
+  tripId,
+  tripName,
+  hasPasscode,
+  people,
+  initialName = "",
+  hasAccount = false,
+  googleConfigured: _googleConfigured = false,
+}: {
+  tripId: string;
+  tripName: string;
+  hasPasscode: boolean;
+  people: string[];
+  initialName?: string;
+  hasAccount?: boolean;
+  googleConfigured?: boolean;
+}) {
   const [name, setName] = useState(initialName);
   const [pass, setPass] = useState("");
   const [error, setError] = useState<{ field?: string; message: string } | null>(null);
@@ -65,6 +81,7 @@ export function JoinForm({ tripId, tripName, hasPasscode, people, initialName = 
               : "You're the first one here. Choose a passcode for the group: anyone with the link will need it to see the trip."}
           </p>
         </div>
+
         <form onSubmit={submit} className="flex flex-col gap-4">
           <label className={label}>
             Your first name
@@ -74,9 +91,10 @@ export function JoinForm({ tripId, tripName, hasPasscode, people, initialName = 
               autoComplete="given-name"
               maxLength={30}
               required
+              readOnly={hasAccount}
               list="trip-people"
               aria-invalid={error?.field === "name"}
-              className={`${field} text-lg`}
+              className={`${field} text-lg ${hasAccount ? "bg-sunken text-muted" : ""}`}
             />
             <datalist id="trip-people">
               {people.map((p) => (

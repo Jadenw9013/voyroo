@@ -1,5 +1,9 @@
 # Voyroo infrastructure: regions and Fluid compute
 
+For current deployment controls and the **failed Preview credential isolation**
+finding, see [the recap Vercel audit](RECAP-VERCEL-AUDIT.md). Do not use existing
+Preview deployments for permissioned footage or production-data testing.
+
 Updated during the Voyroo rename in October 2026. The Vercel project is
 `voyroo`, linked to GitHub repository `Jadenw9013/voyroo` (repository ID
 `1396936798`). The project ID stays `prj_ZLxbK1uOHBb49fxLNpo4MAZnqeGZ`.

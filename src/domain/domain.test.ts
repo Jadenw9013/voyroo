@@ -83,6 +83,29 @@ describe("derive", () => {
     expect(rows.at(-1)!.item.kind).toBe("stay");
   });
 
+  it("orders items taking time zones into account so earlier universal times come first", () => {
+    const tripWithZones: Trip = {
+      ...seed,
+      items: [
+        {
+          id: "flight-sea",
+          title: "Land: Flight SEA to TPE",
+          kind: "flight",
+          start: { date: "2026-12-14", time: "04:55", tz: "America/Los_Angeles" }, // 04:55 PST = 12:55 UTC
+        },
+        {
+          id: "flight-tpe",
+          title: "Flight TPE to KBV",
+          kind: "flight",
+          start: { date: "2026-12-14", time: "13:55", tz: "Asia/Taipei" }, // 13:55 TST = 05:55 UTC
+        },
+      ],
+    };
+    const rows = dayRows(tripWithZones, "2026-12-14");
+    expect(rows[0].item.id).toBe("flight-tpe"); // 05:55 UTC is before 12:55 UTC
+    expect(rows[1].item.id).toBe("flight-sea");
+  });
+
   it("knows what's next", () => {
     const nn = nowNext(seed, "2026-11-26", Date.parse("2026-11-26T09:15:00-06:00"));
     expect(nn.next?.item.id).toBe("lodging-atitlan");
