@@ -57,7 +57,7 @@ test("share a view-only itinerary without sign-up, then revoke it", async ({ pag
     const html = await response!.text();
     expect(html).not.toContain("PRIVATE-NOTE-NOT-FOR-PRESENTATION");
     expect(html).not.toContain("PRIVATE-CONFIRMATION-NOT-FOR-PRESENTATION");
-    await expect(viewer.getByText("View-only itinerary", { exact: true })).toBeVisible();
+    await expect(viewer.getByText("Shared Travel Guide", { exact: true })).toBeVisible();
     await expect(viewer.getByRole("heading", { level: 1 })).toBeVisible();
     await expect(viewer.getByRole("button", { name: "Print itinerary", exact: true })).toBeVisible();
     await viewer.screenshot({ path: testInfo.outputPath("presentation-mobile.png") });
