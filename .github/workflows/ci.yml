@@ -9,6 +9,15 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  audit:
+    name: Audit redaction
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a
+        with:
+          persist-credentials: false
+      - run: python3 -m unittest discover -s scripts -p test_audit_recap_vercel.py
   checks:
     name: Static and unit
     runs-on: ubuntu-latest
