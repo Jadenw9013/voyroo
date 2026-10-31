@@ -1,6 +1,6 @@
 import type { Op } from "./schema";
 import { formatDay } from "./time";
-import type { CheckItem, Item, Link, Todo, Trip } from "./types";
+import type { CheckItem, Item, Link, PackEntry, Todo, Trip } from "./types";
 
 export type { Op } from "./schema";
 
@@ -84,6 +84,19 @@ function findTodo(trip: Trip, id: string): { todo: Todo; index: number } {
   const index = trip.todos.findIndex((t) => t.id === id);
   if (index < 0) throw new OpError("missing", `No to-do "${id}". Someone may have removed it.`);
   return { todo: trip.todos[index], index };
+}
+
+function findPack(trip: Trip, id: string): { entry: PackEntry; index: number; list: PackEntry[] } {
+  const list = trip.packing ?? [];
+  const index = list.findIndex((p) => p.id === id);
+  if (index < 0) throw new OpError("missing", "That's no longer on the packing list. Someone may have removed it.");
+  return { entry: list[index], index, list };
+}
+
+function replacePack(trip: Trip, list: PackEntry[], index: number, entry: PackEntry): Trip {
+  const packing = list.slice();
+  packing[index] = entry;
+  return { ...trip, packing };
 }
 
 /** Applies one op. Returns the new trip and the ops that would undo it. Never mutates `trip`. */
@@ -205,6 +218,49 @@ export function applyOp(trip: Trip, op: Op): { trip: Trip; inverse: Op[] } {
       const { todo, index } = findTodo(trip, op.id);
       return { trip: { ...trip, todos: trip.todos.filter((t) => t.id !== op.id) }, inverse: [{ op: "todo.add", todo, index } as Op] };
     }
+    case "pack.add": {
+      const list = trip.packing ?? [];
+      if (list.some((p) => p.id === op.entry.id)) throw new OpError("duplicate", "That's already on the packing list.");
+      return { trip: { ...trip, packing: insertAt(list, op.entry as PackEntry, op.index) }, inverse: [{ op: "pack.remove", id: op.entry.id }] };
+    }
+    case "pack.update": {
+      const { entry, index, list } = findPack(trip, op.id);
+      const next: Obj = { ...entry };
+      for (const [k, v] of Object.entries(op.set)) {
+        if (v === null) delete next[k];
+        else next[k] = v;
+      }
+      return {
+        trip: replacePack(trip, list, index, next as unknown as PackEntry),
+        inverse: [{ op: "pack.update", id: op.id, set: inversePatch(entry as unknown as Obj, op.set as Patch) } as Op],
+      };
+    }
+    case "pack.claim": {
+      const { entry, index, list } = findPack(trip, op.id);
+      if (entry.kind !== "shared") throw new OpError("invalid", "Only things on the shared list need someone to bring them.");
+      if (op.who && entry.assignee && entry.assignee !== op.who) throw new OpError("invalid", `${entry.assignee} is already bringing “${entry.text}”.`);
+      const next: PackEntry = { ...entry };
+      if (op.who) next.assignee = op.who;
+      else delete next.assignee;
+      return { trip: replacePack(trip, list, index, next), inverse: [{ op: "pack.claim", id: op.id, who: entry.assignee ?? null }] };
+    }
+    case "pack.check": {
+      const { entry, index, list } = findPack(trip, op.id);
+      if (entry.kind === "personal" && op.who !== entry.owner) throw new OpError("invalid", "Only its owner can tick something on their own list.");
+      const before = entry.packedBy ?? [];
+      const was = before.includes(op.who);
+      const packedBy = op.packed ? (was ? before : [...before, op.who]) : before.filter((n) => n !== op.who);
+      const next: PackEntry = { ...entry, packedBy };
+      if (!packedBy.length) delete next.packedBy;
+      return { trip: replacePack(trip, list, index, next), inverse: [{ op: "pack.check", id: op.id, who: op.who, packed: was }] };
+    }
+    case "pack.remove": {
+      const { entry, index, list } = findPack(trip, op.id);
+      const rest = list.filter((p) => p.id !== op.id);
+      const next: Trip = { ...trip, packing: rest };
+      if (!rest.length) delete next.packing;
+      return { trip: next, inverse: [{ op: "pack.add", entry, index } as Op] };
+    }
     case "trip.update": {
       const next: Obj = { ...trip };
       for (const [k, v] of Object.entries(op.set)) {
@@ -312,6 +368,33 @@ export function describeOp(before: Trip, op: Op): string {
     }
     case "todo.remove":
       return `removed the to-do ${quote(before.todos.find((t) => t.id === op.id)?.text ?? "")}`;
+    // The history is the group's: what's on someone's own list never shows in it.
+    case "pack.add":
+      if (op.entry.kind === "personal") return "added to their own packing list";
+      return op.entry.assignee ? `put ${op.entry.assignee} down to bring ${quote(op.entry.text)}` : `added ${quote(op.entry.text)} to the packing list`;
+    case "pack.update": {
+      const entry = before.packing?.find((p) => p.id === op.id);
+      if (!entry) return "edited the packing list";
+      if (op.set.kind === "personal") return `moved ${quote(entry.text)} to their own list`;
+      if (entry.kind === "personal") return op.set.kind === "shared" ? `shared ${quote(op.set.text ?? entry.text)} with the group` : "edited their own packing list";
+      const keys = Object.keys(op.set);
+      if (keys.length === 1 && keys[0] === "assignee") return op.set.assignee ? `put ${op.set.assignee} down to bring ${quote(entry.text)}` : `took the bringer off ${quote(entry.text)}`;
+      return `edited ${quote(entry.text)} on the packing list`;
+    }
+    case "pack.claim": {
+      const text = quote(before.packing?.find((p) => p.id === op.id)?.text ?? "something");
+      return op.who ? `put ${op.who} down to bring ${text}` : `cleared who's bringing ${text}`;
+    }
+    case "pack.check": {
+      const entry = before.packing?.find((p) => p.id === op.id);
+      if (!entry || entry.kind === "personal") return op.packed ? "packed something on their own list" : "unpacked something on their own list";
+      return `${op.packed ? "packed" : "unpacked"} ${quote(entry.text)}`;
+    }
+    case "pack.remove": {
+      const entry = before.packing?.find((p) => p.id === op.id);
+      if (!entry || entry.kind === "personal") return "removed something from their own packing list";
+      return `removed ${quote(entry.text)} from the packing list`;
+    }
     case "trip.update":
       return "updated the trip details";
   }

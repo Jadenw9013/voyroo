@@ -1,4 +1,5 @@
 import { applyOp, describeOp, OpError, touchesBooked, type Op, type OpErrorCode } from "./ops";
+import { packingProblems } from "./packing";
 import { OpSchema, TripSchema } from "./schema";
 import { instantOf } from "./time";
 import type { Trip, TripState } from "./types";
@@ -122,6 +123,7 @@ export function tripProblems(trip: Trip): string[] {
     if (todoIds.has(t.id)) out.push(`Two to-dos share the id "${t.id}".`);
     todoIds.add(t.id);
   }
+  out.push(...packingProblems(trip));
   return out;
 }
 

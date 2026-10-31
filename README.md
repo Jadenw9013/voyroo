@@ -75,10 +75,12 @@ Sign-in uses the [Google Auth Library](https://github.com/googleapis/google-auth
   - **Days:** every day in order, where you sleep each night, and a link that opens the day's route in Google Maps.
   - **Ideas:** things saved without a day yet.
   - **Posts:** every saved TikTok, Reel and YouTube video as a grid of pictures. Tap one to play it full screen in its own player, swipe through the rest, or open it in the app.
-- **To-do**: things still to book (with their booking link and **Mark as booked**, which asks for the confirmation number), what's missing (a night with no bed, the flight home), and the group's list.
+- **To-do**: things still to book (with their booking link and **Mark as booked**, which asks for the confirmation number), what's missing (a night with no bed, the flight home), and the group's list, with who's on each to-do and its note.
+  - **Packing** (`/todo/packing`): a **Shared** list of who brings what ("I'll bring it", then tick it packed) and **Mine**, your own list. Your own list shows only to you in the app, but it's saved in the trip like everything else, so it isn't a place for secrets. **Suggest from our plan** asks the assistant what the itinerary needs (a headlamp for the volcano hike, a dry bag for the boat) and shows a list to pick from; nothing is added until you choose. The button is hidden without `GEMINI_API_KEY`.
 - **Trip**: details, people, inviting someone, the passcode, trip notes (entry rules, money), costs, everything that's changed with **Undo**, and display settings: light, dark, **Sunlight** (black on white for reading outdoors) and large text.
 - **The + button**: one box for everything.
   - Type a plan ("dinner fri 7 at Sabe Rico") and it's added. It guesses AM or PM when you don't say, and shows the guess.
+  - Type "pack sunscreen" for your own packing list, or "bring speaker - Ben" for the shared one.
   - Paste a link (TikTok, Instagram, YouTube, Airbnb, Booking.com, Google Maps, anything) and it's saved to an item or as a new idea.
   - Ask a question and the assistant answers.
   - **Add bookings from screenshots:** choose up to 10 at once (confirmation emails, Airbnb, airline and tour bookings), or paste or drop them in. They're read one after another, and each shows what it recorded:

@@ -17,6 +17,7 @@ import { Sheet } from "@/ui/Sheet";
 import { Assistant } from "../assistant/Assistant";
 import { unfurl, type Preview } from "../links/unfurl";
 import { InstagramThumb, postThumbSrc } from "../posts/Posts";
+import { PackPreview } from "../todo/Packing";
 import { ImportProgress, ImportProvider, MAX_SCREENSHOTS, ScreenshotButton, useImport } from "./ScreenshotImport";
 
 /*
@@ -138,7 +139,7 @@ function ComposerBody({ req, serverNow, onDone }: { req: ComposeRequest; serverN
         </div>
       )}
 
-      {parsed.type !== "item" && parsed.type !== "links" && (
+      {parsed.type !== "item" && parsed.type !== "links" && parsed.type !== "pack" && (
         <button type="button" onClick={() => setManual(true)} className={`${btn.secondary} self-start`}>Add details manually</button>
       )}
       {parsed.type === "empty" && <Hints day={req.day ?? null} onPick={setText} onAsk={(t) => setAsking(t)} />}
@@ -152,6 +153,7 @@ function ComposerBody({ req, serverNow, onDone }: { req: ComposeRequest; serverN
         </div>
       )}
       {parsed.type === "item" && <ItemPreview draft={parsed.draft} kindHint={req.kind} onDone={onDone} onAsk={() => setAsking(text.trim())} />}
+      {parsed.type === "pack" && <PackPreview draft={parsed.pack} onDone={onDone} onPlan={() => setManual(true)} />}
       {parsed.type === "links" && <LinkSaver urls={parsed.urls} rest={parsed.rest} itemId={req.itemId ?? null} day={req.day ?? null} onDone={onDone} />}
     </div>
   );
@@ -167,7 +169,7 @@ function Hints({ day, onPick, onAsk }: { day: string | null; onPick: (t: string)
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm text-muted">
-        Try <button type="button" className="font-semibold text-accent underline-offset-2 hover:underline" onClick={() => onPick("Sunrise hike sat 5am")}>“Sunrise hike sat 5am”</button>, paste a link from TikTok, Instagram or a booking site, or ask:
+        Try <button type="button" className="font-semibold text-accent underline-offset-2 hover:underline" onClick={() => onPick("Sunrise hike sat 5am")}>“Sunrise hike sat 5am”</button> or <button type="button" className="font-semibold text-accent underline-offset-2 hover:underline" onClick={() => onPick("bring speaker - ")}>“bring speaker - Ben”</button>, paste a link from TikTok, Instagram or a booking site, or ask:
       </p>
       <ul className="flex flex-col gap-2">
         {asks.map((a) => (

@@ -1,5 +1,6 @@
 import * as chrono from "chrono-node";
 import { extractUrls } from "./links";
+import { parsePackLine, type PackDraft } from "./packing";
 import { offsetOn, todayIn } from "./time";
 import type { ItemKind, Trip, When } from "./types";
 
@@ -32,6 +33,8 @@ export type Parsed =
   | { type: "ask" }
   /** Contains links: save them (with any words around them as the title or note). */
   | { type: "links"; urls: string[]; rest: string }
+  /** "pack sunscreen", "bring speaker - Ben": the packing list. */
+  | { type: "pack"; pack: PackDraft }
   | { type: "item"; draft: Draft };
 
 export interface ParseContext {
@@ -107,6 +110,8 @@ export function parseLine(input: string, ctx: ParseContext): Parsed {
     return { type: "links", urls, rest: rest.replace(/\s+/g, " ").trim() };
   }
   if (text.endsWith("?") || QUESTION.test(text) || CHANGE.test(text) || text.length > 120 || text.includes("\n")) return { type: "ask" };
+  const pack = parsePackLine(text);
+  if (pack) return { type: "pack", pack };
 
   const ref = referenceDay(ctx);
   const tz = ctx.trip.tz;
