@@ -248,8 +248,8 @@ function Message({ m, onAnswer }: { m: AssistantMessage; onAnswer: (toolCallId: 
         if (p.type === "text") return p.text.trim() ? <Prose key={key} text={p.text} /> : null;
         if (p.type === "tool-show_options") return p.input ? <Options key={key} heading={p.input.heading} options={(p.input.options ?? []) as Option[]} /> : null;
         if (p.type === "tool-ask_user") return <Question key={key} part={p} onAnswer={onAnswer} />;
-        if (p.type === "tool-add_items" || p.type === "tool-update_items" || p.type === "tool-remove_items" || p.type === "tool-add_todos") {
-          if (p.state === "output-available") return <ChangeCard key={key} result={p.output as ChangeResult} />;
+        if (p.type === "tool-add_items" || p.type === "tool-update_items" || p.type === "tool-remove_items" || p.type === "tool-add_todos" || p.type === "tool-add_expenses") {
+          if (p.state === "output-available") return <ChangeCard key={key} result={p.output as ChangeResult} expenses={p.type === "tool-add_expenses"} />;
           if (p.state === "output-error") return <p key={key} className="text-base text-danger">That change didn&apos;t work: {p.errorText}</p>;
           return (
             <p key={key} className="text-base text-muted">
@@ -386,7 +386,7 @@ const VERBS: Record<string, string> = { removed: "Remove", changed: "Change", mo
 /** "removed “X”" → "Remove “X”": a change that hasn't happened yet. */
 export const asProposal = (s: string) => s.replace(/^(\w+)/, (v) => VERBS[v] ?? v.charAt(0).toUpperCase() + v.slice(1));
 
-function ChangeCard({ result }: { result: ChangeResult }) {
+function ChangeCard({ result, expenses }: { result: ChangeResult; expenses?: boolean }) {
   const { undo, tripId, trip } = useTrip();
   const { go } = useView(tripId);
   const [undone, setUndone] = useState(false);
@@ -408,6 +408,11 @@ function ChangeCard({ result }: { result: ChangeResult }) {
                 {i.title}
               </button>
             ))}
+            {expenses && (
+              <button type="button" onClick={() => go({ tab: "expenses" })} className="text-sm font-semibold text-accent underline underline-offset-2">
+                See who owes whom
+              </button>
+            )}
             <button
               type="button"
               onClick={async () => {

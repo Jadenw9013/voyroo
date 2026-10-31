@@ -18,6 +18,17 @@ import { shrinkScreenshot } from "../assistant/images";
 
 export const MAX_SCREENSHOTS = 10;
 
+const RECEIPTS_KEY = "import:receipts";
+
+/** Whether paid receipts are logged as expenses too, as this phone last chose. */
+function receiptsOn(): boolean {
+  try {
+    return localStorage.getItem(RECEIPTS_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 type Status = "waiting" | "reading" | "done" | "failed";
 
 export interface Job {
@@ -81,7 +92,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
           const res = await fetch(`/api/t/${tripId}/import`, {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ image, index: done + 1, total }),
+            body: JSON.stringify({ image, index: done + 1, total, ...(receiptsOn() ? { expenses: true } : {}) }),
           });
           const body = await res.json().catch(() => ({}));
           if (!res.ok) {
@@ -158,6 +169,29 @@ export function ScreenshotButton({ className = "" }: { className?: string }) {
         {online ? (running ? "Add more screenshots" : "Add bookings from screenshots") : "Screenshots need a connection"}
       </button>
     </>
+  );
+}
+
+/** "Also log paid receipts as expenses": off unless chosen, remembered on this phone. */
+export function ReceiptsToggle() {
+  const [on, setOn] = useState(receiptsOn);
+  return (
+    <label className="flex min-h-11 items-center gap-3 text-base">
+      <input
+        type="checkbox"
+        checked={on}
+        onChange={(e) => {
+          setOn(e.target.checked);
+          try {
+            localStorage.setItem(RECEIPTS_KEY, e.target.checked ? "1" : "0");
+          } catch {
+            // Storage blocked: it still applies until the app closes.
+          }
+        }}
+        className="size-6 shrink-0 accent-[var(--accent)]"
+      />
+      Also log paid receipts as expenses, split with the group
+    </label>
   );
 }
 

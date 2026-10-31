@@ -12,6 +12,7 @@ import { Avatar } from "@/ui/badges";
 import { Icon, type IconName } from "@/ui/Icon";
 import { ToastBar } from "@/ui/kit";
 import { ComposerProvider, useCompose } from "./composer/Composer";
+import { Expenses } from "./expenses/Expenses";
 import { ItemPage } from "./item/ItemPage";
 import { Plan } from "./plan/Plan";
 import { Today } from "./today/Today";
@@ -41,7 +42,7 @@ const TABS: { id: Tab; label: string; icon: IconName }[] = [
 
 function Screens({ tripId, serverNow }: { tripId: string; serverNow: number }) {
   const { view, go, back } = useView(tripId);
-  const active: Tab = view.tab === "item" ? "plan" : view.tab;
+  const active: Tab = view.tab === "item" ? "plan" : view.tab === "expenses" ? "todo" : view.tab;
   const compose = useCompose();
   const [sharing, setSharing] = useState(false);
 
@@ -61,6 +62,7 @@ function Screens({ tripId, serverNow }: { tripId: string; serverNow: number }) {
         {view.tab === "today" && <Today day={view.day} go={go} serverNow={serverNow} />}
         {view.tab === "plan" && <Plan section={view.section} go={go} onShare={() => setSharing(true)} />}
         {view.tab === "todo" && <Todo go={go} />}
+        {view.tab === "expenses" && <Expenses go={go} />}
         {view.tab === "trip" && <TripSettings />}
         {view.tab === "item" && <ItemPage key={view.itemId} itemId={view.itemId} go={go} back={() => back({ tab: "plan" })} />}
       </main>
@@ -196,6 +198,19 @@ function Sidebar({
               >
                 <Icon name="image" className="size-4 text-k-stay" />
                 <span>Saved Posts</span>
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                onClick={() => onGo({ tab: "expenses" })}
+                aria-current={view.tab === "expenses" ? "page" : undefined}
+                className={`flex min-h-10 w-full items-center gap-3 rounded-xl px-3.5 text-sm font-medium transition-colors ${
+                  view.tab === "expenses" ? "bg-sunken text-ink" : "text-muted hover:bg-sunken hover:text-ink"
+                }`}
+              >
+                <Icon name="wallet" className="size-4 text-ok" />
+                <span>Expenses</span>
               </button>
             </li>
             <li>

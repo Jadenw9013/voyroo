@@ -15,6 +15,7 @@ import { Icon, LINK_ICON, type IconName } from "@/ui/Icon";
 import { ActionChip, btn, field, label, useCopy } from "@/ui/kit";
 import { Sheet, SheetAction } from "@/ui/Sheet";
 import { useCompose } from "../composer/Composer";
+import { ItemExpenses } from "../expenses/ItemExpenses";
 import { unfurl } from "../links/unfurl";
 import { PostGrid, thumbSrc } from "../posts/Posts";
 import { Marks, timeLabel, whenLabel } from "../shared";
@@ -247,6 +248,10 @@ export function ItemPage({ itemId, back, go }: { itemId: string; back: () => voi
               )}
             </dl>
           )}
+        </Section>
+
+        <Section title="Expenses">
+          <ItemExpenses item={item} />
         </Section>
 
         <Section title="Contact" onEdit={() => setEdit("contact")}>

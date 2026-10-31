@@ -378,9 +378,13 @@ function describeExpense(e: Expense): string {
   return `logged ${quote(e.title)}, ${amount} paid by ${e.paidBy}`;
 }
 
-/** Ids of items an op adds or changes, for highlighting and "Updated" markers. */
+/** Ids of items (and expenses) an op adds or changes, for highlighting and "Updated" markers. */
 export function itemsTouched(op: Op): string[] {
   switch (op.op) {
+    case "expense.add":
+      return [op.expense.id];
+    case "expense.update":
+      return [op.id];
     case "item.add":
       return [op.item.id];
     case "item.update":

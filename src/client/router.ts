@@ -14,6 +14,7 @@ import { useCallback } from "react";
  *   /t/{id}/plan/ideas      Plan, ideas with no day
  *   /t/{id}/plan/posts      Plan, every saved post as a grid
  *   /t/{id}/todo            To-do
+ *   /t/{id}/expenses        Expenses: who paid what, who owes whom
  *   /t/{id}/trip            Trip settings and people
  *   /t/{id}/item/{itemId}   An item's page
  */
@@ -24,6 +25,7 @@ export type View =
   | { tab: "today"; day?: string }
   | { tab: "plan"; section?: PlanSection }
   | { tab: "todo" }
+  | { tab: "expenses" }
   | { tab: "trip" }
   | { tab: "item"; itemId: string };
 
@@ -33,6 +35,7 @@ export function parseView(pathname: string): View {
   if (a === "day" && b && /^\d{4}-\d{2}-\d{2}$/.test(b)) return { tab: "today", day: b };
   if (a === "plan") return { tab: "plan", section: b === "ideas" || b === "posts" ? b : "days" };
   if (a === "todo") return { tab: "todo" };
+  if (a === "expenses") return { tab: "expenses" };
   if (a === "trip") return { tab: "trip" };
   if (a === "item" && b) return { tab: "item", itemId: decodeURIComponent(b) };
   return { tab: "today" };
