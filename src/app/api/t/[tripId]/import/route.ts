@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { errorMessage } from "@/server/ai/models";
 import { importScreenshot } from "@/server/ai/importShot";
-import { getStore, jsonError, readJson, requireSession } from "@/server/http";
+import { getStore, jsonError, rateLimit, readJson, requireSession } from "@/server/http";
 
 export const maxDuration = 120;
 
@@ -13,6 +13,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ tri
   const { tripId } = await params;
   const auth = await requireSession(request, tripId);
   if (!auth.ok) return auth.res;
+  const limited = await rateLimit(request, "import", 60, 3600, "That's a lot of screenshots this hour. Try again in a little while, or add the rest by hand.");
+  if (limited) return limited;
   const parsed = await readJson(request, MAX_BODY);
   if (!parsed.ok) return parsed.res;
   const { image, index, total } = parsed.body;

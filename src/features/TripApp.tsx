@@ -19,10 +19,11 @@ import { Todo } from "./todo/Todo";
 import { TripSettings } from "./trip/TripSettings";
 import { Brand } from "@/ui/Brand";
 import { ShareTrip } from "./trip/ShareTrip";
+import { HeldEdits } from "./HeldEdits";
 
-export function TripApp({ tripId, initial, me, serverNow }: { tripId: string; initial: TripState; me: string; serverNow: number }) {
+export function TripApp({ tripId, initial, me, serverNow, verified }: { tripId: string; initial: TripState; me: string; serverNow: number; verified?: string[] }) {
   return (
-    <TripProvider tripId={tripId} initial={initial} me={me} serverNow={serverNow}>
+    <TripProvider tripId={tripId} initial={initial} me={me} serverNow={serverNow} verified={verified}>
       <ComposerProvider serverNow={serverNow}>
         <Screens tripId={tripId} serverNow={serverNow} />
       </ComposerProvider>
@@ -58,6 +59,7 @@ function Screens({ tripId, serverNow }: { tripId: string; serverNow: number }) {
       <TopBar onShare={() => setSharing(true)} onGo={go} />
       <Sidebar active={active} view={view} onPick={(t) => go({ tab: t } as View)} onGo={go} onShare={() => setSharing(true)} />
       <main id="main" className="mx-auto w-full max-w-6xl min-w-0 pb-[calc(6rem+env(safe-area-inset-bottom))] md:px-6 md:pt-4 md:pb-16">
+        <HeldEdits />
         {view.tab === "today" && <Today day={view.day} go={go} serverNow={serverNow} />}
         {view.tab === "plan" && <Plan section={view.section} go={go} onShare={() => setSharing(true)} />}
         {view.tab === "todo" && <Todo go={go} />}

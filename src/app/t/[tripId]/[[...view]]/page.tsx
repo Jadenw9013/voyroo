@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { connection } from "next/server";
 import { TripApp } from "@/features/TripApp";
-import { readAccount, readSession } from "@/server/auth";
+import { readSession } from "@/server/auth";
 import { getStore } from "@/server/db";
 import { TRIP_ID } from "@/server/http";
 import { googleConfigured } from "@/server/google";
@@ -24,6 +24,10 @@ async function load(tripId: string) {
 /**
  * Every screen of a trip renders from here; moving between them happens on
  * the phone (see client/router.ts), so they all open with no signal.
+ *
+ * Opening a trip only reads it. The group list changes when someone joins or
+ * a person removes someone (which Undo reverses), never as a side effect of
+ * who happens to be looking.
  */
 export default async function TripPage({ params }: { params: Promise<{ tripId: string; view?: string[] }> }) {
   await connection();
@@ -33,26 +37,8 @@ export default async function TripPage({ params }: { params: Promise<{ tripId: s
   if (!session) redirect(`/t/${tripId}/join`);
   const { state, readAt } = await load(tripId);
   if (!state) notFound();
+  // Names that joined with Google get a badge; everyone else is still in the group.
+  const verified = googleConfigured() ? Object.keys(await getStore().tripAccounts(tripId)) : [];
 
-  if (googleConfigured()) {
-    const account = await readAccount();
-    if (account) {
-      const store = getStore();
-      const accounts = await store.tripAccounts(tripId);
-      if (!accounts[session.name]) {
-        await store.rememberTrip(account.id, tripId, session.name);
-        accounts[session.name] = account.id;
-      }
-      const validPeople = state.trip.people.filter((p) => Boolean(accounts[p]) || p === session.name);
-      if (validPeople.length !== state.trip.people.length) {
-        state.trip.people = validPeople.length ? validPeople : [session.name];
-        await store.apply(tripId, [{ op: "trip.update", set: { people: state.trip.people } }], {
-          author: session.name,
-          accountId: account.id,
-        });
-      }
-    }
-  }
-
-  return <TripApp tripId={tripId} initial={state} me={session.name} serverNow={readAt} />;
+  return <TripApp tripId={tripId} initial={state} me={session.name} serverNow={readAt} verified={verified} />;
 }

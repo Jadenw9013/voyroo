@@ -272,3 +272,51 @@ test("reads up to ten booking screenshots at once and records each", async ({ pa
   await expect(list.getByText(/Added “Test Posada \d+”/)).toHaveCount(10);
   await expect(list.getByRole("button", { name: "Open Test Posada 1", exact: true })).toBeVisible();
 });
+
+test("an edit the server holds back for confirmation waits on screen, survives a reload, and saves once confirmed", async ({ page }) => {
+  await join(page);
+  let first = true;
+  const sent: { confirmed?: boolean }[] = [];
+  await page.route("**/api/t/guatemala/ops", async (route) => {
+    const body = route.request().postDataJSON();
+    sent.push(body);
+    // As if someone booked what this edit touches while it was on its way.
+    if (first && !body.confirmed) {
+      first = false;
+      return route.fulfill({ status: 428, contentType: "application/json", body: JSON.stringify({ ok: false, error: "Someone booked this meanwhile.", needsConfirmation: true }) });
+    }
+    return route.continue();
+  });
+  await page.getByRole("button", { name: "Add or ask" }).click();
+  await page.keyboard.type("dinner fri 8 at casa heldback");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  const held = page.getByRole("region", { name: "Edits that need a look" });
+  await expect(held.getByText(/needs a confirmation\. Someone booked this meanwhile\./)).toBeVisible();
+  await page.reload();
+  await expect(held.getByText(/needs a confirmation/)).toBeVisible();
+  await held.getByRole("button", { name: "Confirm" }).click();
+  await expect(held).toHaveCount(0);
+  await expect.poll(async () => {
+    const body = await (await page.request.get("/api/t/guatemala")).json();
+    return body.trip.items.some((item: { title: string }) => /heldback/i.test(item.title));
+  }).toBe(true);
+  expect(sent.at(-1)?.confirmed).toBe(true);
+});
+
+test("an edit that hits server errors is kept and retried until it saves", async ({ page }) => {
+  await join(page);
+  let failures = 2;
+  await page.route("**/api/t/guatemala/ops", async (route) => {
+    if (failures-- > 0) return route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "Server trouble." }) });
+    return route.continue();
+  });
+  await page.getByRole("button", { name: "Add or ask" }).click();
+  await page.keyboard.type("dinner sat 7 at casa retried");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "1 edit waiting to sync." })).toBeVisible();
+  await expect.poll(async () => {
+    const body = await (await page.request.get("/api/t/guatemala")).json();
+    return body.trip.items.some((item: { title: string }) => /retried/i.test(item.title));
+  }, { timeout: 30_000 }).toBe(true);
+  await expect(page.getByRole("status").filter({ hasText: "waiting to sync" })).toHaveCount(0);
+});

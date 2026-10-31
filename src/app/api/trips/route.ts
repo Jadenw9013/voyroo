@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { TripSchema } from "@/domain/schema";
 import type { Trip } from "@/domain/types";
-import { hashPasscode, joinedTrips, newTripId, writeSession } from "@/server/auth";
-import { firstName, getStore, jsonError, readJson, sameSite } from "@/server/http";
+import { hashPasscode, joinedTrips, newTripId, readAccount, writeSession } from "@/server/auth";
+import { firstName, getStore, jsonError, rateLimit, readJson, sameSite } from "@/server/http";
 
 /** The trips this browser has joined. */
 export async function GET() {
@@ -14,6 +14,8 @@ export async function GET() {
 export async function POST(request: Request) {
   const denied = sameSite(request);
   if (denied) return denied;
+  const limited = await rateLimit(request, "trips", 20, 3600, "That's a lot of new trips this hour. Try again later.");
+  if (limited) return limited;
   const parsed = await readJson(request, 4_000);
   if (!parsed.ok) return parsed.res;
   const b = parsed.body;
@@ -45,7 +47,8 @@ export async function POST(request: Request) {
   }
   if (trip.endDate < trip.startDate) return jsonError(400, "The trip ends before it starts.", { field: "endDate" });
 
-  if (!(await getStore().create(trip, await hashPasscode(b.passcode.trim())))) return jsonError(409, "Try again.");
+  const account = await readAccount();
+  if (!(await getStore().create(trip, await hashPasscode(b.passcode.trim()), account?.id))) return jsonError(409, "Try again.");
   await writeSession({ tripId: trip.id, name: me });
   return NextResponse.json({ ok: true, id: trip.id });
 }

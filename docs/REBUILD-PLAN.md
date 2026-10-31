@@ -243,9 +243,8 @@ Design system: tokens for light, dark and Sunlight, with no hardcoded colors in 
 
 - **Model:** Gemini 3.8 Flash with the provider tools `google_maps`, `google_search` and `url_context`. If the model or region rejects them, it retries without them. The mock model stays for dev and tests.
 - **App tools** (function calling):
-  - `add_items`, `update_item`, `remove_items`
-  - `add_todos`, `update_todos`
-  - `attach_links`
+  - `add_items`, `update_items` (also how links are attached: its `links` field), `remove_items`
+  - `add_todos`
   - `show_options`: 2–4 place or option cards, each with name, why, address, Maps link, website and price hint, and an **Add** button that takes a day
   - `ask_user`
 - **Policy:**

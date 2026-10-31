@@ -1,6 +1,9 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import { generateText } from "ai";
 import { assistantModel, isMock } from "./ai/models";
+import { getStore } from "./db";
+import { safeFetch } from "./unfurl";
 
 const PHOTO_TTL_MS = 12 * 60 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 400;
@@ -130,6 +133,23 @@ async function refineQueryWithGemini(params: PhotoParams, fallbackQuery: string)
   return fallbackQuery;
 }
 
+/*
+ * Finding a picture costs a model call, a Bing Images page and up to four
+ * image downloads, so the route only lets people with trip access ask, and
+ * each found (or not found) picture's address is cached in the trip store
+ * for every server instance. Every fetch goes through unfurl's safeFetch:
+ * public addresses only, each redirect checked, a timeout and a size cap.
+ */
+
+const BROWSER_ACCEPT = "text/html,application/json";
+const IMAGE_ACCEPT = "image/avif,image/webp,image/jpeg,image/png,image/gif;q=0.8";
+/** Raster formats only: an SVG served from this site could run script. */
+const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif", "image/gif"]);
+const MIN_IMAGE_BYTES = 2500;
+const MAX_IMAGE_BYTES = 6_000_000;
+const FOUND_TTL_SECONDS = 7 * 24 * 60 * 60;
+const NOT_FOUND_TTL_SECONDS = 24 * 60 * 60;
+
 /**
  * Search Bing Images & Wikipedia for a real contextual photo matching `query`.
  */
@@ -137,44 +157,31 @@ async function searchWebPhotoUrls(query: string): Promise<string[]> {
   const urls: string[] = [];
 
   // 1. Bing Image Search async endpoint (returns unpadded full-bleed mm.bing.net CDN thumbnails + original murls)
-  try {
-    const bingUrl = `https://www.bing.com/images/async?q=${encodeURIComponent(query)}&first=1&count=8&adlt=strict`;
-    const res = await fetch(bingUrl, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept-Language": "en-US,en;q=0.9",
-      },
-      signal: AbortSignal.timeout(4500),
-    });
-    if (res.ok) {
-      const html = await res.text();
-      for (const match of html.matchAll(/turl&quot;:&quot;(https:\/\/[^&]+?)&amp;/g)) {
-        urls.push(match[1]);
-      }
-      for (const match of html.matchAll(/murl&quot;:&quot;(https:\/\/[^&]+?\.(?:jpg|jpeg|png|webp))&quot;/gi)) {
-        urls.push(match[1]);
-      }
+  const bing = await safeFetch(`https://www.bing.com/images/async?q=${encodeURIComponent(query)}&first=1&count=8&adlt=strict`, { accept: BROWSER_ACCEPT, browser: true, maxBytes: 1_500_000 });
+  if (bing?.ok) {
+    const html = new TextDecoder().decode(bing.bytes);
+    for (const match of html.matchAll(/turl&quot;:&quot;(https:\/\/[^&]+?)&amp;/g)) {
+      urls.push(match[1]);
     }
-  } catch {
-    // Continue to Wikipedia fallback
+    for (const match of html.matchAll(/murl&quot;:&quot;(https:\/\/[^&]+?\.(?:jpg|jpeg|png|webp))&quot;/gi)) {
+      urls.push(match[1]);
+    }
   }
 
   // 2. Wikipedia PageImages API fallback
   if (urls.length === 0) {
-    try {
-      const wikiUrl = `https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(query)}&gsrlimit=4&prop=pageimages&piprop=thumbnail&pithumbsize=900&format=json&origin=*`;
-      const res = await fetch(wikiUrl, { signal: AbortSignal.timeout(3500) });
-      if (res.ok) {
-        const data = (await res.json()) as {
+    const wiki = await safeFetch(`https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(query)}&gsrlimit=4&prop=pageimages&piprop=thumbnail&pithumbsize=900&format=json&origin=*`, { accept: "application/json" });
+    if (wiki?.ok) {
+      try {
+        const data = JSON.parse(new TextDecoder().decode(wiki.bytes)) as {
           query?: { pages?: Record<string, { thumbnail?: { source?: string } }> };
         };
         for (const page of Object.values(data.query?.pages ?? {})) {
           if (page.thumbnail?.source) urls.push(page.thumbnail.source);
         }
+      } catch {
+        // Not JSON: no pictures from Wikipedia.
       }
-    } catch {
-      // Ignore network errors
     }
   }
 
@@ -182,24 +189,12 @@ async function searchWebPhotoUrls(query: string): Promise<string[]> {
 }
 
 async function downloadImage(url: string): Promise<{ bytes: Uint8Array; type: string } | null> {
-  try {
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        Accept: "image/avif,image/webp,image/jpeg,image/png,image/*,*/*;q=0.8",
-      },
-      signal: AbortSignal.timeout(4500),
-    });
-    if (!res.ok) return null;
-    const type = (res.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
-    if (!type.startsWith("image/")) return null;
-    const buf = new Uint8Array(await res.arrayBuffer());
-    if (buf.byteLength < 2500 || buf.byteLength > 6_000_000) return null;
-    return { bytes: buf, type };
-  } catch {
-    return null;
-  }
+  const res = await safeFetch(url, { accept: IMAGE_ACCEPT, browser: true, maxBytes: MAX_IMAGE_BYTES + 1 });
+  if (!res?.ok) return null;
+  const type = res.type.split(";")[0].trim().toLowerCase();
+  if (!IMAGE_TYPES.has(type)) return null;
+  if (res.bytes.byteLength < MIN_IMAGE_BYTES || res.bytes.byteLength > MAX_IMAGE_BYTES) return null;
+  return { bytes: res.bytes, type };
 }
 
 /**
@@ -213,10 +208,20 @@ export async function resolveContextualPhotoUrl(params: PhotoParams): Promise<st
   return urls[0] ?? null;
 }
 
+function remember(cacheKey: string, entry: CachedPhoto) {
+  if (photoCache.size >= MAX_CACHE_ENTRIES) {
+    const oldestKey = photoCache.keys().next().value;
+    if (oldestKey) photoCache.delete(oldestKey);
+  }
+  photoCache.set(cacheKey, entry);
+}
+
 /**
  * Resolve and cache the image bytes for a contextual photo request.
+ * `mayLookUp` is asked before anything costly (the model, Bing, Wikipedia)
+ * and only when no server has cached an answer; false means "not now".
  */
-export async function getContextualPhoto(params: PhotoParams): Promise<CachedPhoto | null> {
+export async function getContextualPhoto(params: PhotoParams, opts: { mayLookUp?: () => Promise<boolean> } = {}): Promise<CachedPhoto | null> {
   if (isMock()) return null;
 
   const baseQuery = cleanPhotoQuery(params);
@@ -231,6 +236,20 @@ export async function getContextualPhoto(params: PhotoParams): Promise<CachedPho
 
   const promise = (async (): Promise<CachedPhoto | null> => {
     try {
+      const store = getStore();
+      const sharedKey = `photo:${createHash("sha256").update(cacheKey).digest("hex")}`;
+      const shared = await store.cached(sharedKey);
+      if (shared === "") return null;
+      if (shared) {
+        const img = await downloadImage(shared);
+        if (img) {
+          const entry: CachedPhoto = { ...img, url: shared, at: Date.now() };
+          remember(cacheKey, entry);
+          return entry;
+        }
+      }
+
+      if (opts.mayLookUp && !(await opts.mayLookUp())) return null;
       const query = await refineQueryWithGemini(params, baseQuery);
       let candidates = await searchWebPhotoUrls(query);
       if (candidates.length === 0 && params.dest) {
@@ -241,14 +260,12 @@ export async function getContextualPhoto(params: PhotoParams): Promise<CachedPho
         const img = await downloadImage(url);
         if (img) {
           const entry: CachedPhoto = { ...img, url, at: Date.now() };
-          if (photoCache.size >= MAX_CACHE_ENTRIES) {
-            const oldestKey = photoCache.keys().next().value;
-            if (oldestKey) photoCache.delete(oldestKey);
-          }
-          photoCache.set(cacheKey, entry);
+          remember(cacheKey, entry);
+          await store.cache(sharedKey, url, FOUND_TTL_SECONDS);
           return entry;
         }
       }
+      await store.cache(sharedKey, "", NOT_FOUND_TTL_SECONDS);
       return null;
     } finally {
       inFlight.delete(cacheKey);
@@ -257,4 +274,11 @@ export async function getContextualPhoto(params: PhotoParams): Promise<CachedPho
 
   inFlight.set(cacheKey, promise);
   return promise;
+}
+
+/** Tests start each case with an empty per-instance cache, the way a fresh server would. */
+export function forgetPhotosForTests() {
+  photoCache.clear();
+  queryCache.clear();
+  inFlight.clear();
 }

@@ -6,6 +6,7 @@ import { newId } from "@/domain/ids";
 import { itemsTouched, type Op } from "@/domain/ops";
 import type { Trip, TripState } from "@/domain/types";
 import { useOnline } from "./hooks";
+import { drain, nextRetryAt, release, settle, verdictFor, type Pending, type Verdict } from "./outbox";
 
 /*
  * The trip on this phone. Every edit:
@@ -14,13 +15,10 @@ import { useOnline } from "./hooks";
  *   3. is sent when there's a connection; the server applies it to the latest
  *      trip, so edits made offline or at the same time as someone else land.
  * The last trip seen is kept too, so everything opens with no signal.
+ * An edit the server won't take as is waits for a person (see outbox.ts).
  */
 
-interface Pending {
-  key: string;
-  ops: Op[];
-  confirmed?: boolean;
-}
+export type { Pending } from "./outbox";
 
 export type ApplyOutcome =
   | { ok: true; entry?: ChangeEntry; queued?: boolean }
@@ -41,6 +39,12 @@ interface StoreValue {
   online: boolean;
   /** Edits made on this phone that haven't reached the server yet. */
   queued: number;
+  /** Edits the server wouldn't take as is, waiting for a person to confirm, retry or discard. */
+  held: Pending[];
+  /** Sends a held edit (confirmed, if that's what it needed), or drops it. */
+  resolveHeld(key: string, choice: "send" | "discard"): void;
+  /** Names in the group who joined with a Google account. */
+  verified: string[];
   /** When the copy on screen last came from the server, epoch ms. */
   syncedAt: number;
   apply(ops: Op[], opts?: { confirmed?: boolean; message?: string }): Promise<ApplyOutcome>;
@@ -88,7 +92,15 @@ function lastSummary(entry: ChangeEntry): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-export function TripProvider({ tripId, initial, me: initialMe, serverNow, children }: { tripId: string; initial: TripState; me: string; serverNow: number; children: ReactNode }) {
+interface Sent {
+  verdict: Verdict;
+  error?: string;
+  entry?: ChangeEntry;
+}
+
+const NO_NAMES: string[] = [];
+
+export function TripProvider({ tripId, initial, me: initialMe, serverNow, verified = NO_NAMES, children }: { tripId: string; initial: TripState; me: string; serverNow: number; verified?: string[]; children: ReactNode }) {
   const online = useOnline();
   const [server, setServer] = useState<TripState>(initial);
   const [syncedAt, setSyncedAt] = useState(serverNow);
@@ -97,10 +109,13 @@ export function TripProvider({ tripId, initial, me: initialMe, serverNow, childr
   const [toast, setToast] = useState<Toast | null>(null);
   const [justChanged, setJustChanged] = useState<Set<string>>(new Set());
   const sending = useRef(false);
+  const inflight = useRef(new Set<string>());
+  // Kept in step with every change, so a send that's under way sees edits made meanwhile.
   const outboxRef = useRef(outbox);
-  useEffect(() => {
-    outboxRef.current = outbox;
-  }, [outbox]);
+  const changeOutbox = useCallback((fn: (q: Pending[]) => Pending[]) => {
+    outboxRef.current = fn(outboxRef.current);
+    setOutbox(outboxRef.current);
+  }, []);
 
   /** A newer server copy wins; an older one (from a cached page) never replaces what we have. */
   const accept = useCallback(
@@ -122,7 +137,7 @@ export function TripProvider({ tripId, initial, me: initialMe, serverNow, childr
       setSyncedAt(snap.savedAt);
     } else save(snapKey(tripId), { ...initial, savedAt: serverNow });
     const pending = load<Pending[]>(outboxKey(tripId));
-    if (pending?.length) setOutbox(pending);
+    if (pending?.length) changeOutbox(() => pending);
     // Once, on open.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripId]);
@@ -136,29 +151,34 @@ export function TripProvider({ tripId, initial, me: initialMe, serverNow, childr
     setTimeout(() => setJustChanged(new Set()), 1800);
   }, []);
 
-  /** Sends one pending edit. Returns what happened; leaves it queued if the network failed. */
+  /** Sends one pending edit and says how it went; the caller records that in the outbox. */
   const send = useCallback(
-    async (p: Pending): Promise<ApplyOutcome | "network"> => {
-      let res: Response;
+    async (p: Pending): Promise<Sent> => {
+      if (inflight.current.has(p.key)) return { verdict: "wait" };
+      inflight.current.add(p.key);
       try {
-        res = await fetch(`/api/t/${tripId}/ops`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ ops: p.ops, key: p.key, ...(p.confirmed ? { confirmed: true } : {}) }),
-        });
-      } catch {
-        return "network";
+        let res: Response;
+        try {
+          res = await fetch(`/api/t/${tripId}/ops`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ ops: p.ops, key: p.key, ...(p.confirmed ? { confirmed: true } : {}) }),
+          });
+        } catch {
+          return { verdict: "wait" };
+        }
+        const verdict = verdictFor(res.status);
+        if (verdict === "signin") {
+          window.location.replace(`/t/${tripId}/join`);
+          return { verdict };
+        }
+        const body = await res.json().catch(() => ({}));
+        if (body.trip) accept({ trip: body.trip, version: body.version });
+        const error = typeof body.error === "string" ? body.error : verdict === "retry" ? "The server is having trouble." : "That didn't save.";
+        return { verdict, error, entry: body.entry };
+      } finally {
+        inflight.current.delete(p.key);
       }
-      if (res.status === 401) {
-        window.location.replace(`/t/${tripId}/join`);
-        return "network";
-      }
-      if (res.status >= 500) return "network";
-      const body = await res.json().catch(() => ({}));
-      setOutbox((q) => q.filter((x) => x.key !== p.key));
-      if (body.trip) accept({ trip: body.trip, version: body.version });
-      if (res.ok) return { ok: true, entry: body.entry };
-      return { ok: false, needsConfirmation: !!body.needsConfirmation, error: body.error ?? "That didn't save." };
     },
     [tripId, accept],
   );
@@ -168,15 +188,13 @@ export function TripProvider({ tripId, initial, me: initialMe, serverNow, childr
     if (sending.current || !navigator.onLine) return;
     sending.current = true;
     try {
-      for (const p of outboxRef.current) {
-        const r = await send(p);
-        if (r === "network") break;
-        if (!r.ok) notify(`An edit made offline didn't apply: ${r.error}`);
-      }
+      const held = await drain({ queue: () => outboxRef.current, send, update: changeOutbox });
+      if (held.length === 1) notify(`An edit made on this phone needs a look: ${held[0].held!.error}`);
+      else if (held.length > 1) notify(`${held.length} edits made on this phone need a look. They're at the top of the screen.`);
     } finally {
       sending.current = false;
     }
-  }, [send, notify]);
+  }, [send, changeOutbox, notify]);
 
   const refresh = useCallback(async () => {
     try {
@@ -203,10 +221,19 @@ export function TripProvider({ tripId, initial, me: initialMe, serverNow, childr
     };
   }, [online, flush, refresh]);
 
-  // What's on screen: the server's trip with this phone's unsent edits on top.
+  // An edit waiting out a server error is tried again once its wait is over.
+  useEffect(() => {
+    const at = online ? nextRetryAt(outbox) : null;
+    if (at === null) return;
+    const id = setTimeout(() => void flush(), Math.max(0, at - Date.now()) + 50);
+    return () => clearTimeout(id);
+  }, [online, outbox, flush]);
+
+  // What's on screen: the server's trip with this phone's unsent edits on top. Held edits aren't shown as made.
   const trip = useMemo(() => {
     let state = server;
     for (const p of outbox) {
+      if (p.held) continue;
       const r = prepareChange(state, p.ops, { author: me, confirmed: p.confirmed });
       if (r.ok) state = { trip: r.trip, version: r.entry.version };
     }
@@ -222,23 +249,41 @@ export function TripProvider({ tripId, initial, me: initialMe, serverNow, childr
         return { ok: false, needsConfirmation: !!needs, error: (needs ?? local.issues[0]).message };
       }
       const p: Pending = { key: newId("k"), ops, ...(opts.confirmed ? { confirmed: true } : {}) };
-      setOutbox((q) => [...q, p]);
+      // Edits still on their way go first, so this one waits its turn behind them.
+      const waiting = outboxRef.current.some((x) => !x.held);
+      changeOutbox((q) => [...q, p]);
       flash(ops);
       const said = opts.message ?? lastSummary(local.entry);
       if (!navigator.onLine) {
         notify(`${said}. Saved on this phone; it'll sync when you're online.`);
         return { ok: true, queued: true };
       }
+      if (waiting) {
+        notify(`${said}. Saved on this phone; it'll sync after the edits before it.`);
+        void flush();
+        return { ok: true, queued: true };
+      }
       // Done as far as the person is concerned: it's checked and on screen. The server
       // confirms in the background, and that's when Undo appears.
       void send(p).then((r) => {
-        if (r === "network") notify(`${said}. Saved on this phone; it'll sync when the connection is back.`);
-        else if (r.ok && r.entry) notify(opts.message ?? lastSummary(r.entry), r.entry.id);
-        else if (!r.ok) notify(`That didn't save: ${r.error}`);
+        changeOutbox((q) => settle(q, p.key, r.verdict, r.error ?? "That didn't save.", Date.now()));
+        if (r.verdict === "wait") notify(`${said}. Saved on this phone; it'll sync when the connection is back.`);
+        else if (r.verdict === "retry") notify(`${said}. Saved on this phone; the server is having trouble, so it'll try again shortly.`);
+        else if (r.verdict === "saved" && r.entry) notify(opts.message ?? lastSummary(r.entry), r.entry.id);
+        else if (r.verdict === "confirm") notify(`That needs a confirmation first: ${r.error}`);
+        else if (r.verdict === "failed") notify(`That didn't save: ${r.error}`);
       });
       return { ok: true };
     },
-    [trip, server.version, me, send, flash, notify],
+    [trip, server.version, me, send, flush, changeOutbox, flash, notify],
+  );
+
+  const resolveHeld = useCallback(
+    (key: string, choice: "send" | "discard") => {
+      changeOutbox((q) => release(q, key, choice));
+      if (choice === "send") void flush();
+    },
+    [changeOutbox, flush],
   );
 
   const undo = useCallback(
@@ -270,13 +315,17 @@ export function TripProvider({ tripId, initial, me: initialMe, serverNow, childr
     [tripId],
   );
 
+  const held = useMemo(() => outbox.filter((p) => p.held), [outbox]);
   const value: StoreValue = {
     tripId,
     me,
     trip,
     version: server.version,
     online,
-    queued: outbox.length,
+    queued: outbox.length - held.length,
+    held,
+    resolveHeld,
+    verified,
     syncedAt,
     apply,
     undo,

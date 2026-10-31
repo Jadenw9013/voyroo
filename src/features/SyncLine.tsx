@@ -6,7 +6,7 @@ import { Icon } from "@/ui/Icon";
 
 /** Where the copy on screen came from: live, saved on this phone, or waiting to sync. */
 export function SyncLine() {
-  const { online, syncedAt, queued, trip } = useTrip();
+  const { online, syncedAt, queued, held, trip } = useTrip();
   const at = localParts(syncedAt, trip.tz);
   const when = at.date === todayIn(trip.tz) ? formatTime(at.time) : `${monthDay(at.date)}, ${formatTime(at.time)}`;
   return (
@@ -14,6 +14,7 @@ export function SyncLine() {
       {!online && <Icon name="offline" className="size-4" />}
       {online ? `Up to date as of ${when}` : `Offline. Showing the copy saved on this phone at ${when}.`}
       {queued > 0 && ` ${queued} ${queued === 1 ? "edit" : "edits"} waiting to sync.`}
+      {held.length > 0 && ` ${held.length} ${held.length === 1 ? "edit needs" : "edits need"} a look.`}
     </p>
   );
 }
