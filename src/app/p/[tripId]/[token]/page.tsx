@@ -4,7 +4,7 @@ import { connection } from "next/server";
 import { notFound } from "next/navigation";
 import { previewTrip } from "@/server/preview";
 import { directionsUrl, itemPhotoUrl, mapsLink, routeUrl, tripCoverUrl } from "@/domain/links";
-import { dayRange, formatDay, formatTime } from "@/domain/time";
+import { dayRange, formatDay, formatTime, instantOf } from "@/domain/time";
 import type { Item, ItemKind, Trip } from "@/domain/types";
 import { Icon, KIND_ICON } from "@/ui/Icon";
 import { PrintTrip } from "@/features/trip/PrintTrip";
@@ -179,7 +179,14 @@ export default async function PreviewPage({ params }: { params: Promise<{ tripId
         {days.map((day, dayIdx) => {
           const items = trip.items
             .filter((item) => item.start?.date === day)
-            .sort((a, b) => (a.start?.time || "").localeCompare(b.start?.time || ""));
+            .sort((a, b) => {
+              const atA = instantOf(a.start, trip.tz);
+              const atB = instantOf(b.start, trip.tz);
+              if (atA !== null && atB !== null) return atA - atB;
+              if (atA !== null) return -1;
+              if (atB !== null) return 1;
+              return (a.start?.time || "").localeCompare(b.start?.time || "");
+            });
           const stays = trip.items.filter(
             (item) => item.kind === "stay" && item.start && item.start.date < day && item.end && item.end.date > day
           );

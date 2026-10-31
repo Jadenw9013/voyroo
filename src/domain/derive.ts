@@ -85,7 +85,7 @@ export function rowVerb(row: Row): string | null {
   return "Back from";
 }
 
-/** Everything on a day: timed rows in time order, then the ones with no time yet. */
+/** Everything on a day: timed rows in chronological order (taking time zones into account), then untimed ones. */
 export function dayRows(trip: Trip, date: string): Row[] {
   const rows: Row[] = [];
   for (const item of trip.items) {
