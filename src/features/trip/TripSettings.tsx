@@ -98,7 +98,6 @@ export function TripSettings() {
 
 function People() {
   const { trip, me, apply, setMe } = useTrip();
-  const [name, setName] = useState("");
   const [renaming, setRenaming] = useState(false);
   const [passOpen, setPassOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -129,21 +128,7 @@ function People() {
           </li>
         ))}
       </ul>
-      <form
-        onSubmit={async (e) => {
-          e.preventDefault();
-          const n = name.trim();
-          if (!n || everyone.includes(n)) return;
-          const r = await apply([{ op: "trip.update", set: { people: [...trip.people, n] } }]);
-          if (r.ok) setName("");
-        }}
-        className="mt-3 flex gap-2"
-      >
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Add someone (first name)" aria-label="Add someone" maxLength={30} className={field} />
-        <button type="submit" disabled={!name.trim()} className={btn.secondary}>
-          Add
-        </button>
-      </form>
+      <p className="mt-3 text-sm text-muted">Only users with valid Google accounts can join the planners group. Invite them below to collaborate.</p>
       <div className="mt-3 flex flex-wrap gap-2">
         <button type="button" onClick={() => setSharing(true)} className={btn.primary}>
           <Icon name="share" />

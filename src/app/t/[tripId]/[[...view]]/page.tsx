@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { connection } from "next/server";
 import { TripApp } from "@/features/TripApp";
-import { readSession } from "@/server/auth";
+import { readAccount, readSession } from "@/server/auth";
 import { getStore } from "@/server/db";
 import { TRIP_ID } from "@/server/http";
+import { googleConfigured } from "@/server/google";
 
 export async function generateMetadata({ params }: { params: Promise<{ tripId: string }> }): Promise<Metadata> {
   const { tripId } = await params;
@@ -32,5 +33,26 @@ export default async function TripPage({ params }: { params: Promise<{ tripId: s
   if (!session) redirect(`/t/${tripId}/join`);
   const { state, readAt } = await load(tripId);
   if (!state) notFound();
+
+  if (googleConfigured()) {
+    const account = await readAccount();
+    if (account) {
+      const store = getStore();
+      const accounts = await store.tripAccounts(tripId);
+      if (!accounts[session.name]) {
+        await store.rememberTrip(account.id, tripId, session.name);
+        accounts[session.name] = account.id;
+      }
+      const validPeople = state.trip.people.filter((p) => Boolean(accounts[p]) || p === session.name);
+      if (validPeople.length !== state.trip.people.length) {
+        state.trip.people = validPeople.length ? validPeople : [session.name];
+        await store.apply(tripId, [{ op: "trip.update", set: { people: state.trip.people } }], {
+          author: session.name,
+          accountId: account.id,
+        });
+      }
+    }
+  }
+
   return <TripApp tripId={tripId} initial={state} me={session.name} serverNow={readAt} />;
 }

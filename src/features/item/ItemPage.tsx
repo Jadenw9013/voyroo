@@ -558,7 +558,7 @@ function Checklist({ item }: { item: Item }) {
 
 function Who({ item }: { item: Item }) {
   const { trip, me, apply } = useTrip();
-  const people = [...new Set([me, ...trip.people, ...(item.who ? [item.who] : [])])];
+  const people = [...new Set([me, ...trip.people])];
   return (
     <div className="flex flex-wrap gap-2">
       {people.map((p) => (

@@ -25,6 +25,7 @@ export async function POST(request: Request) {
   const suffix = createHash("sha256").update(`${account?.id || "guest"}:${snapshot.id}`).digest("hex").slice(0, 16);
   const id = newTripId(snapshot.draft!.name || snapshot.draft!.destination!).replace(/-[^-]+$/, `-${suffix}`);
   const trip = plannerTrip(snapshot.draft!, { id, name, homeTz, homeCurrency });
+  trip.people = name ? [name] : [];
   if (!trip.cover) {
     const resolvedCover = await resolveContextualPhotoUrl({
       title: trip.name,
