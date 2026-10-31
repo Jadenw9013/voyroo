@@ -124,6 +124,8 @@ test("vote on an idea, talk it over, see what's new, and keep it off the public 
   expect(html).not.toContain("4:30 AM alarm");
   expect(html).not.toContain("coffee on the boat");
   await expect(guest.getByRole("group", { name: /Votes on/ })).toHaveCount(0);
+  // Tests share one trip: leave it without a viewing link, as the sharing test expects.
+  expect((await ana.request.delete("/api/t/guatemala/preview")).ok()).toBe(true);
 
   // Deleting keeps the thread's place without the words.
   await anaComments.getByRole("button", { name: "Delete your comment" }).click();
