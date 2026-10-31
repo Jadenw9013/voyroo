@@ -272,3 +272,83 @@ test("reads up to ten booking screenshots at once and records each", async ({ pa
   await expect(list.getByText(/Added “Test Posada \d+”/)).toHaveCount(10);
   await expect(list.getByRole("button", { name: "Open Test Posada 1", exact: true })).toBeVisible();
 });
+
+test("the trip map pins every placed item, filters by day, and places the rest", async ({ page, context }) => {
+  // Pins need no tiles: keep the tests off OpenFreeMap. The geocoder is the server's stub (GEOCODER=stub).
+  await page.route("https://tiles.openfreemap.org/**", (route) => route.abort());
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await join(page);
+  await tab(page, "Plan").click();
+  const map = page.getByRole("region", { name: "Trip map", exact: true });
+  await map.scrollIntoViewIfNeeded();
+  // The backfill places the seed trip's items; only undecided places are left over.
+  await expect(map.getByText(/^1\d places on the map/)).toBeVisible({ timeout: 30_000 });
+  await expect(map.locator(".maplibregl-canvas")).toBeVisible({ timeout: 30_000 });
+  const missing = map.getByRole("region", { name: "No location yet" });
+  await expect(missing.getByText("Transfer from GUA after landing")).toBeVisible();
+  await expect(missing.getByText(/Couldn't find “Seattle” on the map/)).toBeVisible();
+
+  // A day: its stops numbered in order, with the route drawn between them.
+  await map.getByRole("button", { name: "Thu 26", exact: true }).click();
+  await expect(map.getByRole("button", { name: "Thu 26", exact: true })).toHaveAttribute("aria-pressed", "true");
+  const first = map.getByRole("button", { name: /^1\. 10 AM · Check out: Lumina/ });
+  await expect(first).toBeVisible();
+  await expect(map.locator("[data-route-stops]")).toHaveAttribute("data-route-stops", /^[2-9]$/);
+
+  // Tap a pin: a card with the time, status, directions and the item; Escape returns to the pin.
+  await first.click();
+  const card = map.getByRole("region", { name: "Selected place" });
+  await expect(card.getByRole("heading", { name: "Check out: Lumina, AMATE Atitlán (Airbnb)" })).toBeFocused();
+  await expect(card.getByText("Thu Nov 26, 10:00 AM")).toBeVisible();
+  await expect(card.getByText("Booked")).toBeVisible();
+  await expect(card.getByRole("link", { name: "Directions" })).toHaveAttribute("href", /destination=14\.72459%2C-91\.25913/);
+  await page.keyboard.press("Escape");
+  await expect(card).toHaveCount(0);
+  await expect(first).toBeFocused();
+
+  // The list says the same thing as the map, for anyone who can't use the map.
+  await map.getByText("List of places").click();
+  await map.getByRole("list", { name: "On the map" }).getByRole("button", { name: /Jet skiing/ }).click();
+  await expect(card.getByRole("heading", { name: "Jet skiing" })).toBeVisible();
+  await card.getByRole("button", { name: "Open" }).click();
+  await expect(page).toHaveURL(/\/item\/activity-jet-ski$/);
+  await page.goBack();
+
+  // An address typed for something not on the map is found when it's saved, in the same change.
+  await map.getByRole("button", { name: "All", exact: true }).click();
+  await missing.getByRole("listitem").filter({ hasText: "Transfer from GUA after landing" }).getByRole("button", { name: "Add address" }).click();
+  const sheet = page.getByRole("dialog", { name: "Where is Transfer from GUA after landing?" });
+  await sheet.getByLabel("Address or Google Maps link").fill("Antigua Guatemala");
+  await sheet.getByRole("button", { name: "Save" }).click();
+  await expect(missing.getByText("Transfer from GUA after landing")).toHaveCount(0);
+  await expect.poll(async () => (await (await page.request.get("/api/t/guatemala")).json()).trip.items.find((i: { id: string }) => i.id === "transfer-arrival").place).toMatchObject({ address: "Antigua Guatemala", lat: 14.55861, lng: -90.73437 });
+
+  // Or a pin dropped by hand, full screen.
+  await missing.getByRole("listitem").filter({ hasText: "Arrival night hotel" }).getByRole("button", { name: "Drop a pin" }).click();
+  const full = page.getByRole("dialog", { name: "Trip map" });
+  await full.getByRole("button", { name: "Put the pin here" }).click({ timeout: 30_000 });
+  await expect(page.getByRole("status").filter({ hasText: "Pinned Arrival night hotel (name TBD) on the map" })).toBeVisible();
+  await expect.poll(async () => (await (await page.request.get("/api/t/guatemala")).json()).trip.items.find((i: { id: string }) => i.id === "lodging-nov24").place?.lat).toEqual(expect.any(Number));
+  await full.getByRole("button", { name: "Close" }).first().click();
+  await expect(full).toHaveCount(0);
+
+  // Offline, everything already on the phone still shows: the pins and the list.
+  await context.setOffline(true);
+  await tab(page, "Today").click();
+  await tab(page, "Plan").click();
+  await map.scrollIntoViewIfNeeded();
+  await expect(map.locator(".map-pin").first()).toBeVisible({ timeout: 15_000 });
+  await expect(map.getByText(/^\d+ places on the map/)).toBeVisible();
+  await context.setOffline(false);
+
+  for (const theme of ["light", "dark"] as const) {
+    await page.evaluate((t) => localStorage.setItem("trip-theme", t), theme);
+    await page.reload();
+    await map.scrollIntoViewIfNeeded();
+    await expect(map.locator(".map-pin").first()).toBeVisible({ timeout: 30_000 });
+    await map.locator(".map-pin button").first().click();
+    const r = await new AxeBuilder({ page }).include(".itinerary-view").withTags(["wcag2a", "wcag2aa"]).analyze();
+    const serious = r.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
+    expect(serious.map((v) => `${v.id}: ${v.nodes[0]?.target}`), `map (${theme})`).toEqual([]);
+  }
+});

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useEffect, useRef } from "react";
 import { dayRows, nightOf, nights, nowNext, phase, stayOn, toBook, tripDays, type Row } from "@/domain/derive";
-import { directionsUrl, mapsEmbedUrl, mapsSearchUrl, routeUrl, telUrl, tripCoverUrl, whatsappUrl } from "@/domain/links";
+import { directionsUrl, telUrl, tripCoverUrl, whatsappUrl } from "@/domain/links";
 import { daysBetween, formatDay, formatDuration, formatRange, formatTime, monthDay, todayIn, weekday } from "@/domain/time";
 import type { Item } from "@/domain/types";
 import { useClock } from "@/client/hooks";
@@ -13,6 +13,7 @@ import { Avatar, KindChip } from "@/ui/badges";
 import { Icon, type IconName } from "@/ui/Icon";
 import { ActionChip, btn, useCopy } from "@/ui/kit";
 import { useCompose } from "../composer/Composer";
+import { TripMap } from "../map/TripMap";
 import { ItemRow, rowTitle, timeLabel } from "../shared";
 import { SyncLine } from "../SyncLine";
 
@@ -154,58 +155,13 @@ export function Today({ day: chosen, go, serverNow }: { day?: string; go: (v: Vi
 
           {when === "before" && day === trip.startDate && <BeforeTrip onTodo={() => go({ tab: "todo" })} />}
 
-          {/* Day's Google Map Card (shown in left column on desktop) */}
-          <section
-            aria-label="Day map"
-            className="hidden flex-col gap-3 rounded-3xl border border-line bg-surface p-4 shadow-lift sm:p-5 lg:flex"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="flex size-8 items-center justify-center rounded-xl bg-accent-soft text-accent">
-                  <Icon name="pin" className="size-4" />
-                </span>
-                <div>
-                  <h2 className="text-sm font-extrabold">{weekday(day)} Map</h2>
-                  <p className="text-xs text-muted">
-                    {ticketRow?.item.place?.name || stay?.place?.name || trip.destination}
-                  </p>
-                </div>
-              </div>
-              <a
-                href={
-                  routeUrl(
-                    rows.map((r) => r.item),
-                    trip,
-                  ) ?? mapsSearchUrl(ticketRow?.item.place?.name || stay?.place?.name || trip.destination)
-                }
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line bg-sunken px-3 text-xs font-bold text-accent hover:bg-accent-soft"
-              >
-                Google Maps
-                <Icon name="external" className="size-3.5" />
-              </a>
-            </div>
-            <div className="h-44 w-full overflow-hidden rounded-2xl border border-line bg-[#0d1324]">
-              <iframe
-                src={mapsEmbedUrl(
-                  ticketRow?.item.place?.address ||
-                    ticketRow?.item.place?.name ||
-                    stay?.place?.address ||
-                    stay?.place?.name ||
-                    trip.destination,
-                  12,
-                )}
-                title={`Google Map for ${formatDay(day)}`}
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                className="size-full border-0 [filter:invert(90%)_hue-rotate(180deg)_brightness(95%)_contrast(92%)]"
-              />
-            </div>
-          </section>
+          {/* The day's map: in the left column on desktop. Only the visible copy loads a map. */}
+          <div className="hidden rounded-3xl border border-line bg-surface p-4 shadow-lift sm:p-5 lg:block">
+            <TripMap variant="day" day={day} go={go} />
+          </div>
         </div>
 
-        {/* Selected Day Schedule Card + Mobile Day Map */}
+        {/* Selected Day Schedule Card + the day's map on smaller screens */}
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-3.5 rounded-3xl border border-line bg-surface p-4 shadow-lift sm:gap-4 sm:p-5">
             <div className="flex items-baseline justify-between gap-3 border-b border-line pb-3">
@@ -241,55 +197,10 @@ export function Today({ day: chosen, go, serverNow }: { day?: string; go: (v: Vi
             <SyncLine />
           </div>
 
-          {/* Mobile Day Map (placed right below the day's schedule on mobile so schedule items stay above the fold) */}
-          <section
-            aria-label="Mobile day map"
-            className="flex flex-col gap-3 rounded-3xl border border-line bg-surface p-4 shadow-lift lg:hidden"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="flex size-8 items-center justify-center rounded-xl bg-accent-soft text-accent">
-                  <Icon name="pin" className="size-4" />
-                </span>
-                <div>
-                  <h2 className="text-sm font-extrabold">{weekday(day)} Map</h2>
-                  <p className="text-xs text-muted">
-                    {ticketRow?.item.place?.name || stay?.place?.name || trip.destination}
-                  </p>
-                </div>
-              </div>
-              <a
-                href={
-                  routeUrl(
-                    rows.map((r) => r.item),
-                    trip,
-                  ) ?? mapsSearchUrl(ticketRow?.item.place?.name || stay?.place?.name || trip.destination)
-                }
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line bg-sunken px-3 text-xs font-bold text-accent hover:bg-accent-soft"
-              >
-                Google Maps
-                <Icon name="external" className="size-3.5" />
-              </a>
-            </div>
-            <div className="h-44 w-full overflow-hidden rounded-2xl border border-line bg-[#0d1324]">
-              <iframe
-                src={mapsEmbedUrl(
-                  ticketRow?.item.place?.address ||
-                    ticketRow?.item.place?.name ||
-                    stay?.place?.address ||
-                    stay?.place?.name ||
-                    trip.destination,
-                  12,
-                )}
-                title={`Mobile Google Map for ${formatDay(day)}`}
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                className="size-full border-0 [filter:invert(90%)_hue-rotate(180deg)_brightness(95%)_contrast(92%)]"
-              />
-            </div>
-          </section>
+          {/* The day's map on phones and tablets: below the schedule so it stays above the fold. */}
+          <div className="rounded-3xl border border-line bg-surface p-4 shadow-lift lg:hidden">
+            <TripMap variant="day" day={day} go={go} />
+          </div>
         </div>
       </div>
     </div>

@@ -31,6 +31,8 @@ export default defineConfig({
       GOOGLE_REDIRECT_URI: "",
       TRIP_PASSCODE: "volcano",
       NEXT_DIST_DIR: ".next-e2e",
+      // Map pins come from a fixed table: tests never reach Nominatim.
+      GEOCODER: "stub",
     },
     reuseExistingServer: false,
     timeout: 180_000,

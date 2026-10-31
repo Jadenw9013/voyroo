@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { tripDays } from "@/domain/derive";
 import { newId } from "@/domain/ids";
-import { classifyLink, directionsUrl, extractUrls, hasContact, instagramUrl, isPost, itemPhotoUrl, mailUrl, mapsLink, placeEmbedUrl, telUrl, whatsappUrl } from "@/domain/links";
+import { classifyLink, directionsUrl, extractUrls, hasContact, instagramUrl, isPost, itemPhotoUrl, mailUrl, mapsLink, telUrl, whatsappUrl } from "@/domain/links";
 import type { Op } from "@/domain/ops";
 import type { ItemPatchT } from "@/domain/schema";
 import { formatDay, zoneName } from "@/domain/time";
@@ -16,6 +16,7 @@ import { ActionChip, btn, field, label, useCopy } from "@/ui/kit";
 import { Sheet, SheetAction } from "@/ui/Sheet";
 import { useCompose } from "../composer/Composer";
 import { unfurl } from "../links/unfurl";
+import { TripMap } from "../map/TripMap";
 import { PostGrid, thumbSrc } from "../posts/Posts";
 import { Marks, timeLabel, whenLabel } from "../shared";
 
@@ -171,17 +172,7 @@ export function ItemPage({ itemId, back, go }: { itemId: string; back: () => voi
                   </button>
                 )}
               </div>
-              {placeEmbedUrl(item.place, trip) && (
-                <div className="h-44 w-full overflow-hidden rounded-2xl border border-line bg-[#0d1324]">
-                  <iframe
-                    src={placeEmbedUrl(item.place, trip)!}
-                    title={`Google Map of ${item.place.name || item.place.address || item.title}`}
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                    className="size-full border-0 [filter:invert(90%)_hue-rotate(180deg)_brightness(95%)_contrast(92%)]"
-                  />
-                </div>
-              )}
+              <TripMap variant="item" itemId={item.id} go={go} />
               <div className="flex flex-wrap items-center gap-4">
                 {mapsLink(item.place, trip) && (
                   <a href={mapsLink(item.place, trip)!} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-2 font-semibold text-accent">

@@ -13,6 +13,11 @@ import { CacheFirst, ExpirationPlugin, NetworkFirst, NetworkOnly, Serwist, Stale
  *   the app from the home screen with no signal lands on the last trip seen.
  * - The API is never cached (the trip itself is kept in localStorage),
  *   except post and link pictures, kept so the grid still shows offline.
+ * - Map tiles and label fonts from OpenFreeMap are kept as they're viewed,
+ *   so the parts of the map already seen still draw with no signal. Tile
+ *   addresses carry the tile set's version, so a kept tile never goes stale;
+ *   the small index that says which version is current is network first.
+ *   The tile cache stays well under OpenFreeMap's 50 MB offline limit.
  */
 
 declare global {
@@ -51,6 +56,11 @@ const isPage = ({ request, sameOrigin, url }: RouteMatchCallbackOptions) => same
 const isApi = ({ sameOrigin, url }: RouteMatchCallbackOptions) => sameOrigin && url.pathname.startsWith("/api/") && !url.pathname.startsWith("/api/auth/");
 const isThumb = ({ sameOrigin, url }: RouteMatchCallbackOptions) => sameOrigin && /^\/api\/t\/[^/]+\/thumb$/.test(url.pathname);
 const isRsc = ({ request, sameOrigin, url }: RouteMatchCallbackOptions) => sameOrigin && request.headers.get("RSC") === "1" && !url.pathname.startsWith("/api/auth/");
+const MAP_HOST = "tiles.openfreemap.org";
+const isTileIndex = ({ url }: RouteMatchCallbackOptions) => url.host === MAP_HOST && url.pathname === "/planet";
+const isTile = ({ url }: RouteMatchCallbackOptions) => url.host === MAP_HOST && /^\/planet\/[^/]+\/\d+\/\d+\/\d+\.pbf$/.test(url.pathname);
+const isMapFont = ({ url }: RouteMatchCallbackOptions) => url.host === MAP_HOST && url.pathname.startsWith("/fonts/");
+const okOnly = { cacheWillUpdate: async ({ response }: { response: Response }) => (response.ok ? response : null) };
 
 const serwist = new Serwist({
   precacheEntries: self.__SW_MANIFEST,
@@ -59,6 +69,14 @@ const serwist = new Serwist({
   navigationPreload: false,
   disableDevLogs: true,
   runtimeCaching: [
+    { matcher: isTileIndex, handler: new NetworkFirst({ cacheName: "map-index", networkTimeoutSeconds: 4, plugins: [okOnly, new ExpirationPlugin({ maxEntries: 4 })] }) },
+    {
+      matcher: isTile,
+      handler: new CacheFirst({ cacheName: "map-tiles", plugins: [okOnly, new ExpirationPlugin({ maxEntries: 800, maxAgeSeconds: 60 * 60 * 24 * 60, purgeOnQuotaError: true })] }),
+    },
+    { matcher: isMapFont, handler: new CacheFirst({ cacheName: "map-fonts", plugins: [okOnly, new ExpirationPlugin({ maxEntries: 80, maxAgeSeconds: 60 * 60 * 24 * 90 })] }) },
+    // The map's worker script, copied to /vendor under a versioned name.
+    { matcher: ({ sameOrigin, url }) => sameOrigin && url.pathname.startsWith("/vendor/"), handler: new CacheFirst({ cacheName: "vendor", plugins: [okOnly, new ExpirationPlugin({ maxEntries: 4 })] }) },
     {
       matcher: isThumb,
       handler: new CacheFirst({ cacheName: "thumbs", plugins: [{ cacheWillUpdate: async ({ response }) => (response.ok ? response : null) }, new ExpirationPlugin({ maxEntries: 300, maxAgeSeconds: 60 * 60 * 24 * 30 })] }),

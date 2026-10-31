@@ -49,6 +49,9 @@ export interface Backend {
   hit(key: string, ttlSeconds: number): Promise<number>;
   /** A counter's current value (0 when unset or expired). */
   count(key: string): Promise<number>;
+  /** A cached value (geocoder answers), or null when unset or expired. */
+  getCache(key: string): Promise<string | null>;
+  setCache(key: string, value: string, ttlSeconds: number): Promise<void>;
   /** The v1 trip, if the old single-trip keys exist. */
   legacy(): Promise<string | null>;
 }
@@ -146,6 +149,8 @@ export class TripStore {
   count(key: string) {
     return this.db.count(key);
   }
+  getCache(key: string) { return this.db.getCache(key); }
+  setCache(key: string, value: string, ttlSeconds: number) { return this.db.setCache(key, value, ttlSeconds); }
   accountTrips(accountId: string) { return this.db.accountTrips(accountId); }
   tripAccounts(tripId: string) { return this.db.tripAccounts(tripId); }
   rememberTrip(accountId: string, tripId: string, name: string) { return this.db.rememberTrip(accountId, tripId, name); }
@@ -169,6 +174,7 @@ export class MemoryBackend implements Backend {
   private planners = new Map<string, string>();
   private previews = new Map<string, string>();
   private counters = new Map<string, { n: number; until: number }>();
+  private cached = new Map<string, { value: string; until: number }>();
 
   constructor(private legacyTrip: string | null = null) {}
 
@@ -234,6 +240,13 @@ export class MemoryBackend implements Backend {
     const c = this.counters.get(key);
     return c && c.until > Date.now() ? c.n : 0;
   }
+  async getCache(key: string) {
+    const c = this.cached.get(key);
+    return c && c.until > Date.now() ? c.value : null;
+  }
+  async setCache(key: string, value: string, ttlSeconds: number) {
+    this.cached.set(key, { value, until: Date.now() + ttlSeconds * 1000 });
+  }
   async legacy() {
     return this.legacyTrip;
   }
@@ -242,7 +255,7 @@ export class MemoryBackend implements Backend {
 /** The subset of the @upstash/redis client used here. */
 export interface RedisLike {
   get(key: string): Promise<string | null>;
-  set(key: string, value: string, opts?: { nx?: true }): Promise<unknown>;
+  set(key: string, value: string, opts?: { nx?: true; ex?: number }): Promise<unknown>;
   del(key: string): Promise<unknown>;
   mget(...keys: string[]): Promise<(string | null)[]>;
   lrange(key: string, start: number, stop: number): Promise<string[]>;
@@ -339,6 +352,13 @@ export class RedisBackend implements Backend {
   }
   async count(key: string) {
     return Number((await this.redis.get(`rl:${key}`)) ?? 0);
+  }
+  async getCache(key: string) {
+    const v = await this.redis.get(`cache:${key}`);
+    return v === null ? null : typeof v === "string" ? v : JSON.stringify(v);
+  }
+  async setCache(key: string, value: string, ttlSeconds: number) {
+    await this.redis.set(`cache:${key}`, value, { ex: ttlSeconds });
   }
   async legacy() {
     const v = await this.redis.get("trip:v1:state");
