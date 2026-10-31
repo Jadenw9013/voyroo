@@ -38,6 +38,7 @@ export interface Backend {
   index(): Promise<Record<string, string>>;
   putIndex(id: string, summary: string): Promise<void>;
   accountTrips(accountId: string): Promise<Record<string, string>>;
+  tripAccounts(tripId: string): Promise<Record<string, string>>;
   rememberTrip(accountId: string, tripId: string, name: string): Promise<void>;
   getPlanner(accountId: string): Promise<string | null>;
   setPlanner(accountId: string, snapshot: string): Promise<void>;
@@ -146,6 +147,7 @@ export class TripStore {
     return this.db.count(key);
   }
   accountTrips(accountId: string) { return this.db.accountTrips(accountId); }
+  tripAccounts(tripId: string) { return this.db.tripAccounts(tripId); }
   rememberTrip(accountId: string, tripId: string, name: string) { return this.db.rememberTrip(accountId, tripId, name); }
   getPlanner(accountId: string) { return this.db.getPlanner(accountId); }
   setPlanner(accountId: string, snapshot: string) { return this.db.setPlanner(accountId, snapshot); }
@@ -163,6 +165,7 @@ export class MemoryBackend implements Backend {
   private passes = new Map<string, string>();
   private idx = new Map<string, string>();
   private accounts = new Map<string, Record<string, string>>();
+  private tripMembers = new Map<string, Record<string, string>>();
   private planners = new Map<string, string>();
   private previews = new Map<string, string>();
   private counters = new Map<string, { n: number; until: number }>();
@@ -206,6 +209,7 @@ export class MemoryBackend implements Backend {
     this.idx.set(id, summary);
   }
   async accountTrips(accountId: string) { return { ...this.accounts.get(accountId) }; }
+  async tripAccounts(tripId: string) { return { ...this.tripMembers.get(tripId) }; }
   async getPlanner(accountId: string) { return this.planners.get(accountId) ?? null; }
   async setPlanner(accountId: string, snapshot: string) { this.planners.set(accountId, snapshot); }
   async getPreview(id: string) { return this.previews.get(id) ?? null; }
@@ -217,6 +221,7 @@ export class MemoryBackend implements Backend {
   async disablePreview(id: string) { this.previews.delete(id); }
   async rememberTrip(accountId: string, tripId: string, name: string) {
     this.accounts.set(accountId, { ...this.accounts.get(accountId), [tripId]: name });
+    this.tripMembers.set(tripId, { ...this.tripMembers.get(tripId), [name]: accountId });
   }
   async hit(key: string, ttlSeconds: number) {
     const now = Date.now();
@@ -319,6 +324,7 @@ export class RedisBackend implements Backend {
     await this.redis.hset("trips", { [id]: summary });
   }
   async accountTrips(accountId: string) { return redisHash(await this.redis.hgetall(`account:${accountId}:trips`)); }
+  async tripAccounts(tripId: string) { return redisHash(await this.redis.hgetall(`trip:${tripId}:accounts`)); }
   async getPlanner(accountId: string) { return this.redis.get(`account:${accountId}:planner`); }
   async setPlanner(accountId: string, snapshot: string) { await this.redis.set(`account:${accountId}:planner`, snapshot); }
   async getPreview(id: string) { return this.redis.get(`t:${id}:preview`); }
@@ -326,6 +332,7 @@ export class RedisBackend implements Backend {
   async disablePreview(id: string) { await this.redis.del(`t:${id}:preview`); }
   async rememberTrip(accountId: string, tripId: string, name: string) {
     await this.redis.hset(`account:${accountId}:trips`, { [tripId]: name });
+    await this.redis.hset(`trip:${tripId}:accounts`, { [name]: accountId });
   }
   async hit(key: string, ttlSeconds: number) {
     return Number(await this.redis.eval(HIT, [`rl:${key}`], [String(ttlSeconds)]));

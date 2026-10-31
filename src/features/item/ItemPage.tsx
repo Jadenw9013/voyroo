@@ -56,9 +56,20 @@ export function ItemPage({ itemId, back, go }: { itemId: string; back: () => voi
           <Icon name="back" />
           Back
         </button>
-        <button type="button" onClick={() => setEdit("menu")} aria-label="More actions" className="flex size-10 items-center justify-center rounded-xl hover:bg-sunken">
-          <Icon name="more" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setEdit("delete")}
+            aria-label="Delete this event"
+            title="Delete this event"
+            className="flex size-10 items-center justify-center rounded-xl text-muted hover:bg-danger/10 hover:text-danger"
+          >
+            <Icon name="trash" className="size-4" />
+          </button>
+          <button type="button" onClick={() => setEdit("menu")} aria-label="More actions" className="flex size-10 items-center justify-center rounded-xl hover:bg-sunken">
+            <Icon name="more" />
+          </button>
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-3xl border border-line bg-surface p-5 shadow-lift">
@@ -115,6 +126,9 @@ export function ItemPage({ itemId, back, go }: { itemId: string; back: () => voi
           )}
           <ActionChip icon="sparkles" onClick={() => compose({ ask: true, itemId: item.id, text: "" })}>
             Ask about this
+          </ActionChip>
+          <ActionChip icon="trash" onClick={() => setEdit("delete")}>
+            Delete
           </ActionChip>
         </div>
       </div>
@@ -544,7 +558,7 @@ function Checklist({ item }: { item: Item }) {
 
 function Who({ item }: { item: Item }) {
   const { trip, me, apply } = useTrip();
-  const people = [...new Set([me, ...trip.people, ...(item.who ? [item.who] : [])])];
+  const people = [...new Set([me, ...trip.people])];
   return (
     <div className="flex flex-wrap gap-2">
       {people.map((p) => (

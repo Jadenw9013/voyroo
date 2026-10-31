@@ -12,7 +12,7 @@ import { POST as create } from "@/app/api/planner/create/route";
 import { POST as changeMe } from "@/app/api/t/[tripId]/me/route";
 
 const account = { id: "a".repeat(64), name: "Ana", email: "ana@example.com" };
-const draft: PlannerDraft = { name: "Birthday getaway", destination: "Oaxaca, Mexico", startDate: "2027-03-01", endDate: "2027-03-04", tz: "America/Mexico_City", currency: "MXN", homeCurrency: "GBP", travelerName: "Sam", people: ["Ben"], notes: "Relaxed food and culture trip.", items: [{ title: "Explore the old town", kind: "activity", start: { date: "2027-03-01", time: "16:00" }, end: null, placeName: "Oaxaca", notes: "An easy afternoon." }] };
+const draft: PlannerDraft = { name: "Birthday getaway", destination: "Oaxaca, Mexico", startDate: "2027-03-01", endDate: "2027-03-04", tz: "America/Mexico_City", currency: "MXN", homeCurrency: "GBP", travelerName: "Sam", people: [], notes: "Relaxed food and culture trip.", items: [{ title: "Explore the old town", kind: "activity", start: { date: "2027-03-01", time: "16:00" }, end: null, placeName: "Oaxaca", notes: "An easy afternoon." }] };
 const snapshot = (): PlannerSnapshot => ({ id: "c89c880e-774e-4ce6-a01c-bd3a2a4fd00a", messages: [{ role: "user", content: "A birthday trip to Oaxaca, March 1–4, 2027." }], draft: structuredClone(draft), suggestions: [] });
 const post = (body: unknown, crossSite = false) => new Request("http://localhost/api/planner", { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json", ...(crossSite ? { "sec-fetch-site": "cross-site" } : {}) } });
 const saveBody = () => ({ snapshot: snapshot(), homeTz: "Europe/London", homeCurrency: "GBP" });
@@ -29,7 +29,7 @@ describe("conversational trip planning", () => {
 
   it("builds a real itinerary without marking suggestions as bookings", () => {
     const trip = plannerTrip(draft, { id: "oaxaca-1", name: "Ana", homeTz: "Europe/London", homeCurrency: "GBP" });
-    expect(trip.people).toEqual(["Ana", "Ben"]);
+    expect(trip.people).toEqual(["Ana"]);
     expect(trip.items[0]).toMatchObject({ title: "Explore the old town", who: "Ana", start: { date: "2027-03-01" } });
     expect(trip.items[0].booking).toBeUndefined();
   });
@@ -59,7 +59,7 @@ describe("conversational trip planning", () => {
     expect(response.status).toBe(200);
     const saved = await response.json();
     const state = await getStore().get(saved.id);
-    expect(state?.trip).toMatchObject({ name: "Birthday getaway", people: ["Ana", "Ben"], currency: "MXN", homeCurrency: "GBP" });
+    expect(state?.trip).toMatchObject({ name: "Birthday getaway", people: ["Ana"], currency: "MXN", homeCurrency: "GBP" });
     expect(await checkPasscode(saved.passcode, (await getStore().getPass(saved.id))!)).toBe(true);
     expect(await readSession(saved.id)).toMatchObject({ name: "Ana", accountId: account.id });
     const retry = await (await create(post(saveBody()))).json();

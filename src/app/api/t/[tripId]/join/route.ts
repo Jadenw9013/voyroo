@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { checkPasscode, hashPasscode, writeSession } from "@/server/auth";
+import { checkPasscode, hashPasscode, readAccount, writeSession } from "@/server/auth";
 import { firstName, getStore, jsonError, readJson, sameSite, TRIP_ID } from "@/server/http";
+import { googleConfigured } from "@/server/google";
 import { SEED_TRIP_ID } from "@/server/seed";
 
 const MAX_TRIES = 10;
@@ -20,7 +21,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ tri
   if (!parsed.ok) return parsed.res;
   const { passcode, name } = parsed.body;
 
-  const who = firstName(name);
+  const account = await readAccount();
+
+  const who = account ? (firstName(account.name.split(/\s+/)[0]) || firstName(name)) : firstName(name);
   if (!who) return jsonError(400, "Your first name, one word.", { field: "name" });
   if (typeof passcode !== "string" || passcode.trim().length < 4 || passcode.length > 100) {
     return jsonError(400, "The passcode is at least 4 characters.", { field: "passcode" });
@@ -48,10 +51,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ tri
     return jsonError(403, "That passcode doesn't match.", { field: "passcode" });
   }
 
-  await writeSession({ tripId, name: who });
-  // Joining puts you in the group's list, so you can be picked as who's on something.
+  await writeSession({ tripId, name: who, ...(account ? { accountId: account.id } : {}) });
+  if (account) {
+    await store.rememberTrip(account.id, tripId, who);
+  }
+  // Joining puts you in the group's list only if Google is not configured or if you signed in with Google
+  const shouldAdd = googleConfigured() ? Boolean(account) : true;
   const state = await store.get(tripId);
-  if (state && !state.trip.people.includes(who)) await store.apply(tripId, [{ op: "trip.update", set: { people: [...state.trip.people, who] } }], { author: who });
+  if (shouldAdd && state && !state.trip.people.includes(who)) {
+    await store.apply(tripId, [{ op: "trip.update", set: { people: [...state.trip.people, who] } }], { author: who, accountId: account?.id });
+  }
   return NextResponse.json({ ok: true, name: who, passcodeSet: created });
 }
 

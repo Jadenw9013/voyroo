@@ -26,6 +26,8 @@ import { MemoryBackend, TripStore } from "./store";
 import { GET as start } from "@/app/api/auth/google/route";
 import { GET as callback } from "@/app/api/auth/google/callback/route";
 import { POST as logout } from "@/app/api/account/logout/route";
+import { POST as joinTrip } from "@/app/api/t/[tripId]/join/route";
+import { hashPasscode } from "./auth";
 
 const accountA = { id: "a".repeat(64), name: "Ana", email: "ana@example.com" };
 const accountB = { id: "b".repeat(64), name: "Ana", email: "other@example.com" };
@@ -159,5 +161,35 @@ describe("Google accounts and trip access", () => {
     await logout(new Request("http://localhost/api/account/logout", { method: "POST" }));
     expect(await readSession("private-trip")).toBeNull();
     expect(await joinedTrips()).toEqual([]);
+  });
+
+  it("only adds users with valid Google accounts to the planners group when Google is configured", async () => {
+    const store = getStore();
+    await store.create({
+      schema: 2, id: "google-trip", name: "Trip", destination: "Tokyo",
+      startDate: "2027-04-01", endDate: "2027-04-05", tz: "Asia/Tokyo", currency: "JPY",
+      people: ["Creator"], items: [], todos: [],
+    }, await hashPasscode("secretpass"));
+
+    // Attempting to join without a Google account allows access but does not add to planners group
+    const unauthReq = new Request("http://localhost/api/t/google-trip/join", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Hacker", passcode: "secretpass" }),
+    });
+    const unauthRes = await joinTrip(unauthReq, { params: Promise.resolve({ tripId: "google-trip" }) });
+    expect(unauthRes.status).toBe(200);
+    let state = await store.get("google-trip");
+    expect(state?.trip.people).toEqual(["Creator"]);
+
+    // Joining with a valid Google account adds them to planners group
+    await writeAccount(accountA);
+    const authReq = new Request("http://localhost/api/t/google-trip/join", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Ana", passcode: "secretpass" }),
+    });
+    const authRes = await joinTrip(authReq, { params: Promise.resolve({ tripId: "google-trip" }) });
+    expect(authRes.status).toBe(200);
+    state = await store.get("google-trip");
+    expect(state?.trip.people).toEqual(["Creator", "Ana"]);
   });
 });

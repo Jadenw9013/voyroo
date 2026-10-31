@@ -8,12 +8,25 @@ import type { Item, Money, Trip, When } from "./types";
  */
 
 export function tripDays(trip: Trip): string[] {
-  return dayRange(trip.startDate, trip.endDate);
+  let first = trip.startDate;
+  let last = trip.endDate;
+  for (const item of trip.items) {
+    if (item.start?.date) {
+      if (!first || item.start.date < first) first = item.start.date;
+      if (!last || item.start.date > last) last = item.start.date;
+    }
+    if (item.end?.date) {
+      if (!first || item.end.date < first) first = item.end.date;
+      if (!last || item.end.date > last) last = item.end.date;
+    }
+  }
+  return first && last ? dayRange(first, last) : [];
 }
 
 /** The nights: first day through the night before the day you go home. */
 export function tripNights(trip: Trip): string[] {
-  return dayRange(trip.startDate, addDays(trip.endDate, -1));
+  const days = tripDays(trip);
+  return days.length > 1 ? days.slice(0, -1) : [];
 }
 
 const sleepsIn = (i: Item) => (i.kind === "stay" || i.sleepsHere === true) && !i.maybe;
@@ -85,7 +98,7 @@ export function rowVerb(row: Row): string | null {
   return "Back from";
 }
 
-/** Everything on a day: timed rows in time order, then the ones with no time yet. */
+/** Everything on a day: timed rows in chronological order (taking time zones into account), then untimed ones. */
 export function dayRows(trip: Trip, date: string): Row[] {
   const rows: Row[] = [];
   for (const item of trip.items) {

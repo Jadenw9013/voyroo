@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { dayRows, ideas, nightOf, stayOn, toBook, tripDays } from "@/domain/derive";
 import { directionsUrl, itemPhotoUrl, mapsEmbedUrl, mapsSearchUrl, routeUrl, tripCoverUrl } from "@/domain/links";
-import { formatDay, formatRange, formatTime, monthDay, weekday } from "@/domain/time";
+import { addDays, formatDay, formatRange, formatTime, monthDay, weekday } from "@/domain/time";
 import type { Item } from "@/domain/types";
 import type { PlanSection, View } from "@/client/router";
 import { useTrip } from "@/client/store";
@@ -22,7 +22,7 @@ import { PastePlan } from "./PastePlan";
  * two-column itinerary + interactive Google Maps/saved/bookings widgets, and Ask Voyroo assistant bar.
  */
 export function Plan({ section = "days", go, onShare }: { section?: PlanSection; go: (v: View) => void; onShare?: () => void }) {
-  const { trip, me } = useTrip();
+  const { trip, me, apply } = useTrip();
   const compose = useCompose();
   const [pasting, setPasting] = useState(false);
   const [askText, setAskText] = useState("");
@@ -119,7 +119,7 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
             <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end sm:gap-4">
               <div className="min-w-0">
                 <p className="text-xs font-semibold tracking-wide text-[#cbd5f5] sm:text-sm">
-                  {formatRange(trip.startDate, trip.endDate)}, {trip.startDate.slice(0, 4)}
+                  {formatRange(days[0] ?? trip.startDate, days.at(-1) ?? trip.endDate)}, {(days[0] ?? trip.startDate).slice(0, 4)}
                 </p>
                 <h1 className="mt-0.5 text-2xl leading-tight font-extrabold tracking-tight text-white sm:mt-1 sm:text-4xl">
                   {trip.name}
@@ -586,8 +586,22 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
             {section === "days" && (
               <div className="flex flex-col gap-6 sm:gap-7">
                 {visibleDays.map((d) => (
-                  <Day key={d} date={d} last={d === trip.endDate} onOpen={open} onAdd={() => compose({ day: d })} />
+                  <Day key={d} date={d} last={d === (days.at(-1) ?? trip.endDate)} onOpen={open} onAdd={() => compose({ day: d })} />
                 ))}
+                {!selectedDay && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const lastDay = days.at(-1) ?? trip.endDate;
+                      const nextDay = addDays(lastDay, 1);
+                      void apply([{ op: "trip.update", set: { endDate: nextDay } }], { message: "Trip extended" });
+                    }}
+                    className={`${btn.quiet} self-start flex items-center gap-2 text-sm text-muted hover:text-foreground`}
+                  >
+                    <Icon name="plus" className="size-4" />
+                    Add day ({formatDay(addDays(days.at(-1) ?? trip.endDate, 1))})
+                  </button>
+                )}
               </div>
             )}
 
