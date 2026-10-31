@@ -122,6 +122,12 @@ export function tripProblems(trip: Trip): string[] {
     if (todoIds.has(t.id)) out.push(`Two to-dos share the id "${t.id}".`);
     todoIds.add(t.id);
   }
+  // Who paid and who shares it aren't checked against `people`: removing someone mustn't break the money they're part of.
+  const expenseIds = new Set<string>();
+  for (const e of trip.expenses ?? []) {
+    if (expenseIds.has(e.id)) out.push(`Two expenses share the id "${e.id}".`);
+    expenseIds.add(e.id);
+  }
   return out;
 }
 

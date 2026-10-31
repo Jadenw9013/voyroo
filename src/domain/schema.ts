@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { formatMinor, toMinor } from "./money";
 import { isDate, isTime, isZone } from "./time";
 
 /*
@@ -120,6 +121,51 @@ export const TodoSchema = z
   })
   .strict();
 
+const MAX_AMOUNT = 10_000_000;
+
+const unique = (names: string[]) => new Set(names.map((n) => n.toLowerCase())).size === names.length;
+
+export const SplitSchema = z
+  .discriminatedUnion("how", [
+    z.object({ how: z.literal("equal"), among: z.array(FirstName).min(1).max(30) }).strict(),
+    z.object({ how: z.literal("shares"), among: z.array(z.object({ name: FirstName, shares: z.number().positive().max(1000) }).strict()).min(1).max(30) }).strict(),
+    z.object({ how: z.literal("exact"), among: z.array(z.object({ name: FirstName, amount: z.number().nonnegative().max(MAX_AMOUNT) }).strict()).min(1).max(30) }).strict(),
+  ])
+  .refine((s) => unique(s.how === "equal" ? s.among : s.among.map((p) => p.name)), "Each person once in a split");
+
+export const FxSchema = z.object({ to: Currency, rate: z.number().positive().max(1e9), on: DateStr }).strict();
+
+const ExpenseFields = {
+  title: Short,
+  amount: z.number().positive("More than zero").max(MAX_AMOUNT),
+  currency: Currency,
+  paidBy: FirstName,
+  split: SplitSchema,
+  date: DateStr,
+};
+
+/** Set amounts must add up to the total, to the cent. */
+function splitAddsUp(e: { amount: number; currency: string; split: z.infer<typeof SplitSchema> }, ctx: z.RefinementCtx) {
+  if (e.split.how !== "exact") return;
+  const sum = e.split.among.reduce((s, p) => s + toMinor(p.amount, e.currency), 0);
+  const total = toMinor(e.amount, e.currency);
+  if (sum !== total) ctx.addIssue({ code: "custom", path: ["split"], message: `The split adds up to ${formatMinor(sum, e.currency)}, not ${formatMinor(total, e.currency)}` });
+}
+
+export const ExpenseSchema = z
+  .object({
+    id: Id,
+    ...ExpenseFields,
+    itemId: Id.optional(),
+    note: Line.optional(),
+    fx: FxSchema.optional(),
+    settlement: z.literal(true).optional(),
+    addedBy: FirstName.optional(),
+    addedAt: z.number().int().nonnegative(),
+  })
+  .strict()
+  .superRefine(splitAddsUp);
+
 export const TripSchema = z
   .object({
     schema: z.literal(2),
@@ -137,6 +183,7 @@ export const TripSchema = z
     notes: Text.optional(),
     items: z.array(ItemSchema).max(500),
     todos: z.array(TodoSchema).max(300),
+    expenses: z.array(ExpenseSchema).max(1000).optional(),
   })
   .strict();
 
@@ -222,6 +269,13 @@ export const TripPatch = z
   .strict()
   .refine((p) => Object.keys(p).length > 0, "No fields to change");
 
+/* The split is replaced whole, never merged: "equal among three" and "Ana's exact Q300" don't mix. */
+export const ExpensePatch = z
+  .object({ ...ExpenseFields, itemId: Id.nullable(), note: Line.nullable(), fx: FxSchema.nullable() })
+  .partial()
+  .strict()
+  .refine((p) => Object.keys(p).length > 0, "No fields to change");
+
 // ---------------------------------------------------------------------------
 // Ops
 
@@ -241,7 +295,11 @@ export const OpSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("todo.update"), id: Id, set: TodoPatch }).strict(),
   z.object({ op: z.literal("todo.remove"), id: Id }).strict(),
   z.object({ op: z.literal("trip.update"), set: TripPatch }).strict(),
+  z.object({ op: z.literal("expense.add"), expense: ExpenseSchema, index }).strict(),
+  z.object({ op: z.literal("expense.update"), id: Id, set: ExpensePatch }).strict(),
+  z.object({ op: z.literal("expense.remove"), id: Id }).strict(),
 ]);
 
 export type Op = z.infer<typeof OpSchema>;
 export type ItemPatchT = z.infer<typeof ItemPatch>;
+export type ExpensePatchT = z.infer<typeof ExpensePatch>;

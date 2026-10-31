@@ -1,6 +1,7 @@
+import { formatMoney } from "./money";
 import type { Op } from "./schema";
 import { formatDay } from "./time";
-import type { CheckItem, Item, Link, Todo, Trip } from "./types";
+import type { CheckItem, Expense, Item, Link, Todo, Trip } from "./types";
 
 export type { Op } from "./schema";
 
@@ -84,6 +85,20 @@ function findTodo(trip: Trip, id: string): { todo: Todo; index: number } {
   const index = trip.todos.findIndex((t) => t.id === id);
   if (index < 0) throw new OpError("missing", `No to-do "${id}". Someone may have removed it.`);
   return { todo: trip.todos[index], index };
+}
+
+function findExpense(trip: Trip, id: string): { expense: Expense; index: number; list: Expense[] } {
+  const list = trip.expenses ?? [];
+  const index = list.findIndex((e) => e.id === id);
+  if (index < 0) throw new OpError("missing", "That expense isn't on the trip any more. Someone may have removed it.");
+  return { expense: list[index], index, list };
+}
+
+/** No expenses left: no list at all, the way a trip from before expenses looks. */
+function withExpenses(trip: Trip, list: Expense[]): Trip {
+  const next: Trip = { ...trip, expenses: list };
+  if (!list.length) delete next.expenses;
+  return next;
 }
 
 /** Applies one op. Returns the new trip and the ops that would undo it. Never mutates `trip`. */
@@ -213,6 +228,29 @@ export function applyOp(trip: Trip, op: Op): { trip: Trip; inverse: Op[] } {
       }
       return { trip: next as unknown as Trip, inverse: [{ op: "trip.update", set: inversePatch(trip as unknown as Obj, op.set as Patch) } as Op] };
     }
+    case "expense.add": {
+      const list = trip.expenses ?? [];
+      if (list.some((e) => e.id === op.expense.id)) throw new OpError("duplicate", "That expense is already logged.");
+      return { trip: withExpenses(trip, insertAt(list, op.expense as Expense, op.index)), inverse: [{ op: "expense.remove", id: op.expense.id }] };
+    }
+    case "expense.update": {
+      const { expense, index, list } = findExpense(trip, op.id);
+      const next: Obj = { ...expense };
+      for (const [k, v] of Object.entries(op.set)) {
+        if (v === null) delete next[k];
+        else next[k] = v;
+      }
+      const updated = list.slice();
+      updated[index] = next as unknown as Expense;
+      return {
+        trip: withExpenses(trip, updated),
+        inverse: [{ op: "expense.update", id: op.id, set: inversePatch(expense as unknown as Obj, op.set as Patch) } as Op],
+      };
+    }
+    case "expense.remove": {
+      const { expense, index, list } = findExpense(trip, op.id);
+      return { trip: withExpenses(trip, list.filter((e) => e.id !== op.id)), inverse: [{ op: "expense.add", expense, index } as Op] };
+    }
   }
 }
 
@@ -314,7 +352,30 @@ export function describeOp(before: Trip, op: Op): string {
       return `removed the to-do ${quote(before.todos.find((t) => t.id === op.id)?.text ?? "")}`;
     case "trip.update":
       return "updated the trip details";
+    case "expense.add":
+      return describeExpense(op.expense as Expense);
+    case "expense.update": {
+      const e = before.expenses?.find((x) => x.id === op.id);
+      return e?.settlement ? `edited ${payment(e)}` : `edited the expense ${quote(e?.title ?? "")}`;
+    }
+    case "expense.remove": {
+      const e = before.expenses?.find((x) => x.id === op.id);
+      if (!e) return "removed an expense";
+      return e.settlement ? `removed ${payment(e)}` : `removed the expense ${quote(e.title)}`;
+    }
   }
+}
+
+const paidTo = (e: Expense) => (e.split.how === "equal" ? e.split.among : e.split.among.map((p) => p.name)).join(" and ");
+
+/** "the payment from Ana to Ben". */
+const payment = (e: Expense) => `the payment from ${e.paidBy} to ${paidTo(e)}`;
+
+/** "logged “Dinner”, Q420 paid by Ana" or, for paying back, "recorded Ana paid Ben Q350". */
+function describeExpense(e: Expense): string {
+  const amount = formatMoney(e.amount, e.currency);
+  if (e.settlement) return `recorded ${e.paidBy} paid ${paidTo(e)} ${amount}`;
+  return `logged ${quote(e.title)}, ${amount} paid by ${e.paidBy}`;
 }
 
 /** Ids of items an op adds or changes, for highlighting and "Updated" markers. */
