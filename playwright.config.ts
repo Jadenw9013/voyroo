@@ -25,6 +25,9 @@ export default defineConfig({
       UPSTASH_REDIS_REST_URL: "",
       UPSTASH_REDIS_REST_TOKEN: "",
       GEMINI_API_KEY: "",
+      // Travel times: a local stand-in, never a real routing service.
+      ROUTING_MOCK: "1",
+      OPENROUTESERVICE_API_KEY: "",
       SESSION_SECRET: "test-only-playwright-session-secret",
       GOOGLE_CLIENT_ID: "",
       GOOGLE_CLIENT_SECRET: "",

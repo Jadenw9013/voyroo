@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef } from "react";
+import { Fragment, useEffect, useRef } from "react";
 import { dayRows, nightOf, nights, nowNext, phase, stayOn, toBook, tripDays, type Row } from "@/domain/derive";
 import { directionsUrl, telUrl, tripCoverUrl, whatsappUrl } from "@/domain/links";
 import { daysBetween, formatDay, formatDuration, formatRange, formatTime, monthDay, todayIn, weekday } from "@/domain/time";
@@ -15,6 +15,7 @@ import { ActionChip, btn, useCopy } from "@/ui/kit";
 import { useCompose } from "../composer/Composer";
 import { TripMap } from "../map/TripMap";
 import { ItemRow, rowTitle, timeLabel } from "../shared";
+import { LegRow, useDayLegs } from "../travel/Travel";
 import { SyncLine } from "../SyncLine";
 
 /**
@@ -29,6 +30,7 @@ export function Today({ day: chosen, go, serverNow }: { day?: string; go: (v: Vi
   const when = phase(trip, nowMs);
   const day = chosen ?? (when === "during" ? today : trip.startDate);
   const rows = dayRows(trip, day);
+  const legs = useDayLegs(day);
   const timed = rows.filter((r) => r.at !== null);
   const untimed = rows.filter((r) => r.at === null);
   const isToday = day === today;
@@ -185,10 +187,16 @@ export function Today({ day: chosen, go, serverNow }: { day?: string; go: (v: Vi
               ) : (
                 <ol className="flex flex-col gap-1.5">
                   {timed.map((r) => (
-                    <ItemRow key={r.key} row={r} item={r.item} onOpen={() => open(r.item)} />
+                    <Fragment key={r.key}>
+                      <LegRow shown={legs.get(r.key)} />
+                      <ItemRow row={r} item={r.item} onOpen={() => open(r.item)} />
+                    </Fragment>
                   ))}
                   {untimed.map((r) => (
-                    <ItemRow key={r.key} row={r} item={r.item} onOpen={() => open(r.item)} />
+                    <Fragment key={r.key}>
+                      <LegRow shown={legs.get(r.key)} />
+                      <ItemRow row={r} item={r.item} onOpen={() => open(r.item)} />
+                    </Fragment>
                   ))}
                 </ol>
               )}

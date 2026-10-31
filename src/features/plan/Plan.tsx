@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { dayRows, ideas, nightOf, stayOn, toBook, tripDays } from "@/domain/derive";
 import { hasCoords } from "@/domain/geo";
 import { itemPhotoUrl, routeUrl, tripCoverUrl } from "@/domain/links";
@@ -16,6 +16,7 @@ import { useCompose } from "../composer/Composer";
 import { MapDialog, TripMap } from "../map/TripMap";
 import { PostGrid, postsOf } from "../posts/Posts";
 import { ItemRow } from "../shared";
+import { LegRow, useDayLegs } from "../travel/Travel";
 import { SyncLine } from "../SyncLine";
 import { PastePlan } from "./PastePlan";
 
@@ -727,6 +728,7 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
 function Day({ date, last, onOpen, onAdd }: { date: string; last: boolean; onOpen: (i: Item) => void; onAdd: () => void }) {
   const { trip } = useTrip();
   const rows = dayRows(trip, date);
+  const legs = useDayLegs(date);
   const stay = last ? null : stayOn(trip, date);
   const n = stay ? nightOf(stay, date) : null;
   const route = routeUrl(
@@ -771,7 +773,10 @@ function Day({ date, last, onOpen, onAdd }: { date: string; last: boolean; onOpe
       {rows.length > 0 && (
         <ol className="mt-2 flex flex-col gap-1.5">
           {rows.map((r) => (
-            <ItemRow key={r.key} row={r} item={r.item} onOpen={() => onOpen(r.item)} />
+            <Fragment key={r.key}>
+              <LegRow shown={legs.get(r.key)} />
+              <ItemRow row={r} item={r.item} onOpen={() => onOpen(r.item)} />
+            </Fragment>
           ))}
         </ol>
       )}

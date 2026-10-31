@@ -19,6 +19,7 @@ import { unfurl } from "../links/unfurl";
 import { TripMap } from "../map/TripMap";
 import { PostGrid, thumbSrc } from "../posts/Posts";
 import { Marks, timeLabel, whenLabel } from "../shared";
+import { FromPrevious } from "../travel/Travel";
 
 type EditKind = "title" | "when" | "where" | "booking" | "contact" | "menu" | "delete" | null;
 
@@ -192,6 +193,8 @@ export function ItemPage({ itemId, back, go }: { itemId: string; back: () => voi
             <Empty onClick={() => setEdit("where")}>Add an address or a Maps link</Empty>
           )}
         </Section>
+
+        <FromPrevious item={item} onOpen={(i) => go({ tab: "item", itemId: i.id })} />
 
         <Section title="Reservation" onEdit={() => setEdit("booking")}>
           <BookingState item={item} onSet={(state) => update(state === null ? { booking: null } : { booking: { state } })} />
