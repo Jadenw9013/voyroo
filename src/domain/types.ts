@@ -77,6 +77,33 @@ export interface CheckItem {
   done: boolean;
 }
 
+/** How someone feels about doing it: "I'm in", "Maybe", "Not for me". */
+export type Vote = "in" | "maybe" | "out";
+
+/** One person's take on an item. Only they can change it. */
+export interface Reaction {
+  /** First name. */
+  by: string;
+  vote?: Vote;
+  heart?: true;
+}
+
+/** A comment on an item. Only its author can edit or delete it. */
+export interface Comment {
+  id: string;
+  /** First name of who wrote it. */
+  by: string;
+  /** Empty once deleted. */
+  text: string;
+  /** Epoch ms, from the author's phone. */
+  at: number;
+  editedAt?: number;
+  /** Deleted by its author: the thread keeps its place, the words are gone. */
+  deletedAt?: number;
+  /** Written by the assistant because its author asked it to. */
+  viaAssistant?: true;
+}
+
 export interface Item {
   id: string;
   /** Used for icons and sensible defaults; never something people must pick. */
@@ -100,6 +127,10 @@ export interface Item {
   sleepsHere?: boolean;
   /** Highest point in metres, for climbs. */
   peakM?: number;
+  /** Who's in, who's a maybe, who'd pass. Changed only by reaction ops. */
+  reactions?: Reaction[];
+  /** The group's thread about it, oldest first. Changed only by comment ops. */
+  comments?: Comment[];
 }
 
 export interface Todo {

@@ -1,11 +1,11 @@
 import { formatMoney } from "./money";
 import type { Op } from "./schema";
 import { formatDay } from "./time";
-import type { CheckItem, Expense, Item, Link, Todo, Trip } from "./types";
+import type { CheckItem, Comment, Expense, Item, Link, Reaction, Todo, Trip } from "./types";
 
 export type { Op } from "./schema";
 
-export type OpErrorCode = "missing" | "duplicate" | "invalid" | "needs_confirmation";
+export type OpErrorCode = "missing" | "duplicate" | "invalid" | "needs_confirmation" | "forbidden";
 
 export class OpError extends Error {
   constructor(
@@ -251,6 +251,70 @@ export function applyOp(trip: Trip, op: Op): { trip: Trip; inverse: Op[] } {
       const { expense, index, list } = findExpense(trip, op.id);
       return { trip: withExpenses(trip, list.filter((e) => e.id !== op.id)), inverse: [{ op: "expense.add", expense, index } as Op] };
     }
+    case "reaction.set": {
+      if (op.vote === undefined && op.heart === undefined) throw new OpError("invalid", "Nothing to change.");
+      const { item, index } = findItem(trip, op.itemId);
+      const list = item.reactions ?? [];
+      const ri = list.findIndex((r) => r.by === op.by);
+      const before = ri < 0 ? undefined : list[ri];
+      const vote = op.vote === undefined ? before?.vote : (op.vote ?? undefined);
+      const heart = op.heart === undefined ? !!before?.heart : op.heart;
+      const after: Reaction = { by: op.by, ...(vote ? { vote } : {}), ...(heart ? { heart: true as const } : {}) };
+      const reactions = !vote && !heart ? list.filter((r) => r.by !== op.by) : ri < 0 ? [...list, after] : list.map((r, i) => (i === ri ? after : r));
+      const next: Item = { ...item, reactions };
+      if (!reactions.length) delete next.reactions;
+      return {
+        trip: replaceItem(trip, index, next),
+        inverse: [
+          {
+            op: "reaction.set",
+            itemId: op.itemId,
+            by: op.by,
+            ...(op.vote !== undefined ? { vote: before?.vote ?? null } : {}),
+            ...(op.heart !== undefined ? { heart: !!before?.heart } : {}),
+          },
+        ],
+      };
+    }
+    case "comment.add": {
+      const { item, index } = findItem(trip, op.itemId);
+      const list = item.comments ?? [];
+      if (list.some((c) => c.id === op.comment.id)) throw new OpError("duplicate", "That comment is already there.");
+      return {
+        trip: replaceItem(trip, index, { ...item, comments: insertAt(list, op.comment as Comment, op.index) }),
+        inverse: [{ op: "comment.remove", itemId: op.itemId, commentId: op.comment.id }],
+      };
+    }
+    case "comment.update": {
+      const { item, index } = findItem(trip, op.itemId);
+      const list = item.comments ?? [];
+      const ci = list.findIndex((c) => c.id === op.commentId);
+      if (ci < 0) throw new OpError("missing", `That comment is no longer on "${item.title}".`);
+      const before = list[ci] as unknown as Obj;
+      const next: Obj = { ...before };
+      for (const [k, v] of Object.entries(op.set)) {
+        if (v === null) delete next[k];
+        else next[k] = v;
+      }
+      const deleted = next.deletedAt !== undefined;
+      if (deleted ? next.text !== "" : !next.text) throw new OpError("invalid", deleted ? "A deleted comment keeps no words." : "A comment needs some words.");
+      const updated = list.slice();
+      updated[ci] = next as unknown as Comment;
+      return {
+        trip: replaceItem(trip, index, { ...item, comments: updated }),
+        inverse: [{ op: "comment.update", itemId: op.itemId, commentId: op.commentId, set: inversePatch(before, op.set as Patch) } as Op],
+      };
+    }
+    case "comment.remove": {
+      const { item, index } = findItem(trip, op.itemId);
+      const list = item.comments ?? [];
+      const ci = list.findIndex((c) => c.id === op.commentId);
+      if (ci < 0) throw new OpError("missing", `That comment is no longer on "${item.title}".`);
+      const rest = list.filter((c) => c.id !== op.commentId);
+      const next: Item = { ...item, comments: rest };
+      if (!rest.length) delete next.comments;
+      return { trip: replaceItem(trip, index, next), inverse: [{ op: "comment.add", itemId: op.itemId, comment: list[ci], index: ci }] };
+    }
   }
 }
 
@@ -363,6 +427,21 @@ export function describeOp(before: Trip, op: Op): string {
       if (!e) return "removed an expense";
       return e.settlement ? `removed ${payment(e)}` : `removed the expense ${quote(e.title)}`;
     }
+    case "reaction.set": {
+      const t = itemTitle(op.itemId);
+      const parts: string[] = [];
+      if (op.vote !== undefined) parts.push(op.vote === "in" ? `is in for ${t}` : op.vote === "maybe" ? `is a maybe for ${t}` : op.vote === "out" ? `passed on ${t}` : `took back their vote on ${t}`);
+      if (op.heart !== undefined) parts.push(op.heart ? `hearted ${t}` : `took back their heart on ${t}`);
+      return parts.join(" and ");
+    }
+    case "comment.add":
+      return `commented on ${itemTitle(op.itemId)}`;
+    case "comment.update":
+      if (op.set.deletedAt) return `deleted a comment on ${itemTitle(op.itemId)}`;
+      if (op.set.deletedAt === null) return `restored a comment on ${itemTitle(op.itemId)}`;
+      return `edited a comment on ${itemTitle(op.itemId)}`;
+    case "comment.remove":
+      return `removed a comment from ${itemTitle(op.itemId)}`;
   }
 }
 
@@ -396,6 +475,10 @@ export function itemsTouched(op: Op): string[] {
     case "check.add":
     case "check.set":
     case "check.remove":
+    case "reaction.set":
+    case "comment.add":
+    case "comment.update":
+    case "comment.remove":
       return [op.itemId];
     default:
       return [];

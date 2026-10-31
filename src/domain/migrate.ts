@@ -7,8 +7,10 @@ import type { Booking, Item, ItemKind, Todo, Trip, When } from "./types";
  * Runs on the seed and on any v1 trip still in the store, so nothing typed
  * on the old site is lost.
  *
- * Within v2, fields are only ever added as optional, so a stored trip never
- * needs rewriting: upgradeTrip tidies one as it's read.
+ * Within v2, fields are only ever added as optional (expenses, votes and
+ * comments among them), so a stored trip never needs rewriting: upgradeTrip
+ * tidies one as it's read. A trip saved before votes and comments existed is
+ * already a valid trip with nobody's votes and an empty thread.
  */
 
 /**

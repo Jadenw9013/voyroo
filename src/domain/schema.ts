@@ -88,6 +88,27 @@ export const LinkSchema = z
 
 export const CheckItemSchema = z.object({ id: Id, text: Line.min(1), done: z.boolean() }).strict();
 
+export const VoteSchema = z.enum(["in", "maybe", "out"]);
+
+export const ReactionSchema = z.object({ by: FirstName, vote: VoteSchema.optional(), heart: z.literal(true).optional() }).strict();
+
+const Epoch = z.number().int().nonnegative();
+export const CommentText = z.string().trim().max(2000);
+
+/** A deleted comment keeps its place with no words; any other comment has some. */
+export const CommentSchema = z
+  .object({
+    id: Id,
+    by: FirstName,
+    text: CommentText,
+    at: Epoch,
+    editedAt: Epoch.optional(),
+    deletedAt: Epoch.optional(),
+    viaAssistant: z.literal(true).optional(),
+  })
+  .strict()
+  .refine((c) => (c.deletedAt === undefined ? c.text.length > 0 : c.text === ""), "A comment needs some words; a deleted one has none");
+
 export const ItemKindSchema = z.enum(["stay", "flight", "transport", "activity", "food", "other"]);
 
 export const ItemSchema = z
@@ -107,6 +128,8 @@ export const ItemSchema = z
     maybe: z.boolean().optional(),
     sleepsHere: z.boolean().optional(),
     peakM: z.number().int().positive().max(9000).optional(),
+    reactions: z.array(ReactionSchema).max(60).optional(),
+    comments: z.array(CommentSchema).max(300).optional(),
   })
   .strict();
 
@@ -276,6 +299,13 @@ export const ExpensePatch = z
   .strict()
   .refine((p) => Object.keys(p).length > 0, "No fields to change");
 
+/* Editing sets text and editedAt; deleting sets deletedAt and empties the text. */
+export const CommentPatch = z
+  .object({ text: CommentText, editedAt: Epoch.nullable(), deletedAt: Epoch.nullable() })
+  .partial()
+  .strict()
+  .refine((p) => Object.keys(p).length > 0, "No fields to change");
+
 // ---------------------------------------------------------------------------
 // Ops
 
@@ -298,6 +328,11 @@ export const OpSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("expense.add"), expense: ExpenseSchema, index }).strict(),
   z.object({ op: z.literal("expense.update"), id: Id, set: ExpensePatch }).strict(),
   z.object({ op: z.literal("expense.remove"), id: Id }).strict(),
+  // Votes and comments: each person changes only their own (see discuss.ts).
+  z.object({ op: z.literal("reaction.set"), itemId: Id, by: FirstName, vote: VoteSchema.nullable().optional(), heart: z.boolean().optional() }).strict(),
+  z.object({ op: z.literal("comment.add"), itemId: Id, comment: CommentSchema, index }).strict(),
+  z.object({ op: z.literal("comment.update"), itemId: Id, commentId: Id, set: CommentPatch }).strict(),
+  z.object({ op: z.literal("comment.remove"), itemId: Id, commentId: Id }).strict(),
 ]);
 
 export type Op = z.infer<typeof OpSchema>;
