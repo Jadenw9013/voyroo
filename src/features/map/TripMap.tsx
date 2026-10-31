@@ -346,10 +346,13 @@ export function TripMap({ variant, go, day, itemId, fullScreen = false, onClose,
         ref={box}
         data-route-stops={route?.length ?? 0}
         onKeyDown={(e) => {
-          if (e.key === "Escape" && (selected || group)) {
-            e.stopPropagation();
-            close();
-          }
+          if (e.key !== "Escape") return;
+          // Escape steps back one thing at a time: the card, then placing a pin, then (full screen) the map.
+          if (selected || group) close();
+          else if (picking) setPicking(null);
+          else return;
+          e.preventDefault();
+          e.stopPropagation();
         }}
         className={`relative w-full overflow-hidden rounded-2xl border border-line bg-sunken ${heightCls}`}
       >

@@ -198,6 +198,23 @@ describe("the map's backfill", () => {
     expect(state.trip.items.find((i) => i.id === "lodging-antigua")!.place).toEqual({ name: "Antigua Guatemala", lat: 14.55861, lng: -90.73437 });
   });
 
+  it("answers from memory once a version of the trip has nothing left to place", async () => {
+    const geo = new StubGeocoder();
+    const lookup = vi.spyOn(geo, "lookup");
+    setGeoForTests({ geocoder: geo });
+    await joinRoute.POST(post({ name: "Sam", passcode: "volcano" }), ctx());
+    let body = await (await locateRoute.POST(post({}), ctx())).json();
+    while (body.pending || body.located.length) body = await (await locateRoute.POST(post({}), ctx())).json();
+    expect(body.notFound).toEqual(["flight-home"]);
+    lookup.mockClear();
+    for (let i = 0; i < 30; i++) {
+      const res = await locateRoute.POST(post({}), ctx());
+      expect(res.status).toBe(200);
+      expect((await res.json()).notFound).toEqual(["flight-home"]);
+    }
+    expect(lookup).not.toHaveBeenCalled();
+  });
+
   it("needs a session", async () => {
     expect((await locateRoute.POST(post({}), ctx())).status).toBe(401);
   });

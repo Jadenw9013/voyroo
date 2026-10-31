@@ -281,8 +281,8 @@ test("the trip map pins every placed item, filters by day, and places the rest",
   await tab(page, "Plan").click();
   const map = page.getByRole("region", { name: "Trip map", exact: true });
   await map.scrollIntoViewIfNeeded();
-  // The backfill places the seed trip's items; only undecided places are left over.
-  await expect(map.getByText(/^1\d places on the map/)).toBeVisible({ timeout: 30_000 });
+  // The backfill places the seed trip's items (and anything earlier tests added); undecided places are left over.
+  await expect(map.getByText(/^\d{2,} places on the map/)).toBeVisible({ timeout: 30_000 });
   await expect(map.locator(".maplibregl-canvas")).toBeVisible({ timeout: 30_000 });
   const missing = map.getByRole("region", { name: "No location yet" });
   await expect(missing.getByText("Transfer from GUA after landing")).toBeVisible();
@@ -329,7 +329,12 @@ test("the trip map pins every placed item, filters by day, and places the rest",
   await full.getByRole("button", { name: "Put the pin here" }).click({ timeout: 30_000 });
   await expect(page.getByRole("status").filter({ hasText: "Pinned Arrival night hotel (name TBD) on the map" })).toBeVisible();
   await expect.poll(async () => (await (await page.request.get("/api/t/guatemala")).json()).trip.items.find((i: { id: string }) => i.id === "lodging-nov24").place?.lat).toEqual(expect.any(Number));
-  await full.getByRole("button", { name: "Close" }).first().click();
+  // Escape steps back one thing at a time: the new pin's card, then the full-screen map.
+  await expect(full.getByRole("region", { name: "Selected place" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(full.getByRole("region", { name: "Selected place" })).toHaveCount(0);
+  await expect(full).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(full).toHaveCount(0);
 
   // Offline, everything already on the phone still shows: the pins and the list.
