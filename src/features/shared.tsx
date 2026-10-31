@@ -133,8 +133,8 @@ export function ItemRow({ row, item, onOpen, showDate }: { row?: Row; item: Item
       <button
         type="button"
         onClick={handleDelete}
-        title={`Delete "${item.title}"`}
-        aria-label={`Delete "${item.title}"`}
+        title="Delete item"
+        aria-label="Delete item"
         className="absolute right-2 top-1/2 -translate-y-1/2 flex size-8 items-center justify-center rounded-xl bg-canvas/80 text-muted opacity-80 backdrop-blur-md transition-all hover:bg-danger/15 hover:text-danger hover:opacity-100 sm:opacity-0 sm:group-hover/item:opacity-100"
       >
         <Icon name="trash" className="size-3.5" />

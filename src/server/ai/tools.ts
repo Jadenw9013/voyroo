@@ -247,10 +247,23 @@ export function buildTools(ctx: ToolContext) {
       inputSchema: z.object({ items: z.array(NewItem).min(1).max(12) }),
       execute: async ({ items }): Promise<ChangeResult> => {
         const trip = await ctx.trip();
-        return applyOrConfirm(
-          ctx,
-          items.map((i) => ({ op: "item.add" as const, item: toItem(i, trip, ctx.me) })),
-        );
+        const createdItems = items.map((i) => toItem(i, trip, ctx.me));
+        const ops: Op[] = createdItems.map((item) => ({ op: "item.add" as const, item }));
+        let minStart = trip.startDate;
+        let maxEnd = trip.endDate;
+        for (const item of createdItems) {
+          if (item.start?.date) {
+            if (item.start.date < minStart) minStart = item.start.date;
+            if (item.start.date > maxEnd) maxEnd = item.start.date;
+          }
+          if (item.end?.date) {
+            if (item.end.date < minStart) minStart = item.end.date;
+            if (item.end.date > maxEnd) maxEnd = item.end.date;
+          }
+        }
+        if (minStart !== trip.startDate) ops.push({ op: "trip.update", set: { startDate: minStart } });
+        if (maxEnd !== trip.endDate) ops.push({ op: "trip.update", set: { endDate: maxEnd } });
+        return applyOrConfirm(ctx, ops);
       },
     }),
     update_items: tool({

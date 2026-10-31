@@ -163,7 +163,7 @@ describe("Google accounts and trip access", () => {
     expect(await joinedTrips()).toEqual([]);
   });
 
-  it("requires a valid Google account to join when Google is configured", async () => {
+  it("only adds users with valid Google accounts to the planners group when Google is configured", async () => {
     const store = getStore();
     await store.create({
       schema: 2, id: "google-trip", name: "Trip", destination: "Tokyo",
@@ -171,15 +171,17 @@ describe("Google accounts and trip access", () => {
       people: ["Creator"], items: [], todos: [],
     }, await hashPasscode("secretpass"));
 
-    // Attempting to join without a Google account
+    // Attempting to join without a Google account allows access but does not add to planners group
     const unauthReq = new Request("http://localhost/api/t/google-trip/join", {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ name: "Hacker", passcode: "secretpass" }),
     });
     const unauthRes = await joinTrip(unauthReq, { params: Promise.resolve({ tripId: "google-trip" }) });
-    expect(unauthRes.status).toBe(401);
+    expect(unauthRes.status).toBe(200);
+    let state = await store.get("google-trip");
+    expect(state?.trip.people).toEqual(["Creator"]);
 
-    // Joining with a valid Google account
+    // Joining with a valid Google account adds them to planners group
     await writeAccount(accountA);
     const authReq = new Request("http://localhost/api/t/google-trip/join", {
       method: "POST", headers: { "content-type": "application/json" },
@@ -187,7 +189,7 @@ describe("Google accounts and trip access", () => {
     });
     const authRes = await joinTrip(authReq, { params: Promise.resolve({ tripId: "google-trip" }) });
     expect(authRes.status).toBe(200);
-    const state = await store.get("google-trip");
+    state = await store.get("google-trip");
     expect(state?.trip.people).toEqual(["Creator", "Ana"]);
   });
 });
