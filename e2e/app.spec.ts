@@ -72,7 +72,7 @@ test("a dated plan can be saved as an undated idea", async ({ page }) => {
   await sheet.getByLabel("Title", { exact: true }).fill("Dinner idea for later");
   await sheet.getByRole("button", { name: "Add", exact: true }).click();
   await tab(page, "Plan").click();
-  await page.getByRole("tab", { name: /Ideas/ }).click();
+  await page.getByRole("button", { name: /^\d+ Saved$/ }).click();
   await expect(page.getByRole("button", { name: /Dinner idea for later/ })).toBeVisible();
 });
 

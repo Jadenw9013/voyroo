@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { isPost, postInfo, type Platform } from "@/domain/links";
 import { formatDay } from "@/domain/time";
 import type { Item, Link, Trip } from "@/domain/types";
@@ -37,6 +37,7 @@ export const thumbSrc = (tripId: string, itemId: string, linkId: string) => `/ap
 export const postThumbSrc = (tripId: string, url: string) => `/api/t/${tripId}/thumb?post=${encodeURIComponent(url)}`;
 
 const PLATFORM_NAME: Record<Platform, string> = { tiktok: "TikTok", instagram: "Instagram", youtube: "YouTube" };
+const subscribeHydration = () => () => {};
 
 /** Shown when there's no picture to be had: the platform's colors, its mark and the caption. */
 const PLATFORM_FILL: Record<Platform | "other", string> = {
@@ -114,12 +115,15 @@ export function PostImage({ tripId, entry, className = "" }: { tripId: string; e
 /** One tile in the grid: the picture, the platform's mark, a play mark, the caption. */
 export function PostTile({ entry, onOpen, showItem }: { entry: PostEntry; onOpen: () => void; showItem?: boolean }) {
   const { tripId } = useTrip();
+  // A direct link can show the server tile before its click handler is attached.
+  const hydrated = useSyncExternalStore(subscribeHydration, () => true, () => false);
   const info = postInfo(entry.link.url);
   const name = info?.label ?? PLATFORM_NAME[entry.link.kind as Platform] ?? "Post";
   const caption = entry.link.title;
   return (
     <button
       type="button"
+      disabled={!hydrated}
       onClick={onOpen}
       aria-label={`${name}${caption ? `: ${caption}` : ""}${showItem ? `, saved to ${entry.item.title}` : ""}`}
       className="group relative block aspect-[3/4] w-full overflow-hidden rounded-xl bg-sunken text-left text-white focus-visible:outline-offset-2"
