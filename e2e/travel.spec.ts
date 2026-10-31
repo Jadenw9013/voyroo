@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 /*
  * Travel time between stops. The server runs with ROUTING_MOCK=1 (see
@@ -25,7 +25,9 @@ async function join(page: Page, name = "Sam") {
 }
 
 const tab = (page: Page, name: string) => page.getByRole("navigation", { name: "Main" }).getByRole("button", { name, exact: true });
-const leg = (page: Page) => page.getByRole("listitem").filter({ hasText: /min drive/ });
+// The connector right after the coffee stop. Other stops that day can have pins too (the map places the
+// seed trip when an earlier test opens it), so match this one leg rather than any "min drive" row.
+const leg = (scope: Page | Locator) => scope.getByRole("listitem").filter({ hasText: "Coffee at Fernando's" }).locator("xpath=following-sibling::li[1]");
 
 async function noSeriousProblems(page: Page, where: string) {
   const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
@@ -51,13 +53,12 @@ test("shows the drive between two stops, flags a tight gap, and keeps the route 
   await expect(today).toContainText("Tight: 10 min drive, 15 min gap");
   await expect(today).not.toContainText("estimate");
   // The connector sits between the two stops.
-  const rows = page.getByRole("region", { name: /Everything on/ }).getByRole("listitem");
-  await expect(rows.nth(0)).toContainText("Coffee at Fernando's");
-  await expect(rows.nth(1)).toContainText("min drive");
-  await expect(rows.nth(2)).toContainText("Hobbitenango morning");
+  // (With pins on the seed trip, the drive from last night's hotel can come before the coffee.)
+  await expect(today.locator("xpath=preceding-sibling::li[1]")).toContainText("Coffee at Fernando's");
+  await expect(today.locator("xpath=following-sibling::li[1]")).toContainText("Hobbitenango morning");
 
   // Kept on the phone with the trip.
-  await expect.poll(() => page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem("trip:guatemala:routes") ?? "{}").routes ?? {}).length)).toBe(1);
+  await expect.poll(() => page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem("trip:guatemala:routes") ?? "{}").routes ?? {}).length)).toBeGreaterThanOrEqual(1);
 
   for (const scheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: scheme });
@@ -67,7 +68,7 @@ test("shows the drive between two stops, flags a tight gap, and keeps the route 
   expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
 
   await tab(page, "Plan").click();
-  await expect(page.locator(`#day-${DAY}`).getByRole("listitem").filter({ hasText: /min drive/ })).toContainText("Leave by 8:45 AM");
+  await expect(leg(page.locator(`#day-${DAY}`))).toContainText("Leave by 8:45 AM");
 
   await page.locator(`#day-${DAY}`).getByRole("button", { name: /Hobbitenango morning/ }).click();
   const from = page.getByRole("region", { name: "From previous stop" });
@@ -88,7 +89,7 @@ test("shows the drive between two stops, flags a tight gap, and keeps the route 
   await expect(leg(page)).toContainText("About 10 min drive · 5.7 km");
   await context.setOffline(true);
   await tab(page, "Plan").click();
-  await expect(page.locator(`#day-${DAY}`).getByRole("listitem").filter({ hasText: /min drive/ })).not.toContainText("estimate");
+  await expect(leg(page.locator(`#day-${DAY}`))).not.toContainText("estimate");
   await context.setOffline(false);
 });
 
