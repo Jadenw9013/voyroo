@@ -1,3 +1,4 @@
+import { locateForWrite } from "@/server/geocode";
 import { applyResponse, getStore, readJson, requireSession } from "@/server/http";
 
 const KEY = /^[A-Za-z0-9_-]{8,64}$/;
@@ -5,7 +6,8 @@ const KEY = /^[A-Za-z0-9_-]{8,64}$/;
 /**
  * Body: { ops, key?, confirmed? }. Applied to the latest trip, whatever
  * version the sender saw. `key` makes a resend harmless; `confirmed` means a
- * person agreed to delete or move something booked.
+ * person agreed to delete or move something booked. New or moved places get
+ * their map coordinates in the same change (see server/geocode.ts).
  */
 export async function POST(request: Request, { params }: { params: Promise<{ tripId: string }> }) {
   const { tripId } = await params;
@@ -14,7 +16,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ tri
   const parsed = await readJson(request);
   if (!parsed.ok) return parsed.res;
   const { ops, key, confirmed } = parsed.body;
-  const result = await getStore().apply(tripId, ops, {
+  const store = getStore();
+  const result = await store.apply(tripId, await locateForWrite(store, tripId, ops), {
     author: auth.session.name,
     accountId: auth.session.accountId,
     confirmed: confirmed === true,

@@ -7,7 +7,7 @@ import { Icon, KIND_ICON } from "./Icon";
  * Tailwind finds them.
  */
 
-const KIND_CHIP: Record<ItemKind, string> = {
+export const KIND_CHIP: Record<ItemKind, string> = {
   stay: "bg-k-stay-soft text-k-stay",
   flight: "bg-k-flight-soft text-k-flight",
   transport: "bg-k-transport-soft text-k-transport",

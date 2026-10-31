@@ -6,6 +6,7 @@ import { classifyLink, extractUrls } from "@/domain/links";
 import { itemsTouched, touchesBooked, type Op } from "@/domain/ops";
 import type { ItemPatchT } from "@/domain/schema";
 import type { Item, ItemKind, Link, Trip, When } from "@/domain/types";
+import { geoDeps, locateOps } from "../geocode";
 import type { TripStore } from "../store";
 
 /*
@@ -219,7 +220,9 @@ async function applyOrConfirm(ctx: ToolContext, ops: Op[], forceConfirm = false)
 
   const dry = prepareChange({ trip, version: 0 }, now, { author });
   if (!dry.ok) return { ok: false, error: dry.issues.map((i) => i.message).join(" ") };
-  const r = await ctx.store.apply(ctx.tripId, now, { author });
+  // Places get coordinates from the geocoder, never from the model: links it wrote aren't read for them.
+  const located = await locateOps(trip, now, geoDeps(ctx.store, { trustLinks: false })).catch(() => now);
+  const r = await ctx.store.apply(ctx.tripId, located, { author });
   if (!r.ok) return { ok: false, error: r.reason === "invalid" ? r.issues.map((i) => i.message).join(" ") : "The trip couldn't be saved just now." };
   const itemIds = [...new Set(now.flatMap(itemsTouched))];
   return { ok: true, entryId: r.entry.id, summary: r.entry.summary, itemIds, ...(heldNote ? { pending: heldNote } : {}) };

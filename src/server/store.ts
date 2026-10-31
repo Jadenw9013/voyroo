@@ -49,9 +49,9 @@ export interface Backend {
   hit(key: string, ttlSeconds: number): Promise<number>;
   /** A counter's current value (0 when unset or expired). */
   count(key: string): Promise<number>;
-  /** A small cached value (photo lookups), or null when unset or expired. */
-  cached(key: string): Promise<string | null>;
-  cache(key: string, value: string, ttlSeconds: number): Promise<void>;
+  /** A small cached value (photo lookups, geocoder answers), or null when unset or expired. */
+  getCache(key: string): Promise<string | null>;
+  setCache(key: string, value: string, ttlSeconds: number): Promise<void>;
   /** The Google account that created the trip, if one did. */
   owner(id: string): Promise<string | null>;
   setOwner(id: string, accountId: string): Promise<void>;
@@ -154,8 +154,8 @@ export class TripStore {
   count(key: string) {
     return this.db.count(key);
   }
-  cached(key: string) { return this.db.cached(key); }
-  cache(key: string, value: string, ttlSeconds: number) { return this.db.cache(key, value, ttlSeconds); }
+  getCache(key: string) { return this.db.getCache(key); }
+  setCache(key: string, value: string, ttlSeconds: number) { return this.db.setCache(key, value, ttlSeconds); }
   owner(id: string) { return this.db.owner(id); }
   accountTrips(accountId: string) { return this.db.accountTrips(accountId); }
   tripAccounts(tripId: string) { return this.db.tripAccounts(tripId); }
@@ -247,11 +247,11 @@ export class MemoryBackend implements Backend {
     const c = this.counters.get(key);
     return c && c.until > Date.now() ? c.n : 0;
   }
-  async cached(key: string) {
+  async getCache(key: string) {
     const c = this.kv.get(key);
     return c && c.until > Date.now() ? c.value : null;
   }
-  async cache(key: string, value: string, ttlSeconds: number) {
+  async setCache(key: string, value: string, ttlSeconds: number) {
     this.kv.set(key, { value, until: Date.now() + ttlSeconds * 1000 });
   }
   async owner(id: string) { return this.owners.get(id) ?? null; }
@@ -362,10 +362,12 @@ export class RedisBackend implements Backend {
   async count(key: string) {
     return Number((await this.redis.get(`rl:${key}`)) ?? 0);
   }
-  async cached(key: string) {
-    return this.redis.get(`cache:${key}`);
+  async getCache(key: string) {
+    // Upstash decodes JSON-looking strings on read; hand back the text that was stored.
+    const v = await this.redis.get(`cache:${key}`);
+    return v === null ? null : typeof v === "string" ? v : JSON.stringify(v);
   }
-  async cache(key: string, value: string, ttlSeconds: number) {
+  async setCache(key: string, value: string, ttlSeconds: number) {
     await this.redis.set(`cache:${key}`, value, { ex: ttlSeconds });
   }
   async owner(id: string) { return this.redis.get(k(id).owner); }

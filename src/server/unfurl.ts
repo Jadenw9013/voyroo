@@ -69,14 +69,18 @@ async function assertPublic(raw: string): Promise<URL> {
 /** A browser's user agent: TikTok and others serve the real page (with its data) only to browsers. */
 const BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36";
 
-/** GET with manual redirects, each hop checked. Returns the final URL and up to `maxBytes` of body. */
-export async function safeFetch(raw: string, opts: { accept: string; maxBytes?: number; browser?: boolean }): Promise<{ url: string; bytes: Uint8Array; type: string; ok: boolean } | null> {
+/**
+ * GET with manual redirects, each hop checked. Returns the final URL and up to `maxBytes` of body.
+ * `until` stops at the first hop it accepts, without fetching it: following a short link only as far as needed.
+ */
+export async function safeFetch(raw: string, opts: { accept: string; maxBytes?: number; browser?: boolean; until?: (url: string) => boolean }): Promise<{ url: string; bytes: Uint8Array; type: string; ok: boolean } | null> {
   let url = raw;
   const maxBytes = opts.maxBytes ?? MAX_BYTES;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
     for (let hop = 0; hop <= MAX_HOPS; hop++) {
+      if (hop > 0 && opts.until?.(url)) return { url, bytes: new Uint8Array(), type: "", ok: true };
       await assertPublic(url);
       const res = await fetch(url, {
         redirect: "manual",
