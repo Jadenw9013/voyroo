@@ -243,7 +243,11 @@ test("a saved post shows as a picture in Plan, Posts and opens in its own player
   await join(page);
   // Embedded players and pictures load from other sites; don't wait on them.
   await page.goto("/t/guatemala/item/activity-zipline", { waitUntil: "domcontentloaded" });
-  await page.getByLabel("Add a link").fill("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+  // Typed before the page hydrates, the field's text is lost: type again until Add is ready.
+  await expect(async () => {
+    await page.getByLabel("Add a link").fill("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+    await expect(page.getByRole("button", { name: "Add", exact: true }).first()).toBeEnabled({ timeout: 1000 });
+  }).toPass();
   await page.getByRole("button", { name: "Add", exact: true }).first().click();
   await expect(page.getByRole("region", { name: "Saved posts" }).getByRole("button", { name: /^YouTube/ })).toBeVisible({ timeout: 15_000 });
 
