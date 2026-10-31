@@ -17,6 +17,7 @@ import { useCallback } from "react";
  *   /t/{id}/todo/packing    To-do, the packing list
  *   /t/{id}/expenses        Expenses: who paid what, who owes whom
  *   /t/{id}/trip            Trip settings and people
+ *   /t/{id}/trip/essentials Trip, scrolled to the essentials
  *   /t/{id}/item/{itemId}   An item's page
  */
 
@@ -28,7 +29,7 @@ export type View =
   | { tab: "plan"; section?: PlanSection }
   | { tab: "todo"; section?: TodoSection }
   | { tab: "expenses" }
-  | { tab: "trip" }
+  | { tab: "trip"; section?: "essentials" }
   | { tab: "item"; itemId: string };
 
 export function parseView(pathname: string): View {
@@ -38,7 +39,7 @@ export function parseView(pathname: string): View {
   if (a === "plan") return { tab: "plan", section: b === "ideas" || b === "posts" ? b : "days" };
   if (a === "todo") return b === "packing" ? { tab: "todo", section: "packing" } : { tab: "todo" };
   if (a === "expenses") return { tab: "expenses" };
-  if (a === "trip") return { tab: "trip" };
+  if (a === "trip") return b === "essentials" ? { tab: "trip", section: "essentials" } : { tab: "trip" };
   if (a === "item" && b) return { tab: "item", itemId: decodeURIComponent(b) };
   return { tab: "today" };
 }
@@ -54,6 +55,8 @@ export function viewPath(tripId: string, v: View): string {
       return v.section && v.section !== "days" ? `${base}/plan/${v.section}` : `${base}/plan`;
     case "todo":
       return v.section === "packing" ? `${base}/todo/packing` : `${base}/todo`;
+    case "trip":
+      return v.section ? `${base}/trip/${v.section}` : `${base}/trip`;
     default:
       return `${base}/${v.tab}`;
   }

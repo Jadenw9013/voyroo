@@ -52,12 +52,24 @@ function patchItem(prev: Item, set: Patch): Item {
   return next as unknown as Item;
 }
 
+/** Keys of the trip that merge one level deep, so two people correcting different lines both land. */
+const TRIP_NESTED = new Set(["essentials"]);
+
+function mergeOne(prev: Obj | undefined, set: Obj): Obj | undefined {
+  const merged: Obj = { ...prev };
+  for (const [k, v] of Object.entries(set)) {
+    if (v === null) delete merged[k];
+    else merged[k] = v;
+  }
+  return Object.keys(merged).length ? merged : undefined;
+}
+
 /** The patch that puts back whatever `set` is about to change. */
-function inversePatch(prev: Obj, set: Patch): Patch {
+function inversePatch(prev: Obj, set: Patch, nested = NESTED): Patch {
   const inv: Patch = {};
   for (const [k, v] of Object.entries(set)) {
     const before = prev[k];
-    if (NESTED.has(k) && v !== null && before !== undefined) {
+    if (nested.has(k) && v !== null && before !== undefined) {
       const sub: Obj = {};
       for (const sk of Object.keys(v as Obj)) sub[sk] = (before as Obj)[sk] ?? null;
       inv[k] = sub;
@@ -279,10 +291,11 @@ export function applyOp(trip: Trip, op: Op): { trip: Trip; inverse: Op[] } {
     case "trip.update": {
       const next: Obj = { ...trip };
       for (const [k, v] of Object.entries(op.set)) {
-        if (v === null) delete next[k];
-        else next[k] = v;
+        const merged = TRIP_NESTED.has(k) && v !== null ? mergeOne(next[k] as Obj | undefined, v as Obj) : v;
+        if (merged === null || merged === undefined) delete next[k];
+        else next[k] = merged;
       }
-      return { trip: next as unknown as Trip, inverse: [{ op: "trip.update", set: inversePatch(trip as unknown as Obj, op.set as Patch) } as Op] };
+      return { trip: next as unknown as Trip, inverse: [{ op: "trip.update", set: inversePatch(trip as unknown as Obj, op.set as Patch, TRIP_NESTED) } as Op] };
     }
     case "expense.add": {
       const list = trip.expenses ?? [];
@@ -498,6 +511,7 @@ export function describeOp(before: Trip, op: Op): string {
       return `removed ${quote(entry.text)} from the packing list`;
     }
     case "trip.update":
+      if (Object.keys(op.set).every((k) => k === "essentials")) return op.set.essentials === null ? "cleared the trip essentials" : "updated the trip essentials";
       return "updated the trip details";
     case "expense.add":
       return describeExpense(op.expense as Expense);

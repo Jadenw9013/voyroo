@@ -168,6 +168,14 @@ npm run import:eval             # reads the screenshots in evals/screenshots, as
 
 To click through the assistant without a key, run `CHAT_MOCK=1 npm run dev`. That uses a scripted stand-in (its places are made up and say so).
 
+## Weather and essentials
+
+**Weather** shows on Today and under each day of the Plan, in words as well as an icon: "Partly cloudy, 75° / 54°F, 30% chance of rain". Each day's weather is for where you sleep that night, else the day's first stop with coordinates, else (the day you fly home) where you slept the night before, else the trip's destination. Beyond the 16-day forecast it shows typical weather for those dates, averaged over the last 10 years and labelled **Typical** ("Usually 75° / 54°F, dry season"). °F or °C follows the group's home time zone until someone picks one under **Trip** → **Display**.
+
+The data comes from [Open-Meteo](https://open-meteo.com/): free for non-commercial use with no key, under CC BY 4.0, credited next to every forecast. The server calls it, never the phones: forecasts are cached 3 hours per place, typical weather 30 days, town lookups 30 days, and an hourly and daily budget keeps well inside the 10,000-calls-a-day free limit. Places with coordinates are used as they are; otherwise Open-Meteo's own geocoder finds the town. The last report is kept on the phone with the trip, so it shows offline with its "as of" time. `WEATHER=stub` answers from fixed numbers (tests); `WEATHER=off` turns it off; a commercial deploy sets `OPEN_METEO_API_KEY`.
+
+**Essentials** (Trip → Essentials, one tap from Today) holds emergency numbers, the nearest embassy or consulate for the group's passports, entry rules, money, tipping, plugs and tap water. **Draft with a web search** asks Gemini with Google Search grounding for a first draft; it's saved in the trip as ordinary, undoable, editable text with its sources and the date it was looked up. The card always says **Verify before you go**, and phone numbers only become tap-to-call after someone taps **I checked these**. **Show to driver** puts a stay's name and address in big type under "please take me to this address" in the local language (Spanish for Guatemala), with a copy button. Essentials never appear on the view-only link.
+
 ## How it works
 
 Read the architecture and the reasons behind it in [`docs/REBUILD-PLAN.md`](docs/REBUILD-PLAN.md). In short:
@@ -215,6 +223,8 @@ Private trip routes require a remembered account membership or a trip cookie fro
 | `GET /api/t/{id}/routes` | `{ routes: { key: { s, m } \| null }, pending, provider }`. Road times for every leg on the trip, cached and rationed |
 | `GET /api/t/{id}/thumb` | `?item=&link=` a saved link's picture, or `?post=` a post's picture before saving (post links only) |
 | `POST /api/t/{id}/chat` | The assistant (AI SDK UI message stream) |
+| `GET /api/t/{id}/weather` | `{ asOf, days, years? }`: each remaining day's forecast or typical weather, in °C. Rate-limited per trip |
+| `POST /api/t/{id}/essentials` | `{ nationality }`. A web-search draft of the essentials with its sources; saves nothing. 10 a day per trip |
 | `POST /api/t/{id}/import` | `{ image, index, total }`. Reads one booking screenshot and records what it shows. One per request, so ten screenshots stay well under Vercel's 4.5 MB request limit |
 
 ## Product and branding

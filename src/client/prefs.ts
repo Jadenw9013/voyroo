@@ -72,3 +72,26 @@ export function useTextSize(): [TextSize, (s: TextSize) => void] {
     },
   ];
 }
+
+const TEMP = "trip-temp";
+
+function storedTemp(): "C" | "F" | null {
+  try {
+    const t = localStorage.getItem(TEMP);
+    return t === "C" || t === "F" ? t : null;
+  } catch {
+    return null;
+  }
+}
+
+/** °C or °F on this phone. Until someone picks, `fallback` (from the trip's home settings) decides. */
+export function useTempUnit(fallback: "C" | "F"): ["C" | "F", (u: "C" | "F") => void] {
+  const unit = useSyncExternalStore(subscribe, () => storedTemp() ?? fallback, () => fallback);
+  return [
+    unit,
+    (next) => {
+      keep(TEMP, next);
+      changed();
+    },
+  ];
+}

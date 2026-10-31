@@ -4,8 +4,9 @@ import { defineConfig } from "@playwright/test";
  * End-to-end checks at phone and desktop sizes: joining, adding, the item
  * page, the assistant, layout and accessibility. `npm run e2e`.
  *
- * The server uses the in-memory store and the scripted stand-in assistant,
- * never Redis or Gemini, so nothing here can touch a real trip.
+ * The server uses the in-memory store, the scripted stand-in assistant and
+ * stand-in weather, never Redis, Gemini or Open-Meteo, so nothing here can
+ * touch a real trip or a real service.
  */
 export default defineConfig({
   testDir: "e2e",
@@ -20,6 +21,7 @@ export default defineConfig({
     env: {
       CHAT_MOCK: "1",
       RATES_MOCK: "1",
+      WEATHER: "stub",
       ALLOW_MEMORY_STORE: "1",
       KV_REST_API_URL: "",
       KV_REST_API_TOKEN: "",

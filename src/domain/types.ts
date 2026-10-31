@@ -236,12 +236,44 @@ export interface Trip {
   cover?: string;
   /** Trip-wide notes: entry rules, money, emergency numbers. */
   notes?: string;
+  /** Emergency numbers, entry rules and the like: a draft the group checks and corrects. */
+  essentials?: Essentials;
   items: Item[];
   todos: Todo[];
   /** What the group has spent and paid back. Missing means none yet. */
   expenses?: Expense[];
   /** Missing on trips from before the packing list: the same as none. */
   packing?: PackEntry[];
+}
+
+export interface Source {
+  url: string;
+  title?: string;
+}
+
+/**
+ * What to know before landing. Plain text per topic so anyone can correct it.
+ * A first draft may come from a web search; it says so until someone checks it.
+ */
+export interface Essentials {
+  /** Whose passports the embassy and entry rules are for: "United States". */
+  nationality?: string;
+  /** One per line: "Police: 110". */
+  emergency?: string;
+  embassy?: string;
+  entry?: string;
+  /** Currency, cash and cards. */
+  money?: string;
+  tipping?: string;
+  plugs?: string;
+  water?: string;
+  /** Where the draft's facts came from. */
+  sources?: Source[];
+  /** When the draft was looked up, "YYYY-MM-DD". */
+  draftedOn?: string;
+  /** Who checked it against official sources, and when ("YYYY-MM-DD"). */
+  checkedBy?: string;
+  checkedOn?: string;
 }
 
 /** A stored trip and its version; the version goes up by one per change. */

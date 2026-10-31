@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Fragment, useEffect, useRef } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { dayRows, nightOf, nights, nowNext, phase, stayOn, toBook, tripDays, type Row } from "@/domain/derive";
 import { directionsUrl, telUrl, tripCoverUrl, whatsappUrl } from "@/domain/links";
 import { daysBetween, formatDay, formatDuration, formatRange, formatTime, monthDay, todayIn, weekday } from "@/domain/time";
@@ -13,6 +13,8 @@ import { Avatar, KindChip } from "@/ui/badges";
 import { Icon, type IconName } from "@/ui/Icon";
 import { ActionChip, btn, useCopy } from "@/ui/kit";
 import { useCompose } from "../composer/Composer";
+import { DriverChip, DriverSheet } from "../essentials/Driver";
+import { DayWeatherCard } from "../weather/DayWeather";
 import { TripMap } from "../map/TripMap";
 import { ItemRow, rowTitle, timeLabel } from "../shared";
 import { LegRow, useDayLegs } from "../travel/Travel";
@@ -155,6 +157,8 @@ export function Today({ day: chosen, go, serverNow }: { day?: string; go: (v: Vi
             onAdd={() => compose({ day, kind: "stay", text: "" })}
           />
 
+          <EssentialsLink onOpen={() => go({ tab: "trip", section: "essentials" })} />
+
           {when === "before" && day === trip.startDate && <BeforeTrip onTodo={() => go({ tab: "todo" })} />}
 
           {/* The day's map: in the left column on desktop. Only the visible copy loads a map. */}
@@ -180,6 +184,8 @@ export function Today({ day: chosen, go, serverNow }: { day?: string; go: (v: Vi
                 Add to {weekday(day)}
               </button>
             </div>
+
+            <DayWeatherCard date={day} />
 
             <section aria-label={`Everything on ${formatDay(day)}`}>
               {rows.length === 0 ? (
@@ -336,6 +342,7 @@ function Tonight({
 }) {
   const { trip } = useTrip();
   const copy = useCopy();
+  const [driver, setDriver] = useState(false);
   if (last) return null;
   if (!stay) {
     return (
@@ -376,13 +383,14 @@ function Tonight({
         </span>
         <Icon name="chevronRight" className="mt-1 size-4 text-muted" />
       </button>
-      {(dir || stay.booking?.confirmation) && (
+      {(dir || stay.booking?.confirmation || stay.place?.address || stay.place?.name) && (
         <div className="mt-3 flex flex-wrap gap-2 pl-9">
           {dir && (
             <ActionChip icon="directions" href={dir}>
               Directions
             </ActionChip>
           )}
+          <DriverChip item={stay} onOpen={() => setDriver(true)} />
           {stay.booking?.confirmation && (
             <ActionChip icon="copy" onClick={() => copy(stay.booking!.confirmation!, "Confirmation")}>
               {stay.booking.confirmation}
@@ -390,7 +398,30 @@ function Tonight({
           )}
         </div>
       )}
+      {driver && <DriverSheet item={stay} onClose={() => setDriver(false)} />}
     </section>
+  );
+}
+
+/** One tap to emergency numbers, the embassy and the stays' addresses for a driver. */
+function EssentialsLink({ onOpen }: { onOpen: () => void }) {
+  const { trip } = useTrip();
+  const e = trip.essentials;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex items-center gap-3 rounded-3xl border border-line bg-surface p-4 text-left shadow-lift transition-colors hover:bg-sunken"
+    >
+      <Icon name="compass" className="size-6 shrink-0 text-accent" />
+      <span className="min-w-0 flex-1">
+        <span className="block text-base font-bold">Trip essentials</span>
+        <span className="block text-sm text-muted">
+          {e?.emergency ? "Emergency numbers, embassy, entry rules, show to driver" : "Emergency numbers, embassy and more: not added yet"}
+        </span>
+      </span>
+      <Icon name="chevronRight" className="size-4 text-muted" />
+    </button>
   );
 }
 
