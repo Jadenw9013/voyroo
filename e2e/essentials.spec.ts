@@ -38,7 +38,8 @@ async function clearEssentials(page: Page) {
 test("weather in words on Today and Plan, in °F for a US group and °C on request, kept for offline", async ({ page }, testInfo) => {
   await join(page);
   const weather = page.getByRole("region", { name: "Weather" });
-  await expect(weather).toContainText("75° / 54°F");
+  // The first request compiles the weather route on a cold dev server.
+  await expect(weather).toContainText("75° / 54°F", { timeout: 30_000 });
   await weather.scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath("today-weather.png") });
   await expect(weather).toContainText(/Partly cloudy|Usually/);
@@ -126,7 +127,7 @@ for (const scheme of ["light", "dark"] as const) {
   test(`weather, essentials and the driver card have no serious accessibility problems (${scheme})`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: scheme });
     await join(page);
-    await expect(page.getByRole("region", { name: "Weather" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Weather" })).toBeVisible({ timeout: 30_000 });
     await noSeriousProblems(page, `Today (${scheme})`);
 
     const draft = { emergency: "Police: 110\nAmbulance: 128", water: "Bottled only", draftedOn: "2026-10-31", sources: [{ url: "https://travel.state.gov/", title: "travel.state.gov" }], checkedBy: null, checkedOn: null };
