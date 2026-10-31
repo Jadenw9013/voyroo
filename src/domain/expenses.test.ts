@@ -55,6 +55,13 @@ describe("money", () => {
     expect(formatMoney(420, "GTQ")).toBe("Q420");
     expect(formatMoney(54.5, "USD")).toBe("$54.50");
     expect(formatMoney(1200, "JPY")).toBe("¥1,200");
+    expect(formatMoney(-105, "GTQ")).toBe("-Q105");
+  });
+
+  it("never uses a sign that reads as another currency's", () => {
+    // A trip in Mexico with a home in the US: pesos aren't "$".
+    expect(formatMoney(300, "MXN")).toBe("MX$300");
+    expect(formatMoney(420, "ARS")).toMatch(/^ARS\s420$/);
   });
 });
 

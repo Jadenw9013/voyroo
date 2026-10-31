@@ -256,7 +256,7 @@ export function ExpenseForm({ expense, start = {}, onDone, primaryId, autoFocus 
                     )}
                   </>
                 )}
-                <span className="tnum w-20 shrink-0 text-right text-sm text-muted">{part ? formatMoney(fromMinor(part.minor, currency), currency) : "Not in it"}</span>
+                <span className="tnum w-20 shrink-0 text-right text-sm text-muted">{part ? formatMoney(fromMinor(part.minor, currency), currency) : split.among.some((x) => (typeof x === "string" ? x : x.name) === p) ? "" : "Not in it"}</span>
               </li>
             );
           })}

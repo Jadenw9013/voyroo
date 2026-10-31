@@ -41,7 +41,7 @@ export function ItemExpenses({ item }: { item: Item }) {
           ))}
         </ul>
       ) : (
-        <p className="text-base text-muted">{price ? `Booked for ${formatMoney(price.amount, price.currency)}. Paid for it? Log it and it's split with the group.` : "Paid for this? Log it and it's split with the group."}</p>
+        <p className="text-base text-muted">{price ? `Reservation price ${formatMoney(price.amount, price.currency)}. Paid for it? Log it and it's split with the group.` : "Paid for this? Log it and it's split with the group."}</p>
       )}
       <button type="button" onClick={() => setOpen({ start })} className={`${btn.secondary} self-start`}>
         <Icon name="receipt" />

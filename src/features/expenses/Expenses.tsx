@@ -35,7 +35,9 @@ export function Expenses({ go }: { go: (v: View) => void }) {
   const perCurrency = balancesByCurrency(list, names);
   const mixed = perCurrency.length > 1 || (perCurrency.length === 1 && perCurrency[0].currency !== home);
   const combined = mixed ? combinedBalances(list, home, saved?.rates, names) : null;
-  const views = [...(combined ? [`all`] : []), ...perCurrency.map((b) => b.currency)];
+  // Several currencies: all in one first. Just one: that one first (exact, and what people pay back in), converted second.
+  const currencies = perCurrency.map((b) => b.currency);
+  const views = combined ? (currencies.length > 1 ? ["all", ...currencies] : [...currencies, "all"]) : currencies;
   const [picked, setPicked] = useState<string | null>(null);
   const shown = picked && views.includes(picked) ? picked : (views[0] ?? trip.currency);
   const current: Balances | null = shown === "all" ? combined : (perCurrency.find((b) => b.currency === shown) ?? null);
@@ -59,7 +61,7 @@ export function Expenses({ go }: { go: (v: View) => void }) {
           <h2 id="none-yet" className="text-lg font-bold">
             Nothing logged yet
           </h2>
-          <p className="text-base text-muted">Log a dinner, a taxi or the park fees as you go, and this works out who owes whom, in quetzales, dollars or both.</p>
+          <p className="text-base text-muted">Log a dinner, a taxi or the park fees as you go, and this works out who owes whom, in any currency.</p>
           <p className="text-base text-muted">
             Or type it in the + box: <span className="font-semibold text-ink">“dinner 420 {trip.currency} paid by {names[1] ?? me} split all”</span>.
           </p>
