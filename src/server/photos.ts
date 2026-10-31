@@ -238,7 +238,7 @@ export async function getContextualPhoto(params: PhotoParams, opts: { mayLookUp?
     try {
       const store = getStore();
       const sharedKey = `photo:${createHash("sha256").update(cacheKey).digest("hex")}`;
-      const shared = await store.cached(sharedKey);
+      const shared = await store.getCache(sharedKey);
       if (shared === "") return null;
       if (shared) {
         const img = await downloadImage(shared);
@@ -261,11 +261,11 @@ export async function getContextualPhoto(params: PhotoParams, opts: { mayLookUp?
         if (img) {
           const entry: CachedPhoto = { ...img, url, at: Date.now() };
           remember(cacheKey, entry);
-          await store.cache(sharedKey, url, FOUND_TTL_SECONDS);
+          await store.setCache(sharedKey, url, FOUND_TTL_SECONDS);
           return entry;
         }
       }
-      await store.cache(sharedKey, "", NOT_FOUND_TTL_SECONDS);
+      await store.setCache(sharedKey, "", NOT_FOUND_TTL_SECONDS);
       return null;
     } finally {
       inFlight.delete(cacheKey);
