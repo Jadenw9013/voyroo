@@ -1,6 +1,7 @@
 import * as chrono from "chrono-node";
 import { extractUrls } from "./links";
 import { roundMoney } from "./money";
+import { parsePackLine, type PackDraft } from "./packing";
 import { offsetOn, todayIn } from "./time";
 import type { ItemKind, Trip, When } from "./types";
 
@@ -50,6 +51,8 @@ export type Parsed =
   | { type: "links"; urls: string[]; rest: string }
   /** An amount, and paid, split or spent: something the group spent. */
   | { type: "expense"; draft: ExpenseDraft }
+  /** "pack sunscreen", "bring speaker - Ben": the packing list. */
+  | { type: "pack"; pack: PackDraft }
   | { type: "item"; draft: Draft };
 
 export interface ParseContext {
@@ -128,6 +131,8 @@ export function parseLine(input: string, ctx: ParseContext): Parsed {
     return { type: "links", urls, rest: rest.replace(/\s+/g, " ").trim() };
   }
   if (text.endsWith("?") || QUESTION.test(text) || CHANGE.test(text) || text.length > 120 || text.includes("\n")) return { type: "ask" };
+  const pack = parsePackLine(text);
+  if (pack) return { type: "pack", pack };
   const expense = parseExpense(text, ctx);
   if (expense) return { type: "expense", draft: expense };
 

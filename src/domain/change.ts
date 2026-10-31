@@ -1,5 +1,6 @@
 import { forbidden } from "./discuss";
 import { applyOp, describeOp, OpError, touchesBooked, type Op, type OpErrorCode } from "./ops";
+import { packingProblems } from "./packing";
 import { OpSchema, TripSchema } from "./schema";
 import { instantOf } from "./time";
 import type { Trip, TripState } from "./types";
@@ -129,6 +130,7 @@ export function tripProblems(trip: Trip): string[] {
     if (expenseIds.has(e.id)) out.push(`Two expenses share the id "${e.id}".`);
     expenseIds.add(e.id);
   }
+  out.push(...packingProblems(trip));
   return out;
 }
 

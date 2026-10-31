@@ -187,6 +187,32 @@ export interface Expense {
   addedAt: number;
 }
 
+export type PackKind = "shared" | "personal";
+
+export type PackCategory = "documents" | "clothes" | "toiletries" | "health" | "tech" | "gear" | "snacks" | "other";
+
+/**
+ * One thing to pack. Shared: the group needs one (or a few) and someone says
+ * they'll bring it. Personal: on one person's own list, shown only to them in
+ * the app; it's stored in the trip like everything else, so it isn't secret.
+ */
+export interface PackEntry {
+  id: string;
+  text: string;
+  kind: PackKind;
+  /** Personal: whose list it's on. */
+  owner?: string;
+  /** Shared: who said they'd bring it. */
+  assignee?: string;
+  /** How many, when more than one. */
+  quantity?: number;
+  /** First names of who has packed it. On a personal entry, only the owner. */
+  packedBy?: string[];
+  /** The item it's for ("the volcano hike"), if any. */
+  itemId?: string;
+  category?: PackCategory;
+}
+
 export interface Trip {
   schema: 2;
   id: string;
@@ -214,6 +240,8 @@ export interface Trip {
   todos: Todo[];
   /** What the group has spent and paid back. Missing means none yet. */
   expenses?: Expense[];
+  /** Missing on trips from before the packing list: the same as none. */
+  packing?: PackEntry[];
 }
 
 /** A stored trip and its version; the version goes up by one per change. */

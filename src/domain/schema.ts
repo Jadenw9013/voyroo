@@ -189,6 +189,24 @@ export const ExpenseSchema = z
   .strict()
   .superRefine(splitAddsUp);
 
+export const PackCategorySchema = z.enum(["documents", "clothes", "toiletries", "health", "tech", "gear", "snacks", "other"]);
+
+const Quantity = z.number().int().min(1).max(99);
+
+export const PackEntrySchema = z
+  .object({
+    id: Id,
+    text: Line.min(1),
+    kind: z.enum(["shared", "personal"]),
+    owner: FirstName.optional(),
+    assignee: FirstName.optional(),
+    quantity: Quantity.optional(),
+    packedBy: z.array(FirstName).max(30).optional(),
+    itemId: Id.optional(),
+    category: PackCategorySchema.optional(),
+  })
+  .strict();
+
 export const TripSchema = z
   .object({
     schema: z.literal(2),
@@ -207,6 +225,7 @@ export const TripSchema = z
     items: z.array(ItemSchema).max(500),
     todos: z.array(TodoSchema).max(300),
     expenses: z.array(ExpenseSchema).max(1000).optional(),
+    packing: z.array(PackEntrySchema).max(500).optional(),
   })
   .strict();
 
@@ -274,6 +293,22 @@ export const TodoPatch = z
   .strict()
   .refine((p) => Object.keys(p).length > 0, "No fields to change");
 
+/** Moving an entry between the shared list and someone's own sets kind, owner, assignee and packedBy together. */
+export const PackPatch = z
+  .object({
+    text: Line.min(1),
+    kind: z.enum(["shared", "personal"]),
+    owner: FirstName.nullable(),
+    assignee: FirstName.nullable(),
+    quantity: Quantity.nullable(),
+    packedBy: z.array(FirstName).max(30).nullable(),
+    itemId: Id.nullable(),
+    category: PackCategorySchema.nullable(),
+  })
+  .partial()
+  .strict()
+  .refine((p) => Object.keys(p).length > 0, "No fields to change");
+
 export const TripPatch = z
   .object({
     name: Short,
@@ -324,6 +359,13 @@ export const OpSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("todo.add"), todo: TodoSchema, index }).strict(),
   z.object({ op: z.literal("todo.update"), id: Id, set: TodoPatch }).strict(),
   z.object({ op: z.literal("todo.remove"), id: Id }).strict(),
+  z.object({ op: z.literal("pack.add"), entry: PackEntrySchema, index }).strict(),
+  z.object({ op: z.literal("pack.update"), id: Id, set: PackPatch }).strict(),
+  // "I'll bring it" (who) or "Not me" (null). Refused if someone else already said they'd bring it.
+  z.object({ op: z.literal("pack.claim"), id: Id, who: FirstName.nullable() }).strict(),
+  // One person's tick, so two people packing at once don't overwrite each other.
+  z.object({ op: z.literal("pack.check"), id: Id, who: FirstName, packed: z.boolean() }).strict(),
+  z.object({ op: z.literal("pack.remove"), id: Id }).strict(),
   z.object({ op: z.literal("trip.update"), set: TripPatch }).strict(),
   z.object({ op: z.literal("expense.add"), expense: ExpenseSchema, index }).strict(),
   z.object({ op: z.literal("expense.update"), id: Id, set: ExpensePatch }).strict(),

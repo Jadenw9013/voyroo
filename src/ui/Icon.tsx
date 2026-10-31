@@ -6,6 +6,7 @@ const PATHS = {
   plan: "M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01",
   todo: "M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9",
   suitcase: "M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M4 6h16a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zM8 6v15M16 6v15",
+  backpack: "M9 6V5a3 3 0 0 1 6 0v1M8 6h8a4 4 0 0 1 4 4v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9a4 4 0 0 1 4-4zM8 14h8v7M8 21v-7M10 10h4",
   plus: "M12 5v14M5 12h14",
   minus: "M5 12h14",
   fit: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5",
