@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { prepareChange } from "@/domain/change";
+import { newComment } from "@/domain/discuss";
 import { newId } from "@/domain/ids";
 import { classifyLink, extractUrls } from "@/domain/links";
 import { itemsTouched, touchesBooked, type Op } from "@/domain/ops";
@@ -13,6 +14,7 @@ import type { TripStore } from "../store";
  * turned into the same ops a person's edit makes and checked by the same rules.
  *
  *   add_items, update_items, add_todos  apply at once, with Undo in the app
+ *   add_comment                         posts on an item's thread for the person asking; there is no voting tool
  *   remove_items                        never applies: it returns a card a person confirms
  *   update_items on a booked item's dates  likewise
  *   show_options                        place or option cards with an Add button
@@ -313,6 +315,17 @@ export function buildTools(ctx: ToolContext) {
             },
           })),
         );
+      },
+    }),
+    add_comment: tool({
+      description:
+        "Post a comment on one item's thread, as the person talking to you and marked as written by the assistant. Only when they ask you to comment, reply or leave a note for the group. Never votes, and never edits or deletes comments.",
+      inputSchema: z.object({ itemId: z.string().describe("The item's exact id from the trip data."), text: z.string().min(1).max(2000).describe("The comment, in their voice, short.") }),
+      execute: async ({ itemId, text }): Promise<ChangeResult> => {
+        const trip = await ctx.trip();
+        if (!trip.items.some((i) => i.id === itemId)) return { ok: false, error: `No item with id "${itemId}".` };
+        if (!text.trim()) return { ok: false, error: "The comment is empty." };
+        return applyOrConfirm(ctx, [newComment(itemId, ctx.me, text, Date.now(), true)]);
       },
     }),
     show_options: tool({

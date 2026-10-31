@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useState } from "react";
 import { dayRows, ideas, nightOf, stayOn, toBook, tripDays } from "@/domain/derive";
+import { mostWanted } from "@/domain/discuss";
 import { directionsUrl, itemPhotoUrl, mapsEmbedUrl, mapsSearchUrl, routeUrl, tripCoverUrl } from "@/domain/links";
 import { addDays, formatDay, formatRange, formatTime, monthDay, weekday } from "@/domain/time";
 import type { Item } from "@/domain/types";
@@ -12,6 +13,7 @@ import { Avatar, KindChip, KIND_LABEL, StatusPill } from "@/ui/badges";
 import { Icon } from "@/ui/Icon";
 import { btn } from "@/ui/kit";
 import { useCompose } from "../composer/Composer";
+import { IdeaFooter, IdeaSort, type IdeaOrder } from "../decide/Decide";
 import { PostGrid, postsOf } from "../posts/Posts";
 import { ItemRow } from "../shared";
 import { SyncLine } from "../SyncLine";
@@ -30,6 +32,7 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
   const [activeStop, setActiveStop] = useState<string | null>(null);
   const [mobileMapOpen, setMobileMapOpen] = useState(false);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [ideaSort, setIdeaSort] = useState<IdeaOrder>("added");
   const open = (item: Item) => go({ tab: "item", itemId: item.id });
   const saved = ideas(trip);
   const posts = postsOf(trip);
@@ -612,11 +615,14 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
                     Nothing saved without a day. Type something with no day in the + box, or paste a link.
                   </p>
                 ) : (
-                  <ul className="divide-y divide-line">
-                    {saved.map((i) => (
-                      <ItemRow key={i.id} item={i} onOpen={() => open(i)} />
-                    ))}
-                  </ul>
+                  <>
+                    {saved.length > 1 && <IdeaSort value={ideaSort} onChange={setIdeaSort} />}
+                    <ul className="divide-y divide-line">
+                      {(ideaSort === "wanted" ? mostWanted(saved) : saved).map((i) => (
+                        <ItemRow key={i.id} item={i} onOpen={() => open(i)} footer={<IdeaFooter item={i} onOpen={() => open(i)} />} />
+                      ))}
+                    </ul>
+                  </>
                 )}
                 <button type="button" onClick={() => compose({})} className={`${btn.quiet} mt-2 -ml-3`}>
                   <Icon name="plus" />

@@ -10,6 +10,7 @@ import { MockLanguageModelV4 } from "ai/test";
  * - "plan"   → add_items: three suggested steps on the day on screen
  * - "remove" or "delete" → remove_items for cliff jumping (a confirm card)
  * - "add dinner" with no day → ask_user: which day?
+ * - "comment" → add_comment on the item that's open (or zip lining)
  * - a screenshot → add_items: a made-up booked stay with a confirmation number
  * - anything else → a short text answer
  * - after a tool result → one line
@@ -97,6 +98,10 @@ function script(prompt: Prompt): Chunk[] {
         { title: "Afternoon swim", kind: "activity", date: day, time: "15:00", maybe: true },
       ],
     });
+  }
+  if (/\bcomment\b/.test(said)) {
+    const open = /\(id ([a-z0-9_-]+)\) and asked about it/.exec(String(prompt.find((p) => p.role === "system")?.content ?? ""));
+    return call("add_comment", { itemId: open?.[1] ?? "activity-zipline", text: "Count me in for the morning slot." });
   }
   if (/\b(remove|delete)\b/.test(said)) return call("remove_items", { ids: ["activity-cliff-jumping"] });
   if (/\badd dinner\b/.test(said)) return call("ask_user", { question: "Which night?", options: ["Fri Nov 27", "Sat Nov 28"] });

@@ -55,6 +55,7 @@ export function applyResponse(result: ApplyResult) {
   if (result.reason === "not_found") return jsonError(404, "No such trip.");
   if (result.reason === "busy") return jsonError(503, "Lots of edits at once. Try again in a moment.");
   const needs = result.issues.find((i) => i.code === "needs_confirmation");
+  const denied = result.issues.some((i) => i.code === "forbidden");
   return NextResponse.json(
     {
       ok: false,
@@ -64,7 +65,7 @@ export function applyResponse(result: ApplyResult) {
       trip: result.state.trip,
       version: result.state.version,
     },
-    { status: needs ? 428 : 422 },
+    { status: needs ? 428 : denied ? 403 : 422 },
   );
 }
 

@@ -248,7 +248,7 @@ function Message({ m, onAnswer }: { m: AssistantMessage; onAnswer: (toolCallId: 
         if (p.type === "text") return p.text.trim() ? <Prose key={key} text={p.text} /> : null;
         if (p.type === "tool-show_options") return p.input ? <Options key={key} heading={p.input.heading} options={(p.input.options ?? []) as Option[]} /> : null;
         if (p.type === "tool-ask_user") return <Question key={key} part={p} onAnswer={onAnswer} />;
-        if (p.type === "tool-add_items" || p.type === "tool-update_items" || p.type === "tool-remove_items" || p.type === "tool-add_todos") {
+        if (p.type === "tool-add_items" || p.type === "tool-update_items" || p.type === "tool-remove_items" || p.type === "tool-add_todos" || p.type === "tool-add_comment") {
           if (p.state === "output-available") return <ChangeCard key={key} result={p.output as ChangeResult} />;
           if (p.state === "output-error") return <p key={key} className="text-base text-danger">That change didn&apos;t work: {p.errorText}</p>;
           return (

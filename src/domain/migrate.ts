@@ -6,6 +6,10 @@ import type { Booking, Item, ItemKind, Todo, Trip, When } from "./types";
  * v1 (segments, statuses, plan items, open questions) → v2 (items and to-dos).
  * Runs on the seed and on any v1 trip still in the store, so nothing typed
  * on the old site is lost.
+ *
+ * Within v2, votes and comments arrived as optional item fields (reactions,
+ * comments), so a v2 trip stored before them is already a valid trip with
+ * nobody's votes and an empty thread: it needs no rewrite.
  */
 
 export interface V1Segment {

@@ -15,6 +15,7 @@ import { Icon, LINK_ICON, type IconName } from "@/ui/Icon";
 import { ActionChip, btn, field, label, useCopy } from "@/ui/kit";
 import { Sheet, SheetAction } from "@/ui/Sheet";
 import { useCompose } from "../composer/Composer";
+import { Comments, GroupVotes } from "../decide/Decide";
 import { unfurl } from "../links/unfurl";
 import { PostGrid, thumbSrc } from "../posts/Posts";
 import { Marks, timeLabel, whenLabel } from "../shared";
@@ -132,6 +133,8 @@ export function ItemPage({ itemId, back, go }: { itemId: string; back: () => voi
           </ActionChip>
         </div>
       </div>
+
+      <GroupVotes item={item} />
 
       {posts.length > 0 && (
         <section aria-label="Saved posts" className="rounded-3xl border border-line bg-surface p-5 shadow-lift">
@@ -270,6 +273,8 @@ export function ItemPage({ itemId, back, go }: { itemId: string; back: () => voi
         </Section>
       </div>
 
+      <Comments item={item} />
+
       {edit === "title" && <TitleSheet item={item} onClose={() => setEdit(null)} />}
       {edit === "when" && <WhenSheet item={item} onClose={() => setEdit(null)} />}
       {edit === "where" && <PlaceSheet item={item} onClose={() => setEdit(null)} />}
@@ -293,6 +298,9 @@ export function ItemPage({ itemId, back, go }: { itemId: string; back: () => voi
                 setEdit(null);
                 const copyOf: Item = { ...structuredClone(item), id: newId("i"), title: `${item.title} (copy)`.slice(0, 200) };
                 delete copyOf.booking;
+                // A copy starts its own conversation: votes and comments stay with the original.
+                delete copyOf.reactions;
+                delete copyOf.comments;
                 void apply([{ op: "item.add", item: copyOf }], { message: "Duplicated" }).then((r) => r.ok && go({ tab: "item", itemId: copyOf.id }));
               }}
             >
