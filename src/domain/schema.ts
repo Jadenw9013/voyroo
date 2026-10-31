@@ -120,6 +120,46 @@ export const TodoSchema = z
   })
   .strict();
 
+const SourceSchema = z.object({ url: Url, title: Line.optional() }).strict();
+const EssentialsText = z.string().trim().max(2000);
+
+/** Emergency numbers, entry rules and the like: free text per topic, so the group can correct any of it. */
+export const EssentialsSchema = z
+  .object({
+    nationality: z.string().trim().max(60).optional(),
+    emergency: EssentialsText.optional(),
+    embassy: EssentialsText.optional(),
+    entry: EssentialsText.optional(),
+    money: EssentialsText.optional(),
+    tipping: EssentialsText.optional(),
+    plugs: EssentialsText.optional(),
+    water: EssentialsText.optional(),
+    sources: z.array(SourceSchema).max(12).optional(),
+    draftedOn: DateStr.optional(),
+    checkedBy: FirstName.optional(),
+    checkedOn: DateStr.optional(),
+  })
+  .strict();
+
+/** Merges one level deep, like an item's place: only the keys given change, null removes one. */
+export const EssentialsPatch = z
+  .object({
+    nationality: z.string().trim().max(60).nullable(),
+    emergency: EssentialsText.nullable(),
+    embassy: EssentialsText.nullable(),
+    entry: EssentialsText.nullable(),
+    money: EssentialsText.nullable(),
+    tipping: EssentialsText.nullable(),
+    plugs: EssentialsText.nullable(),
+    water: EssentialsText.nullable(),
+    sources: z.array(SourceSchema).max(12).nullable(),
+    draftedOn: DateStr.nullable(),
+    checkedBy: FirstName.nullable(),
+    checkedOn: DateStr.nullable(),
+  })
+  .partial()
+  .strict();
+
 export const TripSchema = z
   .object({
     schema: z.literal(2),
@@ -135,6 +175,7 @@ export const TripSchema = z
     people: z.array(FirstName).max(30),
     cover: Url.or(z.string().regex(/^\/[\w./-]+$/)).optional(),
     notes: Text.optional(),
+    essentials: EssentialsSchema.optional(),
     items: z.array(ItemSchema).max(500),
     todos: z.array(TodoSchema).max(300),
   })
@@ -217,6 +258,7 @@ export const TripPatch = z
     people: z.array(FirstName).max(30),
     cover: z.string().max(2000).nullable(),
     notes: Text.nullable(),
+    essentials: EssentialsPatch.nullable(),
   })
   .partial()
   .strict()

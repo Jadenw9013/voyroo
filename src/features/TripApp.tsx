@@ -61,7 +61,7 @@ function Screens({ tripId, serverNow }: { tripId: string; serverNow: number }) {
         {view.tab === "today" && <Today day={view.day} go={go} serverNow={serverNow} />}
         {view.tab === "plan" && <Plan section={view.section} go={go} onShare={() => setSharing(true)} />}
         {view.tab === "todo" && <Todo go={go} />}
-        {view.tab === "trip" && <TripSettings />}
+        {view.tab === "trip" && <TripSettings section={view.section} />}
         {view.tab === "item" && <ItemPage key={view.itemId} itemId={view.itemId} go={go} back={() => back({ tab: "plan" })} />}
       </main>
       <BottomBar active={active} onPick={(t) => go({ tab: t } as View)} />

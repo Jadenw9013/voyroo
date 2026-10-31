@@ -15,6 +15,7 @@ import { useCompose } from "../composer/Composer";
 import { PostGrid, postsOf } from "../posts/Posts";
 import { ItemRow } from "../shared";
 import { SyncLine } from "../SyncLine";
+import { DayWeatherLine, WeatherFootnote } from "../weather/DayWeather";
 import { PastePlan } from "./PastePlan";
 
 /**
@@ -588,6 +589,7 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
                 {visibleDays.map((d) => (
                   <Day key={d} date={d} last={d === (days.at(-1) ?? trip.endDate)} onOpen={open} onAdd={() => compose({ day: d })} />
                 ))}
+                <WeatherFootnote />
                 {!selectedDay && (
                   <button
                     type="button"
@@ -1003,6 +1005,7 @@ function Day({ date, last, onOpen, onAdd }: { date: string; last: boolean; onOpe
               </p>
             ))}
           {last && <p className="mt-1 text-sm text-muted">Travel home</p>}
+          <DayWeatherLine date={date} />
         </div>
         {route && (
           <a href={route} target="_blank" rel="noreferrer" className={`${btn.quiet} shrink-0 text-sm`}>

@@ -5,7 +5,8 @@ import { useEffect, useState } from "react";
 import type { ChangeEntry } from "@/domain/change";
 import { costs } from "@/domain/derive";
 import { formatRange, formatTime, localParts, monthDay, zoneName } from "@/domain/time";
-import { useTheme, useSunlight, useTextSize, type Theme } from "@/client/prefs";
+import { defaultTempUnit } from "@/domain/weather";
+import { useTempUnit, useTheme, useSunlight, useTextSize, type Theme } from "@/client/prefs";
 import { useTrip } from "@/client/store";
 import { Avatar } from "@/ui/badges";
 import { Icon } from "@/ui/Icon";
@@ -13,10 +14,11 @@ import { btn, field, label, SectionTitle } from "@/ui/kit";
 import { Sheet } from "@/ui/Sheet";
 import { money } from "../item/ItemPage";
 import { AccountPanel } from "../account/AccountPanel";
+import { Essentials } from "../essentials/Essentials";
 import { ShareTrip } from "./ShareTrip";
 
-/** Trip: details, people and invites, trip-wide notes, costs, what changed, and display settings. */
-export function TripSettings() {
+/** Trip: essentials, details, people and invites, trip-wide notes, costs, what changed, and display settings. */
+export function TripSettings({ section }: { section?: "essentials" } = {}) {
   const { trip, me } = useTrip();
   const [editing, setEditing] = useState(false);
   const totals = costs(trip);
@@ -39,6 +41,8 @@ export function TripSettings() {
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
         <div className="flex flex-col gap-6">
+          <Essentials focus={section === "essentials"} />
+
           <div className="rounded-3xl border border-line bg-surface p-5 shadow-lift">
             <People />
           </div>
@@ -285,6 +289,8 @@ function Display() {
   const [theme, setTheme] = useTheme();
   const [sun, setSun] = useSunlight();
   const [size, setSize] = useTextSize();
+  const { trip } = useTrip();
+  const [unit, setUnit] = useTempUnit(defaultTempUnit(trip));
   const seg = (on: boolean) => `min-h-10 flex-1 rounded-lg px-2 text-sm font-semibold ${on ? "bg-surface text-ink shadow-lift" : "text-muted"}`;
   return (
     <section className="flex flex-col gap-4">
@@ -307,6 +313,13 @@ function Display() {
         {(["normal", "large"] as const).map((s) => (
           <button key={s} type="button" role="radio" aria-checked={size === s} onClick={() => setSize(s)} className={`${seg(size === s)} ${s === "large" ? "text-base" : ""}`}>
             {s === "normal" ? "Normal text" : "Large text"}
+          </button>
+        ))}
+      </div>
+      <div className="flex gap-1 rounded-xl bg-sunken p-1" role="radiogroup" aria-label="Temperature">
+        {(["C", "F"] as const).map((u) => (
+          <button key={u} type="button" role="radio" aria-checked={unit === u} onClick={() => setUnit(u)} className={seg(unit === u)}>
+            {u === "C" ? "Celsius (°C)" : "Fahrenheit (°F)"}
           </button>
         ))}
       </div>
