@@ -41,6 +41,7 @@ Color never carries meaning alone:
 - every kind has its icon
 - every status pill has a mark and a word: ✓ Booked, ○ To book, ? Maybe
 - a missing night's amber dot comes with the words "nowhere to stay" for screen readers
+- a balance has an arrow and words: ↑ Gets back (ok), ↓ Owes (todo), ✓ Square (muted)
 
 **Sunlight** turns everything black on white with heavier type and outlined chips, and hides photos behind text.
 

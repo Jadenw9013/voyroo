@@ -1,12 +1,16 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { prepareChange } from "@/domain/change";
+import { everyone, fxFor, homeCurrency, type Rates } from "@/domain/expenses";
 import { newId } from "@/domain/ids";
 import { classifyLink, extractUrls } from "@/domain/links";
 import { itemsTouched, touchesBooked, type Op } from "@/domain/ops";
 import type { ItemPatchT } from "@/domain/schema";
-import type { Item, ItemKind, Link, Trip, When } from "@/domain/types";
+import { roundMoney } from "@/domain/money";
+import { isDate, todayIn } from "@/domain/time";
+import type { Expense, Item, ItemKind, Link, Split, Trip, When } from "@/domain/types";
 import { geoDeps, locateOps } from "../geocode";
+import { getRates } from "../rates";
 import type { TripStore } from "../store";
 
 /*
@@ -14,6 +18,7 @@ import type { TripStore } from "../store";
  * turned into the same ops a person's edit makes and checked by the same rules.
  *
  *   add_items, update_items, add_todos  apply at once, with Undo in the app
+ *   add_expenses                        likewise: who paid what, split with the group
  *   remove_items                        never applies: it returns a card a person confirms
  *   update_items on a booked item's dates  likewise
  *   show_options                        place or option cards with an Add button
@@ -172,6 +177,61 @@ export function toUpdateOps(u: ItemUpdateT, item: Item, trip: Trip, author: stri
   return ops;
 }
 
+const NewExpense = z.object({
+  title: z.string().min(1).max(200).describe('What it was for: "Dinner at Sabe Rico", "Taxi to the dock".'),
+  amount: z.number().positive().describe("The total paid."),
+  currency: z.string().optional().describe("ISO 4217, e.g. GTQ or USD. Leave out for the trip's local currency."),
+  paidBy: z.string().optional().describe("First name of who paid, from the group. Leave out for the person talking to you."),
+  splitAmong: z.array(z.string()).optional().describe("First names sharing it equally. Leave out for the whole group."),
+  exactAmounts: z
+    .array(z.object({ name: z.string(), amount: z.number().nonnegative() }))
+    .optional()
+    .describe("Only when the person said who owes how much. Must add up to amount; replaces splitAmong."),
+  date: z.string().optional().describe("YYYY-MM-DD it was paid. Leave out for today."),
+  itemId: z.string().optional().describe("The item it paid for, by its exact id, if it matches one."),
+  note: z.string().optional(),
+});
+
+type NewExpenseT = z.infer<typeof NewExpense>;
+
+/** One expense from the assistant: only people in the group, the trip's currency unless said, and today's rate locked in. */
+export function toExpense(input: NewExpenseT, trip: Trip, me: string, rates: Rates | null): Expense | { error: string } {
+  const currency = clean(input.currency)?.toUpperCase() ?? trip.currency;
+  if (!/^[A-Z]{3}$/.test(currency)) return { error: `"${input.currency}" isn't a currency code.` };
+  const amount = roundMoney(input.amount, currency);
+  const group = everyone(trip, me);
+  const paidBy = input.paidBy ? member(input.paidBy, trip, me) : me;
+  if (!paidBy) return { error: `${input.paidBy} isn't in the group (${group.join(", ")}).` };
+  let split: Split;
+  if (input.exactAmounts?.length) {
+    const among = input.exactAmounts.map((p) => ({ name: member(p.name, trip, me), amount: roundMoney(p.amount, currency) }));
+    const stranger = input.exactAmounts.find((_, i) => !among[i].name);
+    if (stranger) return { error: `${stranger.name} isn't in the group (${group.join(", ")}).` };
+    split = { how: "exact", among: among as { name: string; amount: number }[] };
+  } else {
+    const named = (input.splitAmong ?? []).filter((n) => !/^(everyone|all|everybody|group)$/i.test(n.trim()));
+    const among = [...new Set(named.map((n) => member(n, trip, me)).filter((n): n is string => !!n))];
+    if (named.length && !among.length) return { error: `None of ${named.join(", ")} are in the group (${group.join(", ")}).` };
+    split = { how: "equal", among: among.length ? among : group };
+  }
+  const date = clean(input.date) && isDate(input.date!.trim()) ? input.date!.trim() : todayIn(trip.tz);
+  const fx = fxFor(currency, homeCurrency(trip), rates);
+  return {
+    id: newId("e"),
+    title: input.title.trim().slice(0, 200),
+    amount,
+    currency,
+    paidBy,
+    split,
+    date,
+    ...(input.itemId && trip.items.some((i) => i.id === input.itemId) ? { itemId: input.itemId } : {}),
+    ...(clean(input.note) ? { note: clean(input.note)!.slice(0, 300) } : {}),
+    ...(fx ? { fx } : {}),
+    addedBy: me,
+    addedAt: Date.now(),
+  };
+}
+
 export interface ToolContext {
   store: TripStore;
   tripId: string;
@@ -179,6 +239,8 @@ export interface ToolContext {
   me: string;
   /** The latest trip, read fresh for each tool call. */
   trip: () => Promise<Trip>;
+  /** Today's exchange rates (tests pass their own). */
+  rates?: () => Promise<Rates | null>;
 }
 
 /** What the app shows for a change the assistant made, or wants confirmed. */
@@ -316,6 +378,22 @@ export function buildTools(ctx: ToolContext) {
             },
           })),
         );
+      },
+    }),
+    add_expenses: tool({
+      description:
+        "Log what someone in the group paid, to split it: a dinner, a taxi, park fees, a booking that's been paid. Equal among everyone unless told otherwise. Applies at once; the person can undo. Not for prices that are only planned.",
+      inputSchema: z.object({ expenses: z.array(NewExpense).min(1).max(12) }),
+      execute: async ({ expenses }): Promise<ChangeResult> => {
+        const trip = await ctx.trip();
+        const rates = await (ctx.rates ?? getRates)().catch(() => null);
+        const ops: Op[] = [];
+        for (const e of expenses) {
+          const made = toExpense(e, trip, ctx.me, rates);
+          if ("error" in made) return { ok: false, error: made.error };
+          ops.push({ op: "expense.add", expense: made });
+        }
+        return applyOrConfirm(ctx, ops);
       },
     }),
     show_options: tool({

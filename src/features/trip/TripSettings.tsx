@@ -6,6 +6,7 @@ import type { ChangeEntry } from "@/domain/change";
 import { costs } from "@/domain/derive";
 import { formatRange, formatTime, localParts, monthDay, zoneName } from "@/domain/time";
 import { useTheme, useSunlight, useTextSize, type Theme } from "@/client/prefs";
+import { useView } from "@/client/router";
 import { useTrip } from "@/client/store";
 import { Avatar } from "@/ui/badges";
 import { Icon } from "@/ui/Icon";
@@ -13,11 +14,13 @@ import { btn, field, label, SectionTitle } from "@/ui/kit";
 import { Sheet } from "@/ui/Sheet";
 import { money } from "../item/ItemPage";
 import { AccountPanel } from "../account/AccountPanel";
+import { MoneyCard } from "../expenses/Expenses";
 import { ShareTrip } from "./ShareTrip";
 
 /** Trip: details, people and invites, trip-wide notes, costs, what changed, and display settings. */
 export function TripSettings() {
-  const { trip, me } = useTrip();
+  const { trip, me, tripId } = useTrip();
+  const { go } = useView(tripId);
   const [editing, setEditing] = useState(false);
   const totals = costs(trip);
 
@@ -55,6 +58,7 @@ export function TripSettings() {
         </div>
 
         <div className="flex flex-col gap-6">
+          <MoneyCard go={go} />
           {totals.length > 0 && (
             <section className="rounded-3xl border border-line bg-surface p-5 shadow-lift">
               <SectionTitle>Costs</SectionTitle>

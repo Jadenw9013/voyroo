@@ -6,7 +6,23 @@ import type { Booking, Item, ItemKind, Todo, Trip, When } from "./types";
  * v1 (segments, statuses, plan items, open questions) → v2 (items and to-dos).
  * Runs on the seed and on any v1 trip still in the store, so nothing typed
  * on the old site is lost.
+ *
+ * Within v2, fields are only ever added as optional, so a stored trip never
+ * needs rewriting: upgradeTrip tidies one as it's read.
  */
+
+/**
+ * A stored v2 trip as the app expects it. Trips saved before expenses
+ * existed have no list, and missing means none, so nothing is filled in. An
+ * empty list is dropped, so every trip without expenses looks the same, to
+ * this version and to phones still running the one before.
+ */
+export function upgradeTrip(trip: Trip): Trip {
+  if (!("expenses" in trip) || (Array.isArray(trip.expenses) && trip.expenses.length)) return trip;
+  const next = { ...trip };
+  delete next.expenses;
+  return next;
+}
 
 export interface V1Segment {
   id: string;

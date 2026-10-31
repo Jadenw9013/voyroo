@@ -22,28 +22,42 @@ The person is adding bookings from screenshots, one at a time. For this one:
 - If it isn't a booking, or you can't read it, don't call any tool.
 - Then reply with one short line saying what you recorded, or what the screenshot shows if you recorded nothing.`;
 
+/** Only when the person turned on "Also log paid receipts as expenses". */
+const RECEIPTS = (me: string) => `
+- The person also wants paid receipts logged as expenses. If this shows something already paid (a receipt, a paid bill, a payment confirmation with a total), also call add_expenses once: the total and currency exactly as shown, paid by ${me} unless it names someone in the group as the payer, split among the whole group, with the itemId of the booking it's for if there is one. A receipt that isn't a booking (a restaurant bill, a taxi) gets add_expenses only.
+- A quote, a cart or a booking still to be paid isn't an expense. Never put card numbers, card endings or payment details in the title or note.`;
+
 export interface ImportResult {
   results: ChangeResult[];
   text: string;
 }
 
-export async function importScreenshot(args: { store: TripStore; tripId: string; me: string; image: { data: string; mediaType: string }; index: number; total: number }): Promise<ImportResult | null> {
+export async function importScreenshot(args: {
+  store: TripStore;
+  tripId: string;
+  me: string;
+  image: { data: string; mediaType: string };
+  index: number;
+  total: number;
+  /** Also log a paid receipt as an expense. */
+  expenses?: boolean;
+}): Promise<ImportResult | null> {
   const model = isMock() ? (await import("./mock")).mockModel() : assistantModel();
   if (!model) return null;
   const { store, tripId, me } = args;
   const state = await store.get(tripId);
   if (!state) return null;
   const all = buildTools({ store, tripId, me, trip: async () => (await store.get(tripId))!.trip });
-  const tools = { add_items: all.add_items, update_items: all.update_items };
+  const tools = { add_items: all.add_items, update_items: all.update_items, ...(args.expenses ? { add_expenses: all.add_expenses } : {}) };
 
   const r = await generateText({
     model,
-    instructions: buildInstructions(state.trip, { me, nowMs: Date.now(), day: null, itemId: null }) + RULES,
+    instructions: buildInstructions(state.trip, { me, nowMs: Date.now(), day: null, itemId: null }) + RULES + (args.expenses ? RECEIPTS(me) : ""),
     messages: [
       {
         role: "user",
         content: [
-          { type: "text", text: `Screenshot ${args.index} of ${args.total}. Record the booking it shows.` },
+          { type: "text", text: `Screenshot ${args.index} of ${args.total}. Record the booking it shows.${args.expenses ? " If it's a paid receipt, also log it as an expense." : ""}` },
           { type: "file", data: args.image.data, mediaType: args.image.mediaType },
         ],
       },
@@ -55,7 +69,7 @@ export async function importScreenshot(args: { store: TripStore; tripId: string;
     providerOptions: { google: { thinkingConfig: { thinkingLevel: SETTINGS.thinkingLevel } } },
   });
   return {
-    results: r.steps.flatMap((s) => s.toolResults.map((t) => t.output as ChangeResult)),
+    results: r.steps.flatMap((s) => s.toolResults.flatMap((t) => (t ? [t.output as ChangeResult] : []))),
     text: r.text.trim(),
   };
 }

@@ -1,6 +1,6 @@
 import "server-only";
 import { prepareChange, type ChangeEntry, type ChangeMeta, type OpIssue } from "@/domain/change";
-import { isV1 } from "@/domain/migrate";
+import { isV1, upgradeTrip } from "@/domain/migrate";
 import type { Trip, TripState } from "@/domain/types";
 import { seedTrip, SEED_TRIP_ID } from "./seed";
 
@@ -83,7 +83,7 @@ export class TripStore {
       row = await this.db.read(id);
     }
     if (!row) return null;
-    return { trip: parse<Trip>(row.state), version: row.version };
+    return { trip: upgradeTrip(parse<Trip>(row.state)), version: row.version };
   }
 
   /** `owner`: the Google account creating it, which may later change the passcode without knowing it. */

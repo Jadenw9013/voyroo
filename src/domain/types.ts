@@ -112,6 +112,50 @@ export interface Todo {
   note?: string;
 }
 
+/**
+ * Who shares an expense, and how. Names are first names from the group.
+ *   equal:  the same for everyone listed
+ *   shares: in proportion ("Ana 2, Ben 1": Ana's room is twice the size)
+ *   exact:  set amounts, in the expense's currency, adding up to the total
+ */
+export type Split =
+  | { how: "equal"; among: string[] }
+  | { how: "shares"; among: { name: string; shares: number }[] }
+  | { how: "exact"; among: { name: string; amount: number }[] };
+
+/** The exchange rate locked in when an expense was logged, so totals never drift. */
+export interface Fx {
+  /** The currency it converts to: the trip's home currency at the time. */
+  to: string;
+  /** Units of `to` for one unit of the expense's currency. */
+  rate: number;
+  /** The day the rate is from, "YYYY-MM-DD". */
+  on: string;
+}
+
+export interface Expense {
+  id: string;
+  title: string;
+  /** What was paid, in `currency`, e.g. 420 GTQ. */
+  amount: number;
+  /** ISO 4217. */
+  currency: string;
+  /** First name of who paid. */
+  paidBy: string;
+  split: Split;
+  /** Local day it was paid, "YYYY-MM-DD". */
+  date: string;
+  /** The item it was for, if any: a booking, a dinner. */
+  itemId?: string;
+  note?: string;
+  fx?: Fx;
+  /** Paying someone back ("Ana paid Ben Q350"), not spending: left out of totals. */
+  settlement?: true;
+  addedBy?: string;
+  /** Epoch ms. */
+  addedAt: number;
+}
+
 export interface Trip {
   schema: 2;
   id: string;
@@ -137,6 +181,8 @@ export interface Trip {
   notes?: string;
   items: Item[];
   todos: Todo[];
+  /** What the group has spent and paid back. Missing means none yet. */
+  expenses?: Expense[];
 }
 
 /** A stored trip and its version; the version goes up by one per change. */

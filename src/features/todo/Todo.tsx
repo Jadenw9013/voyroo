@@ -12,6 +12,7 @@ import { Icon } from "@/ui/Icon";
 import { btn, field, SectionTitle } from "@/ui/kit";
 import { Sheet } from "@/ui/Sheet";
 import { useCompose } from "../composer/Composer";
+import { MoneyCard } from "../expenses/Expenses";
 import { SyncLine } from "../SyncLine";
 
 /** To-do: what still needs booking, what's missing, and the group's list. */
@@ -114,6 +115,8 @@ export function Todo({ go }: { go: (v: View) => void }) {
               </ul>
             )}
           </section>
+
+          <MoneyCard go={go} />
         </div>
 
         <section aria-labelledby="list" className="rounded-3xl border border-line bg-surface p-5 shadow-lift">

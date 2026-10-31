@@ -19,6 +19,7 @@ export default defineConfig({
     url: "http://localhost:3200",
     env: {
       CHAT_MOCK: "1",
+      RATES_MOCK: "1",
       ALLOW_MEMORY_STORE: "1",
       KV_REST_API_URL: "",
       KV_REST_API_TOKEN: "",
