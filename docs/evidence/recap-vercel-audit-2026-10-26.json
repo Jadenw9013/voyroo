@@ -1,0 +1,207 @@
+{
+  "observedAtUtc": "2026-10-26T05:24:04.697422+00:00",
+  "project": "voyroo",
+  "projectId": "prj_ZLxbK1uOHBb49fxLNpo4MAZnqeGZ",
+  "productionBranch": "main",
+  "autoAssignCustomDomains": true,
+  "authenticationDeploymentType": "all_except_custom_domains",
+  "gitForkProtection": true,
+  "deployHookCount": 0,
+  "configuredProjectCheckCount": 0,
+  "checkNames": [],
+  "auditorTeamRole": "OWNER",
+  "envScopes": [
+    {
+      "key": "ALLOW_MEMORY_STORE",
+      "targets": [
+        "production"
+      ],
+      "gitBranch": null,
+      "type": "sensitive",
+      "customEnvironmentIds": []
+    },
+    {
+      "key": "GEMINI_API_KEY",
+      "targets": [
+        "preview",
+        "production"
+      ],
+      "gitBranch": null,
+      "type": "sensitive",
+      "customEnvironmentIds": []
+    },
+    {
+      "key": "GOOGLE_CLIENT_ID",
+      "targets": [
+        "production"
+      ],
+      "gitBranch": null,
+      "type": "sensitive",
+      "customEnvironmentIds": []
+    },
+    {
+      "key": "GOOGLE_CLIENT_SECRET",
+      "targets": [
+        "production"
+      ],
+      "gitBranch": null,
+      "type": "sensitive",
+      "customEnvironmentIds": []
+    },
+    {
+      "key": "GOOGLE_REDIRECT_URI",
+      "targets": [
+        "production"
+      ],
+      "gitBranch": null,
+      "type": "sensitive",
+      "customEnvironmentIds": []
+    },
+    {
+      "key": "KV_REST_API_READ_ONLY_TOKEN",
+      "targets": [
+        "preview",
+        "production"
+      ],
+      "gitBranch": null,
+      "type": "sensitive",
+      "customEnvironmentIds": []
+    },
+    {
+      "key": "KV_REST_API_TOKEN",
+      "targets": [
+        "preview",
+        "production"
+      ],
+      "gitBranch": null,
+      "type": "sensitive",
+      "customEnvironmentIds": []
+    },
+    {
+      "key": "KV_REST_API_URL",
+      "targets": [
+        "preview",
+        "production"
+      ],
+      "gitBranch": null,
+      "type": "sensitive",
+      "customEnvironmentIds": []
+    },
+    {
+      "key": "KV_URL",
+      "targets": [
+        "preview",
+        "production"
+      ],
+      "gitBranch": null,
+      "type": "sensitive",
+      "customEnvironmentIds": []
+    },
+    {
+      "key": "REDIS_URL",
+      "targets": [
+        "preview",
+        "production"
+      ],
+      "gitBranch": null,
+      "type": "sensitive",
+      "customEnvironmentIds": []
+    },
+    {
+      "key": "SESSION_SECRET",
+      "targets": [
+        "preview",
+        "production"
+      ],
+      "gitBranch": null,
+      "type": "sensitive",
+      "customEnvironmentIds": []
+    },
+    {
+      "key": "TRIP_PASSPHRASE",
+      "targets": [
+        "preview",
+        "production"
+      ],
+      "gitBranch": null,
+      "type": "encrypted",
+      "customEnvironmentIds": []
+    }
+  ],
+  "sharedProductionPreviewKeys": [
+    "GEMINI_API_KEY",
+    "KV_REST_API_READ_ONLY_TOKEN",
+    "KV_REST_API_TOKEN",
+    "KV_REST_API_URL",
+    "KV_URL",
+    "REDIS_URL",
+    "SESSION_SECRET",
+    "TRIP_PASSPHRASE"
+  ],
+  "branchOverrideCount": 0,
+  "isolationVerdict": "FAIL_SHARED_SCOPES",
+  "recentDeployments": [
+    {
+      "id": "dpl_2NXvyVCLQf4LETU6SsaeybRE3FgU",
+      "target": "preview",
+      "state": "READY",
+      "branch": "feat/recap-render-prototype",
+      "sha": "a5f6ae900d3edb5ec9e0c8d7b33ef57fe21fe111"
+    },
+    {
+      "id": "dpl_f5szdwK12bvXRj1AhHpvZ6npiCjU",
+      "target": "preview",
+      "state": "READY",
+      "branch": "docs/memories-recap-plan",
+      "sha": "3ca4d9af32c79e528a0c9964b64b75d6874d4fda"
+    },
+    {
+      "id": "dpl_6zwSPxQyxkS4PVLTDrEA5RX5ewJx",
+      "target": "preview",
+      "state": "READY",
+      "branch": "feat/recap-render-prototype",
+      "sha": "51c3c4da86941a9b9880e33cfef08767668ebbbc"
+    },
+    {
+      "id": "dpl_79NUQ2NUt5xkJkXYUzxqR7BSHQg1",
+      "target": "preview",
+      "state": "READY",
+      "branch": "chore/recap-ci-foundation",
+      "sha": "0713ce04ecc6533ae81b11d36c95c453c5b3975b"
+    },
+    {
+      "id": "dpl_Dj4Z8XE9GZLr7PfGnDaZKeuxYSsR",
+      "target": "preview",
+      "state": "READY",
+      "branch": "feat/recap-render-prototype",
+      "sha": "842ccaca2c8519f5246b345c75161a68208ee888"
+    },
+    {
+      "id": "dpl_BWSrbUHjAfTDQEJrGoCBAF68J9DW",
+      "target": "preview",
+      "state": "READY",
+      "branch": "chore/recap-ci-foundation",
+      "sha": "ea83a97e2455936f767386e2631098f0ccd0ba31"
+    },
+    {
+      "id": "dpl_35MGQ52DLphhtqumsppRyRkfRF6L",
+      "target": "preview",
+      "state": "READY",
+      "branch": "chore/recap-ci-foundation",
+      "sha": "1e66ca40d04c2a12790203fd4b7640150c9314ec"
+    },
+    {
+      "id": "dpl_6AJC5uBxdq34eMHSU9pm8S3q1xEr",
+      "target": "preview",
+      "state": "READY",
+      "branch": "chore/recap-ci-foundation",
+      "sha": "8b285ffd05d994982595179af86c33d4cac59c00"
+    }
+  ],
+  "limitations": [
+    "Metadata only: no env values, decryption, value hashes, or secret identifiers recorded.",
+    "No authenticated app/Redis/model requests; no promotion or bypass drill.",
+    "Removing shared targets alone does not prove independent backend/credential identity.",
+    "Project configuration does not retroactively remove secrets from existing deployments."
+  ]
+}
