@@ -163,7 +163,7 @@ export function tripCoverUrl(trip: Pick<Trip, "id" | "name" | "destination" | "c
     return trip.cover.replace(/&w=800&h=600&c=7/g, "");
   }
   const dest = trip.destination || trip.name;
-  return `/api/photo?title=${encodeURIComponent(trip.name)}&dest=${encodeURIComponent(dest)}&kind=destination&v=2`;
+  return `/api/photo?title=${encodeURIComponent(trip.name)}&dest=${encodeURIComponent(dest)}&kind=destination&v=3`;
 }
 
 /** Contextually accurate photo URL for a specific itinerary item or saved place. */
@@ -173,6 +173,6 @@ export function itemPhotoUrl(item: Item, trip: Pick<Trip, "id" | "destination">,
     return `/api/t/${encodeURIComponent(trip.id)}/thumb?item=${encodeURIComponent(item.id)}&link=${encodeURIComponent(withImg.id)}`;
   }
   const place = item.place?.name || item.place?.address || "";
-  return `/api/photo?title=${encodeURIComponent(item.title)}&place=${encodeURIComponent(place)}&dest=${encodeURIComponent(trip.destination)}&kind=${encodeURIComponent(item.kind)}&idx=${idx}&v=2`;
+  return `/api/photo?title=${encodeURIComponent(item.title)}&place=${encodeURIComponent(place)}&dest=${encodeURIComponent(trip.destination)}&kind=${encodeURIComponent(item.kind)}&idx=${idx}&v=3`;
 }
 

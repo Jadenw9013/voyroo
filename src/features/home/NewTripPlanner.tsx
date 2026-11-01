@@ -138,7 +138,7 @@ export function NewTripPlanner({ account, initialName, initialSnapshot }: { acco
         {draft.destination && (
           <div className="preview-photo">
             <Image
-              src={`/api/photo?title=${encodeURIComponent(draft.name || draft.destination)}&dest=${encodeURIComponent(draft.destination)}&kind=destination&v=2`}
+              src={`/api/photo?title=${encodeURIComponent(draft.name || draft.destination)}&dest=${encodeURIComponent(draft.destination)}&kind=destination&v=3`}
               alt=""
               fill
               sizes="(max-width: 850px) 100vw, 420px"

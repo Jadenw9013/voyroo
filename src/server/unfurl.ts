@@ -73,7 +73,7 @@ const BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
  * GET with manual redirects, each hop checked. Returns the final URL and up to `maxBytes` of body.
  * `until` stops at the first hop it accepts, without fetching it: following a short link only as far as needed.
  */
-export async function safeFetch(raw: string, opts: { accept: string; maxBytes?: number; browser?: boolean; until?: (url: string) => boolean }): Promise<{ url: string; bytes: Uint8Array; type: string; ok: boolean } | null> {
+export async function safeFetch(raw: string, opts: { accept: string; maxBytes?: number; browser?: boolean; userAgent?: string; until?: (url: string) => boolean }): Promise<{ url: string; bytes: Uint8Array; type: string; ok: boolean } | null> {
   let url = raw;
   const maxBytes = opts.maxBytes ?? MAX_BYTES;
   const ctrl = new AbortController();
@@ -85,7 +85,7 @@ export async function safeFetch(raw: string, opts: { accept: string; maxBytes?: 
       const res = await fetch(url, {
         redirect: "manual",
         signal: ctrl.signal,
-        headers: { accept: opts.accept, "user-agent": opts.browser ? BROWSER_UA : "Mozilla/5.0 (compatible; TripLinkPreview/1.0)", "accept-language": "en" },
+        headers: { accept: opts.accept, "user-agent": opts.userAgent ?? (opts.browser ? BROWSER_UA : "Mozilla/5.0 (compatible; TripLinkPreview/1.0)"), "accept-language": "en" },
       });
       if (res.status >= 300 && res.status < 400) {
         const next = res.headers.get("location");
