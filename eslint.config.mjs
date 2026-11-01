@@ -16,6 +16,8 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     "video/recap/**",
+    // Copied from node_modules at install (scripts/vendor-maplibre.mjs).
+    "public/vendor/**",
   ]),
 ]);
 

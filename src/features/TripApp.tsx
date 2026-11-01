@@ -12,6 +12,7 @@ import { Avatar } from "@/ui/badges";
 import { Icon, type IconName } from "@/ui/Icon";
 import { ToastBar } from "@/ui/kit";
 import { ComposerProvider, useCompose } from "./composer/Composer";
+import { Expenses } from "./expenses/Expenses";
 import { ItemPage } from "./item/ItemPage";
 import { Plan } from "./plan/Plan";
 import { Today } from "./today/Today";
@@ -19,10 +20,11 @@ import { Todo } from "./todo/Todo";
 import { TripSettings } from "./trip/TripSettings";
 import { Brand } from "@/ui/Brand";
 import { ShareTrip } from "./trip/ShareTrip";
+import { HeldEdits } from "./HeldEdits";
 
-export function TripApp({ tripId, initial, me, serverNow }: { tripId: string; initial: TripState; me: string; serverNow: number }) {
+export function TripApp({ tripId, initial, me, serverNow, verified }: { tripId: string; initial: TripState; me: string; serverNow: number; verified?: string[] }) {
   return (
-    <TripProvider tripId={tripId} initial={initial} me={me} serverNow={serverNow}>
+    <TripProvider tripId={tripId} initial={initial} me={me} serverNow={serverNow} verified={verified}>
       <ComposerProvider serverNow={serverNow}>
         <Screens tripId={tripId} serverNow={serverNow} />
       </ComposerProvider>
@@ -41,9 +43,14 @@ const TABS: { id: Tab; label: string; icon: IconName }[] = [
 
 function Screens({ tripId, serverNow }: { tripId: string; serverNow: number }) {
   const { view, go, back } = useView(tripId);
-  const active: Tab = view.tab === "item" ? "plan" : view.tab;
+  const active: Tab = view.tab === "item" ? "plan" : view.tab === "expenses" ? "todo" : view.tab;
   const compose = useCompose();
   const [sharing, setSharing] = useState(false);
+
+  // Taps work from here on. Browser tests wait for this before tapping what the server drew.
+  useEffect(() => {
+    document.documentElement.dataset.hydrated = "true";
+  }, []);
 
   // Arrived from the share sheet (/share): open the composer with what was shared.
   useEffect(() => {
@@ -58,10 +65,12 @@ function Screens({ tripId, serverNow }: { tripId: string; serverNow: number }) {
       <TopBar onShare={() => setSharing(true)} onGo={go} />
       <Sidebar active={active} view={view} onPick={(t) => go({ tab: t } as View)} onGo={go} onShare={() => setSharing(true)} />
       <main id="main" className="mx-auto w-full max-w-6xl min-w-0 pb-[calc(6rem+env(safe-area-inset-bottom))] md:px-6 md:pt-4 md:pb-16">
+        <HeldEdits />
         {view.tab === "today" && <Today day={view.day} go={go} serverNow={serverNow} />}
         {view.tab === "plan" && <Plan section={view.section} go={go} onShare={() => setSharing(true)} />}
         {view.tab === "todo" && <Todo go={go} />}
-        {view.tab === "trip" && <TripSettings />}
+        {view.tab === "expenses" && <Expenses go={go} />}
+        {view.tab === "trip" && <TripSettings section={view.section} />}
         {view.tab === "item" && <ItemPage key={view.itemId} itemId={view.itemId} go={go} back={() => back({ tab: "plan" })} />}
       </main>
       <BottomBar active={active} onPick={(t) => go({ tab: t } as View)} />
@@ -196,6 +205,19 @@ function Sidebar({
               >
                 <Icon name="image" className="size-4 text-k-stay" />
                 <span>Saved Posts</span>
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                onClick={() => onGo({ tab: "expenses" })}
+                aria-current={view.tab === "expenses" ? "page" : undefined}
+                className={`flex min-h-10 w-full items-center gap-3 rounded-xl px-3.5 text-sm font-medium transition-colors ${
+                  view.tab === "expenses" ? "bg-sunken text-ink" : "text-muted hover:bg-sunken hover:text-ink"
+                }`}
+              >
+                <Icon name="wallet" className="size-4 text-ok" />
+                <span>Expenses</span>
               </button>
             </li>
             <li>

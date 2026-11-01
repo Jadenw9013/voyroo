@@ -10,6 +10,9 @@ import { MockLanguageModelV4 } from "ai/test";
  * - "plan"   → add_items: three suggested steps on the day on screen
  * - "remove" or "delete" → remove_items for cliff jumping (a confirm card)
  * - "add dinner" with no day → ask_user: which day?
+ * - "log", "spent" or "paid" with an amount → add_expenses: a made-up taxi, split with everyone
+ * - a screenshot, with receipts as expenses on → add_expenses: a made-up paid receipt
+ * - "comment" → add_comment on the item that's open (or zip lining)
  * - a screenshot → add_items: a made-up booked stay with a confirmation number
  * - anything else → a short text answer
  * - after a tool result → one line
@@ -55,11 +58,16 @@ function script(prompt: Prompt): Chunk[] {
     if (out.includes("needsConfirmation")) return text("That needs a tap from you to confirm.");
     if (out.includes("shown")) return text("Tap Add on any of these to put it on the day. (These are made-up places from the test assistant.)");
     if (out.includes("Test Posada")) return text("Recorded a made-up test booking from the screenshot.");
+    if (out.includes("Test receipt")) return text("Logged a made-up test receipt as an expense.");
     return text("Done. You can undo it from the message below.");
   }
   const said = lastUser(prompt);
   const user = [...prompt].reverse().find((p) => p.role === "user");
   const pictures = ((user?.content as { type: string }[]) ?? []).filter((c) => c.type === "file").length;
+  if (pictures && /as an expense/.test(said)) {
+    const n = /screenshot (\d+)/.exec(said)?.[1] ?? "1";
+    return call("add_expenses", { expenses: [{ title: `Test receipt ${n}`, amount: 150, currency: "GTQ", note: "Paid by card 4111 1111 1111 1111" }] });
+  }
   if (pictures) {
     const n = /screenshot (\d+)/.exec(said)?.[1] ?? "1";
     return call("add_items", {
@@ -77,6 +85,9 @@ function script(prompt: Prompt): Chunk[] {
         },
       ],
     });
+  }
+  if (/\b(log|spent|paid)\b/.test(said) && /\d/.test(said)) {
+    return call("add_expenses", { expenses: [{ title: "Test taxi", amount: Number(/(\d+(?:\.\d+)?)/.exec(said)![1]), currency: "GTQ" }] });
   }
   if (/\b(eat|restaurant|dinner near|food)\b/.test(said)) {
     return call("show_options", {
@@ -97,6 +108,10 @@ function script(prompt: Prompt): Chunk[] {
         { title: "Afternoon swim", kind: "activity", date: day, time: "15:00", maybe: true },
       ],
     });
+  }
+  if (/\bcomment\b/.test(said)) {
+    const open = /\(id ([a-z0-9_-]+)\) and asked about it/.exec(String(prompt.find((p) => p.role === "system")?.content ?? ""));
+    return call("add_comment", { itemId: open?.[1] ?? "activity-zipline", text: "Count me in for the morning slot." });
   }
   if (/\b(remove|delete)\b/.test(said)) return call("remove_items", { ids: ["activity-cliff-jumping"] });
   if (/\badd dinner\b/.test(said)) return call("ask_user", { question: "Which night?", options: ["Fri Nov 27", "Sat Nov 28"] });

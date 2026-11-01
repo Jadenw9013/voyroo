@@ -18,8 +18,13 @@ const opsRoute = await import("@/app/api/t/[tripId]/ops/route");
 const undoRoute = await import("@/app/api/t/[tripId]/undo/route");
 const tripsRoute = await import("@/app/api/trips/route");
 const previewRoute = await import("@/app/api/t/[tripId]/preview/route");
+const meRoute = await import("@/app/api/t/[tripId]/me/route");
+const unfurlRoute = await import("@/app/api/t/[tripId]/unfurl/route");
 const publicRoute = await import("@/app/api/p/[tripId]/[token]/route");
-const { previewTrip } = await import("./preview");
+const { previewTrip, publicTrip } = await import("./preview");
+const { getStore } = await import("./db");
+const { ACCOUNT_COOKIE, hashPasscode, seal } = await import("./auth");
+const { requester } = await import("./http");
 
 const ctx = (tripId = "guatemala") => ({ params: Promise.resolve({ tripId }) });
 const post = (body: unknown, headers: Record<string, string> = {}) =>
@@ -87,6 +92,38 @@ describe("view-only presentation links", () => {
     expect(await previewTrip("guatemala", token)).toBeNull();
     const replacement = await (await previewRoute.POST(post({}), ctx())).json();
     expect(replacement.path).not.toBe(path);
+  });
+
+  it("shows where and when, and none of the group's private details", async () => {
+    await join();
+    const { trip } = await (await tripRoute.GET(get(), ctx())).json();
+    const [first, second] = trip.items;
+    const changed = await opsRoute.POST(post({ confirmed: true, ops: [
+      { op: "trip.update", set: { notes: "PRIVATE-TRIP-NOTE" } },
+      { op: "item.update", id: first.id, set: {
+        notes: "Door code PRIVATE-DOOR-CODE",
+        who: "Privwho",
+        contact: { phone: "+502 5555 0199", email: "private-host@example.com", whatsapp: "+502 5555 0198" },
+        booking: { state: "booked", confirmation: "PRIVATE-CONFIRMATION", by: "Privbooker", price: { amount: 987, currency: "USD" }, note: "PRIVATE-BOOKING-NOTE", url: "https://example.com/manage/PRIVATE-MANAGE" },
+      } },
+      { op: "link.add", itemId: second.id, link: { id: "l1", url: "https://example.com/PRIVATE-LINK", kind: "booking", title: "PRIVATE-LINK-TITLE", addedBy: "Privlinker", addedAt: 1 } },
+      { op: "check.add", itemId: first.id, check: { id: "c1", text: "PRIVATE-CHECKLIST", done: false } },
+      { op: "todo.add", todo: { id: "t1", text: "PRIVATE-TODO", done: false, who: "Privtodo" } },
+    ] }), ctx());
+    expect(changed.status).toBe(200);
+    const { path } = await (await previewRoute.POST(post({}), ctx())).json();
+    jar.clear();
+    const shown = await previewTrip("guatemala", path.split("/").at(-1));
+    const text = JSON.stringify(shown);
+    for (const secret of ["PRIVATE-", "Privwho", "Privbooker", "Privlinker", "Privtodo", "Sam", "5555", "private-host", "987"]) expect(text).not.toContain(secret);
+    expect(shown!.trip.people).toEqual([]);
+    expect(shown!.trip.todos).toEqual([]);
+    expect(shown!.travelers).toBe(1);
+    const item = shown!.trip.items.find((i) => i.id === first.id)!;
+    expect(item.title).toBe(first.title);
+    expect(item.booking).toEqual({ state: "booked" });
+    expect(item.start).toEqual(first.start);
+    expect(Object.keys(item).sort()).toEqual(Object.keys(publicTrip({ ...trip, items: [first] }).items[0]).sort());
   });
 
   it("blocks cross-site link creation and revocation", async () => {
@@ -229,5 +266,55 @@ describe("joining from one address", () => {
       jar.clear();
       expect((await join(`Friend${String.fromCharCode(97 + i)}`, "volcano")).status).toBe(200);
     }
+  });
+});
+
+describe("changing the passcode", () => {
+  const change = (body: Record<string, unknown>) => meRoute.POST(post(body), ctx());
+
+  it("needs the current passcode, even from a Google member who didn't make the trip", async () => {
+    await join("Sam", "volcano");
+    expect((await change({ newPasscode: "lava-rocks" })).status).toBe(403);
+    expect((await change({ passcode: "wrong", newPasscode: "lava-rocks" })).status).toBe(403);
+    expect((await change({ passcode: "volcano", newPasscode: "lava-rocks" })).status).toBe(200);
+    jar.clear();
+    expect((await join("Ana", "volcano")).status).toBe(403);
+    expect((await join("Ana", "lava-rocks")).status).toBe(200);
+  });
+
+  it("stops guessing the current passcode", async () => {
+    await join("Sam", "volcano");
+    for (let i = 0; i < 10; i++) expect((await change({ passcode: `guess${i}`, newPasscode: "lava-rocks" })).status).toBe(403);
+    expect((await change({ passcode: "volcano", newPasscode: "lava-rocks" })).status).toBe(429);
+  });
+
+  it("lets the Google account that made the trip change it without the old one", async () => {
+    const store = getStore();
+    const trip = { schema: 2 as const, id: "owned-trip", name: "Owned", destination: "Lima", startDate: "2027-03-01", endDate: "2027-03-03", tz: "America/Lima", currency: "PEN", people: ["Ana"], items: [], todos: [] };
+    await store.create(trip, await hashPasscode("generated-pass"), "a".repeat(64));
+    await store.rememberTrip("a".repeat(64), "owned-trip", "Ana");
+    jar.set(ACCOUNT_COOKIE, seal("account", { id: "a".repeat(64), name: "Ana", email: "ana@example.com" }, 600));
+    expect((await meRoute.POST(post({ newPasscode: "new-pass" }), ctx("owned-trip"))).status).toBe(200);
+    jar.set(ACCOUNT_COOKIE, seal("account", { id: "b".repeat(64), name: "Bo", email: "bo@example.com" }, 600));
+    await store.rememberTrip("b".repeat(64), "owned-trip", "Bo");
+    expect((await meRoute.POST(post({ newPasscode: "bo-pass" }), ctx("owned-trip"))).status).toBe(403);
+  });
+});
+
+describe("rate limits", () => {
+  const from = (ip: string) => ({ "x-forwarded-for": ip });
+
+  it("caps new trips per address", async () => {
+    const body = { name: "Peru", startDate: "2027-03-01", endDate: "2027-03-10", tz: "America/Lima", currency: "pen", passcode: "llama", me: "Ana" };
+    for (let i = 0; i < 20; i++) expect((await tripsRoute.POST(post(body, from("203.0.113.7")))).status).toBe(200);
+    expect((await tripsRoute.POST(post(body, from("203.0.113.7")))).status).toBe(429);
+    expect((await tripsRoute.POST(post(body, from("198.51.100.2")))).status).toBe(200);
+  });
+
+  it("caps link previews per address", async () => {
+    await join();
+    const who = await requester(new Request("http://localhost", { headers: from("203.0.113.9") }));
+    for (let i = 0; i < 120; i++) await getStore().hit(`unfurl:${who}`, 3600);
+    expect((await unfurlRoute.POST(post({ url: "https://example.com" }, from("203.0.113.9")), ctx())).status).toBe(429);
   });
 });

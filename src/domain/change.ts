@@ -1,4 +1,6 @@
+import { forbidden } from "./discuss";
 import { applyOp, describeOp, OpError, touchesBooked, type Op, type OpErrorCode } from "./ops";
+import { packingProblems } from "./packing";
 import { OpSchema, TripSchema } from "./schema";
 import { instantOf } from "./time";
 import type { Trip, TripState } from "./types";
@@ -89,7 +91,7 @@ export function stripCards(text: string): string {
 }
 
 /** Keys holding links or ids: never touched by the scrub, so a long id in a URL survives. */
-const SKIP = new Set(["url", "image", "mapsUrl", "website", "id", "itemId", "linkId", "checkId", "op", "tz", "date", "time"]);
+const SKIP = new Set(["url", "image", "mapsUrl", "website", "id", "itemId", "linkId", "checkId", "commentId", "op", "tz", "date", "time"]);
 
 function scrub<T>(value: T, key?: string): T {
   if (typeof value === "string") return (key && SKIP.has(key) ? value : stripCards(value)) as T;
@@ -122,6 +124,13 @@ export function tripProblems(trip: Trip): string[] {
     if (todoIds.has(t.id)) out.push(`Two to-dos share the id "${t.id}".`);
     todoIds.add(t.id);
   }
+  // Who paid and who shares it aren't checked against `people`: removing someone mustn't break the money they're part of.
+  const expenseIds = new Set<string>();
+  for (const e of trip.expenses ?? []) {
+    if (expenseIds.has(e.id)) out.push(`Two expenses share the id "${e.id}".`);
+    expenseIds.add(e.id);
+  }
+  out.push(...packingProblems(trip));
   return out;
 }
 
@@ -141,6 +150,8 @@ export function prepareChange(state: TripState, raw: unknown, meta: ChangeMeta):
   const inverse: Op[] = [];
   const summary: string[] = [];
   for (const [index, op] of ops.entries()) {
+    const denied = forbidden(trip, op, meta);
+    if (denied) return { ok: false, issues: [{ index, code: "forbidden", message: denied }] };
     const booked = meta.confirmed ? null : touchesBooked(trip, op);
     if (booked) {
       return {

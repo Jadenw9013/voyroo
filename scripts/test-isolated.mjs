@@ -19,7 +19,7 @@ Object.assign(env, {
   GEMINI_API_KEY: "", GOOGLE_CLIENT_ID: "", GOOGLE_CLIENT_SECRET: "", GOOGLE_REDIRECT_URI: "",
   SESSION_SECRET: "isolated-test-only-session-secret", TRIP_PASSCODE: "", ALLOW_MEMORY_STORE: "1",
   MEMORIES_ENABLED: "0", RECAP_AI_ENABLED: "0", RECAP_RENDERING_ENABLED: "0",
-  MEMORIES_PILOT_TRIP_IDS: "", MEMORIES_PILOT_ACCOUNT_IDS: "", NEXT_DIST_DIR: ".next",
+  MEMORIES_PILOT_TRIP_IDS: "", MEMORIES_PILOT_ACCOUNT_IDS: "", NEXT_DIST_DIR: ".next", GEOCODER: "stub",
 });
 for (const args of selected) {
   const child = spawnSync(process.execPath, [process.env.npm_execpath, ...args], { env, stdio: "inherit" });

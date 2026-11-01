@@ -27,7 +27,8 @@ export default async function PreviewPage({ params }: { params: Promise<{ tripId
   const { tripId, token } = await params;
   const state = await previewTrip(tripId, token);
   if (!state) notFound();
-  const { trip } = state;
+  const { trip, travelers } = state;
+  const access = { tripId, token };
   const days = [...new Set([...dayRange(trip.startDate, trip.endDate), ...trip.items.flatMap((item) => item.start ? [item.start.date] : [])])].sort();
   const ideas = trip.items.filter((item) => !item.start);
   const scheduledItems = trip.items.filter((item) => !!item.start);
@@ -90,17 +91,17 @@ export default async function PreviewPage({ params }: { params: Promise<{ tripId
                 <span className="presentation-stat-value">{bookedCount}</span>
                 <span className="presentation-stat-label">Booked</span>
               </div>
-              {trip.people.length > 0 && (
-                <div className="presentation-stat presentation-stat-people">
-                  <span className="presentation-stat-label">Travelers</span>
-                  <span className="presentation-stat-names">{trip.people.join(", ")}</span>
+              {travelers > 0 && (
+                <div className="presentation-stat">
+                  <span className="presentation-stat-value">{travelers}</span>
+                  <span className="presentation-stat-label">{travelers === 1 ? "Traveler" : "Travelers"}</span>
                 </div>
               )}
             </div>
           </div>
           <div className="presentation-cover-wrap">
             <img
-              src={tripCoverUrl(trip)}
+              src={withAccess(tripCoverUrl(trip), access)}
               alt={`${trip.destination} destination cover`}
               className="presentation-cover-img"
               loading="eager"
@@ -129,7 +130,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ tripId
                 <a key={item.id} href={`#item-${item.id}`} className="presentation-highlight-card group">
                   <div className="presentation-highlight-img-wrap">
                     <img
-                      src={itemPhotoUrl(item, trip, idx)}
+                      src={withAccess(itemPhotoUrl(item, trip, idx), access)}
                       alt={item.title}
                       className="presentation-highlight-img"
                       loading="lazy"
@@ -211,7 +212,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ tripId
                 {featuredItem && (
                   <div className="presentation-day-snapshot">
                     <img
-                      src={itemPhotoUrl(featuredItem, trip, dayIdx)}
+                      src={withAccess(itemPhotoUrl(featuredItem, trip, dayIdx), access)}
                       alt={featuredItem.title}
                       className="presentation-day-snapshot-img"
                       loading="lazy"
@@ -243,7 +244,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ tripId
                   return (
                     <div key={stay.id} className="presentation-stay">
                       <img
-                        src={itemPhotoUrl(stay, trip, stayIdx)}
+                        src={withAccess(itemPhotoUrl(stay, trip, stayIdx), access)}
                         alt={stay.title}
                         className="presentation-stay-thumb"
                         loading="lazy"
@@ -283,7 +284,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ tripId
                   );
                 })}
                 {items.length ? (
-                  items.map((item, idx) => <PreviewItem key={item.id} item={item} trip={trip} tz={trip.tz} idx={idx} />)
+                  items.map((item, idx) => <PreviewItem key={item.id} item={item} trip={trip} tz={trip.tz} idx={idx} access={access} />)
                 ) : (
                   <div className="presentation-empty-day">
                     <Icon name="sparkles" className="size-5 text-accent" />
@@ -309,7 +310,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ tripId
             </header>
             <div className="presentation-events">
               {ideas.map((item, idx) => (
-                <PreviewItem key={item.id} item={item} trip={trip} tz={trip.tz} idx={idx} />
+                <PreviewItem key={item.id} item={item} trip={trip} tz={trip.tz} idx={idx} access={access} />
               ))}
             </div>
           </section>
@@ -322,10 +323,15 @@ export default async function PreviewPage({ params }: { params: Promise<{ tripId
   );
 }
 
-function PreviewItem({ item, trip, tz, idx }: { item: Item; trip: Trip; tz: string; idx: number }) {
+/** Photo lookups need trip access; on this page, the viewing token is that access. */
+function withAccess(src: string, access: { tripId: string; token: string }): string {
+  return src.startsWith("/api/photo?") ? `${src}&trip=${encodeURIComponent(access.tripId)}&token=${access.token}` : src;
+}
+
+function PreviewItem({ item, trip, tz, idx, access }: { item: Item; trip: Trip; tz: string; idx: number; access: { tripId: string; token: string } }) {
   const mapUrl = mapsLink(item.place, trip);
   const dirUrl = directionsUrl(item.place, trip);
-  const photoUrl = itemPhotoUrl(item, trip, idx);
+  const photoUrl = withAccess(itemPhotoUrl(item, trip, idx), access);
 
   return (
     <article id={`item-${item.id}`} className="presentation-event">
@@ -358,10 +364,6 @@ function PreviewItem({ item, trip, tz, idx }: { item: Item; trip: Trip; tz: stri
             </div>
           </div>
 
-          {item.notes && (
-            <p className="presentation-event-notes">{item.notes}</p>
-          )}
-
           <div className="presentation-event-meta">
             {item.end && (item.end.date !== item.start?.date || item.kind === "stay") && (
               <span className="presentation-meta-badge">
@@ -391,7 +393,6 @@ function PreviewItem({ item, trip, tz, idx }: { item: Item; trip: Trip; tz: stri
               >
                 <Icon name={item.booking.state === "booked" ? "check" : "clock"} className="size-3" />
                 {item.booking.state === "booked" ? "Booked" : "Still to book"}
-                {item.booking.by ? ` · ${item.booking.by}` : ""}
               </span>
             )}
             {item.maybe && (

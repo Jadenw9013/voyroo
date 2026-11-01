@@ -9,7 +9,7 @@ export default defineConfig({
     url: "http://localhost:3300", timeout: 60_000, reuseExistingServer: false,
     env: {
       ALLOW_MEMORY_STORE: "1", KV_REST_API_URL: "", KV_REST_API_TOKEN: "", UPSTASH_REDIS_REST_URL: "", UPSTASH_REDIS_REST_TOKEN: "",
-      GEMINI_API_KEY: "", CHAT_MOCK: "", TRIP_PASSCODE: "volcano", NEXT_DIST_DIR: ".next",
+      GEMINI_API_KEY: "", CHAT_MOCK: "", WEATHER: "stub", TRIP_PASSCODE: "volcano", NEXT_DIST_DIR: ".next", GEOCODER: "stub",
       SESSION_SECRET: "production-test-only-secret", GOOGLE_CLIENT_ID: "production-test.apps.googleusercontent.com",
       GOOGLE_CLIENT_SECRET: "production-test-only-client-secret", GOOGLE_REDIRECT_URI: "http://localhost:3300/api/auth/google/callback",
     },

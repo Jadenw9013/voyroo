@@ -1,9 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { dayRows, nightOf, nights, nowNext, phase, stayOn, toBook, tripDays, type Row } from "@/domain/derive";
-import { directionsUrl, mapsEmbedUrl, mapsSearchUrl, routeUrl, telUrl, tripCoverUrl, whatsappUrl } from "@/domain/links";
+import { directionsUrl, telUrl, tripCoverUrl, whatsappUrl } from "@/domain/links";
 import { daysBetween, formatDay, formatDuration, formatRange, formatTime, monthDay, todayIn, weekday } from "@/domain/time";
 import type { Item } from "@/domain/types";
 import { useClock } from "@/client/hooks";
@@ -13,7 +13,11 @@ import { Avatar, KindChip } from "@/ui/badges";
 import { Icon, type IconName } from "@/ui/Icon";
 import { ActionChip, btn, useCopy } from "@/ui/kit";
 import { useCompose } from "../composer/Composer";
+import { DriverChip, DriverSheet } from "../essentials/Driver";
+import { DayWeatherCard } from "../weather/DayWeather";
+import { TripMap } from "../map/TripMap";
 import { ItemRow, rowTitle, timeLabel } from "../shared";
+import { LegRow, useDayLegs } from "../travel/Travel";
 import { SyncLine } from "../SyncLine";
 
 /**
@@ -28,6 +32,7 @@ export function Today({ day: chosen, go, serverNow }: { day?: string; go: (v: Vi
   const when = phase(trip, nowMs);
   const day = chosen ?? (when === "during" ? today : trip.startDate);
   const rows = dayRows(trip, day);
+  const legs = useDayLegs(day);
   const timed = rows.filter((r) => r.at !== null);
   const untimed = rows.filter((r) => r.at === null);
   const isToday = day === today;
@@ -152,60 +157,17 @@ export function Today({ day: chosen, go, serverNow }: { day?: string; go: (v: Vi
             onAdd={() => compose({ day, kind: "stay", text: "" })}
           />
 
+          <EssentialsLink onOpen={() => go({ tab: "trip", section: "essentials" })} />
+
           {when === "before" && day === trip.startDate && <BeforeTrip onTodo={() => go({ tab: "todo" })} />}
 
-          {/* Day's Google Map Card (shown in left column on desktop) */}
-          <section
-            aria-label="Day map"
-            className="hidden flex-col gap-3 rounded-3xl border border-line bg-surface p-4 shadow-lift sm:p-5 lg:flex"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="flex size-8 items-center justify-center rounded-xl bg-accent-soft text-accent">
-                  <Icon name="pin" className="size-4" />
-                </span>
-                <div>
-                  <h2 className="text-sm font-extrabold">{weekday(day)} Map</h2>
-                  <p className="text-xs text-muted">
-                    {ticketRow?.item.place?.name || stay?.place?.name || trip.destination}
-                  </p>
-                </div>
-              </div>
-              <a
-                href={
-                  routeUrl(
-                    rows.map((r) => r.item),
-                    trip,
-                  ) ?? mapsSearchUrl(ticketRow?.item.place?.name || stay?.place?.name || trip.destination)
-                }
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line bg-sunken px-3 text-xs font-bold text-accent hover:bg-accent-soft"
-              >
-                Google Maps
-                <Icon name="external" className="size-3.5" />
-              </a>
-            </div>
-            <div className="h-44 w-full overflow-hidden rounded-2xl border border-line bg-[#0d1324]">
-              <iframe
-                src={mapsEmbedUrl(
-                  ticketRow?.item.place?.address ||
-                    ticketRow?.item.place?.name ||
-                    stay?.place?.address ||
-                    stay?.place?.name ||
-                    trip.destination,
-                  12,
-                )}
-                title={`Google Map for ${formatDay(day)}`}
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                className="size-full border-0 [filter:invert(90%)_hue-rotate(180deg)_brightness(95%)_contrast(92%)]"
-              />
-            </div>
-          </section>
+          {/* The day's map: in the left column on desktop. Only the visible copy loads a map. */}
+          <div className="hidden rounded-3xl border border-line bg-surface p-4 shadow-lift sm:p-5 lg:block">
+            <TripMap variant="day" day={day} go={go} />
+          </div>
         </div>
 
-        {/* Selected Day Schedule Card + Mobile Day Map */}
+        {/* Selected Day Schedule Card + the day's map on smaller screens */}
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-3.5 rounded-3xl border border-line bg-surface p-4 shadow-lift sm:gap-4 sm:p-5">
             <div className="flex items-baseline justify-between gap-3 border-b border-line pb-3">
@@ -223,16 +185,24 @@ export function Today({ day: chosen, go, serverNow }: { day?: string; go: (v: Vi
               </button>
             </div>
 
+            <DayWeatherCard date={day} />
+
             <section aria-label={`Everything on ${formatDay(day)}`}>
               {rows.length === 0 ? (
                 <p className="py-4 text-base text-muted">Nothing planned yet for this day.</p>
               ) : (
                 <ol className="flex flex-col gap-1.5">
                   {timed.map((r) => (
-                    <ItemRow key={r.key} row={r} item={r.item} onOpen={() => open(r.item)} />
+                    <Fragment key={r.key}>
+                      <LegRow shown={legs.get(r.key)} />
+                      <ItemRow row={r} item={r.item} onOpen={() => open(r.item)} />
+                    </Fragment>
                   ))}
                   {untimed.map((r) => (
-                    <ItemRow key={r.key} row={r} item={r.item} onOpen={() => open(r.item)} />
+                    <Fragment key={r.key}>
+                      <LegRow shown={legs.get(r.key)} />
+                      <ItemRow row={r} item={r.item} onOpen={() => open(r.item)} />
+                    </Fragment>
                   ))}
                 </ol>
               )}
@@ -241,55 +211,10 @@ export function Today({ day: chosen, go, serverNow }: { day?: string; go: (v: Vi
             <SyncLine />
           </div>
 
-          {/* Mobile Day Map (placed right below the day's schedule on mobile so schedule items stay above the fold) */}
-          <section
-            aria-label="Mobile day map"
-            className="flex flex-col gap-3 rounded-3xl border border-line bg-surface p-4 shadow-lift lg:hidden"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="flex size-8 items-center justify-center rounded-xl bg-accent-soft text-accent">
-                  <Icon name="pin" className="size-4" />
-                </span>
-                <div>
-                  <h2 className="text-sm font-extrabold">{weekday(day)} Map</h2>
-                  <p className="text-xs text-muted">
-                    {ticketRow?.item.place?.name || stay?.place?.name || trip.destination}
-                  </p>
-                </div>
-              </div>
-              <a
-                href={
-                  routeUrl(
-                    rows.map((r) => r.item),
-                    trip,
-                  ) ?? mapsSearchUrl(ticketRow?.item.place?.name || stay?.place?.name || trip.destination)
-                }
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line bg-sunken px-3 text-xs font-bold text-accent hover:bg-accent-soft"
-              >
-                Google Maps
-                <Icon name="external" className="size-3.5" />
-              </a>
-            </div>
-            <div className="h-44 w-full overflow-hidden rounded-2xl border border-line bg-[#0d1324]">
-              <iframe
-                src={mapsEmbedUrl(
-                  ticketRow?.item.place?.address ||
-                    ticketRow?.item.place?.name ||
-                    stay?.place?.address ||
-                    stay?.place?.name ||
-                    trip.destination,
-                  12,
-                )}
-                title={`Mobile Google Map for ${formatDay(day)}`}
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                className="size-full border-0 [filter:invert(90%)_hue-rotate(180deg)_brightness(95%)_contrast(92%)]"
-              />
-            </div>
-          </section>
+          {/* The day's map on phones and tablets: below the schedule so it stays above the fold. */}
+          <div className="rounded-3xl border border-line bg-surface p-4 shadow-lift lg:hidden">
+            <TripMap variant="day" day={day} go={go} />
+          </div>
         </div>
       </div>
     </div>
@@ -417,6 +342,7 @@ function Tonight({
 }) {
   const { trip } = useTrip();
   const copy = useCopy();
+  const [driver, setDriver] = useState(false);
   if (last) return null;
   if (!stay) {
     return (
@@ -457,13 +383,14 @@ function Tonight({
         </span>
         <Icon name="chevronRight" className="mt-1 size-4 text-muted" />
       </button>
-      {(dir || stay.booking?.confirmation) && (
+      {(dir || stay.booking?.confirmation || stay.place?.address || stay.place?.name) && (
         <div className="mt-3 flex flex-wrap gap-2 pl-9">
           {dir && (
             <ActionChip icon="directions" href={dir}>
               Directions
             </ActionChip>
           )}
+          <DriverChip item={stay} onOpen={() => setDriver(true)} />
           {stay.booking?.confirmation && (
             <ActionChip icon="copy" onClick={() => copy(stay.booking!.confirmation!, "Confirmation")}>
               {stay.booking.confirmation}
@@ -471,7 +398,30 @@ function Tonight({
           )}
         </div>
       )}
+      {driver && <DriverSheet item={stay} onClose={() => setDriver(false)} />}
     </section>
+  );
+}
+
+/** One tap to emergency numbers, the embassy and the stays' addresses for a driver. */
+function EssentialsLink({ onOpen }: { onOpen: () => void }) {
+  const { trip } = useTrip();
+  const e = trip.essentials;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex items-center gap-3 rounded-3xl border border-line bg-surface p-4 text-left shadow-lift transition-colors hover:bg-sunken"
+    >
+      <Icon name="compass" className="size-6 shrink-0 text-accent" />
+      <span className="min-w-0 flex-1">
+        <span className="block text-base font-bold">Trip essentials</span>
+        <span className="block text-sm text-muted">
+          {e?.emergency ? "Emergency numbers, embassy, entry rules, show to driver" : "Emergency numbers, embassy and more: not added yet"}
+        </span>
+      </span>
+      <Icon name="chevronRight" className="size-4 text-muted" />
+    </button>
   );
 }
 

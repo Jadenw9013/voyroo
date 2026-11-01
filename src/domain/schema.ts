@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { formatMinor, toMinor } from "./money";
 import { isDate, isTime, isZone } from "./time";
 
 /*
@@ -87,6 +88,27 @@ export const LinkSchema = z
 
 export const CheckItemSchema = z.object({ id: Id, text: Line.min(1), done: z.boolean() }).strict();
 
+export const VoteSchema = z.enum(["in", "maybe", "out"]);
+
+export const ReactionSchema = z.object({ by: FirstName, vote: VoteSchema.optional(), heart: z.literal(true).optional() }).strict();
+
+const Epoch = z.number().int().nonnegative();
+export const CommentText = z.string().trim().max(2000);
+
+/** A deleted comment keeps its place with no words; any other comment has some. */
+export const CommentSchema = z
+  .object({
+    id: Id,
+    by: FirstName,
+    text: CommentText,
+    at: Epoch,
+    editedAt: Epoch.optional(),
+    deletedAt: Epoch.optional(),
+    viaAssistant: z.literal(true).optional(),
+  })
+  .strict()
+  .refine((c) => (c.deletedAt === undefined ? c.text.length > 0 : c.text === ""), "A comment needs some words; a deleted one has none");
+
 export const ItemKindSchema = z.enum(["stay", "flight", "transport", "activity", "food", "other"]);
 
 export const ItemSchema = z
@@ -106,6 +128,8 @@ export const ItemSchema = z
     maybe: z.boolean().optional(),
     sleepsHere: z.boolean().optional(),
     peakM: z.number().int().positive().max(9000).optional(),
+    reactions: z.array(ReactionSchema).max(60).optional(),
+    comments: z.array(CommentSchema).max(300).optional(),
   })
   .strict();
 
@@ -118,6 +142,109 @@ export const TodoSchema = z
     itemId: Id.optional(),
     note: Line.optional(),
   })
+  .strict();
+
+const MAX_AMOUNT = 10_000_000;
+
+const unique = (names: string[]) => new Set(names.map((n) => n.toLowerCase())).size === names.length;
+
+export const SplitSchema = z
+  .discriminatedUnion("how", [
+    z.object({ how: z.literal("equal"), among: z.array(FirstName).min(1).max(30) }).strict(),
+    z.object({ how: z.literal("shares"), among: z.array(z.object({ name: FirstName, shares: z.number().positive().max(1000) }).strict()).min(1).max(30) }).strict(),
+    z.object({ how: z.literal("exact"), among: z.array(z.object({ name: FirstName, amount: z.number().nonnegative().max(MAX_AMOUNT) }).strict()).min(1).max(30) }).strict(),
+  ])
+  .refine((s) => unique(s.how === "equal" ? s.among : s.among.map((p) => p.name)), "Each person once in a split");
+
+export const FxSchema = z.object({ to: Currency, rate: z.number().positive().max(1e9), on: DateStr }).strict();
+
+const ExpenseFields = {
+  title: Short,
+  amount: z.number().positive("More than zero").max(MAX_AMOUNT),
+  currency: Currency,
+  paidBy: FirstName,
+  split: SplitSchema,
+  date: DateStr,
+};
+
+/** Set amounts must add up to the total, to the cent. */
+function splitAddsUp(e: { amount: number; currency: string; split: z.infer<typeof SplitSchema> }, ctx: z.RefinementCtx) {
+  if (e.split.how !== "exact") return;
+  const sum = e.split.among.reduce((s, p) => s + toMinor(p.amount, e.currency), 0);
+  const total = toMinor(e.amount, e.currency);
+  if (sum !== total) ctx.addIssue({ code: "custom", path: ["split"], message: `The split adds up to ${formatMinor(sum, e.currency)}, not ${formatMinor(total, e.currency)}` });
+}
+
+export const ExpenseSchema = z
+  .object({
+    id: Id,
+    ...ExpenseFields,
+    itemId: Id.optional(),
+    note: Line.optional(),
+    fx: FxSchema.optional(),
+    settlement: z.literal(true).optional(),
+    addedBy: FirstName.optional(),
+    addedAt: z.number().int().nonnegative(),
+  })
+  .strict()
+  .superRefine(splitAddsUp);
+
+export const PackCategorySchema = z.enum(["documents", "clothes", "toiletries", "health", "tech", "gear", "snacks", "other"]);
+
+const Quantity = z.number().int().min(1).max(99);
+
+export const PackEntrySchema = z
+  .object({
+    id: Id,
+    text: Line.min(1),
+    kind: z.enum(["shared", "personal"]),
+    owner: FirstName.optional(),
+    assignee: FirstName.optional(),
+    quantity: Quantity.optional(),
+    packedBy: z.array(FirstName).max(30).optional(),
+    itemId: Id.optional(),
+    category: PackCategorySchema.optional(),
+  })
+  .strict();
+
+const SourceSchema = z.object({ url: Url, title: Line.optional() }).strict();
+const EssentialsText = z.string().trim().max(2000);
+
+/** Emergency numbers, entry rules and the like: free text per topic, so the group can correct any of it. */
+export const EssentialsSchema = z
+  .object({
+    nationality: z.string().trim().max(60).optional(),
+    emergency: EssentialsText.optional(),
+    embassy: EssentialsText.optional(),
+    entry: EssentialsText.optional(),
+    money: EssentialsText.optional(),
+    tipping: EssentialsText.optional(),
+    plugs: EssentialsText.optional(),
+    water: EssentialsText.optional(),
+    sources: z.array(SourceSchema).max(12).optional(),
+    draftedOn: DateStr.optional(),
+    checkedBy: FirstName.optional(),
+    checkedOn: DateStr.optional(),
+  })
+  .strict();
+
+/** Merges one level deep, like an item's place: only the keys given change, null removes one. */
+export const EssentialsPatch = z
+  .object({
+    nationality: z.string().trim().max(60).nullable(),
+    emergency: EssentialsText.nullable(),
+    embassy: EssentialsText.nullable(),
+    entry: EssentialsText.nullable(),
+    money: EssentialsText.nullable(),
+    tipping: EssentialsText.nullable(),
+    plugs: EssentialsText.nullable(),
+    water: EssentialsText.nullable(),
+    sources: z.array(SourceSchema).max(12).nullable(),
+    draftedOn: DateStr.nullable(),
+    checkedBy: FirstName.nullable(),
+    checkedOn: DateStr.nullable(),
+  })
+  .partial()
   .strict();
 
 export const TripSchema = z
@@ -135,8 +262,11 @@ export const TripSchema = z
     people: z.array(FirstName).max(30),
     cover: Url.or(z.string().regex(/^\/[\w./-]+$/)).optional(),
     notes: Text.optional(),
+    essentials: EssentialsSchema.optional(),
     items: z.array(ItemSchema).max(500),
     todos: z.array(TodoSchema).max(300),
+    expenses: z.array(ExpenseSchema).max(1000).optional(),
+    packing: z.array(PackEntrySchema).max(500).optional(),
   })
   .strict();
 
@@ -204,6 +334,22 @@ export const TodoPatch = z
   .strict()
   .refine((p) => Object.keys(p).length > 0, "No fields to change");
 
+/** Moving an entry between the shared list and someone's own sets kind, owner, assignee and packedBy together. */
+export const PackPatch = z
+  .object({
+    text: Line.min(1),
+    kind: z.enum(["shared", "personal"]),
+    owner: FirstName.nullable(),
+    assignee: FirstName.nullable(),
+    quantity: Quantity.nullable(),
+    packedBy: z.array(FirstName).max(30).nullable(),
+    itemId: Id.nullable(),
+    category: PackCategorySchema.nullable(),
+  })
+  .partial()
+  .strict()
+  .refine((p) => Object.keys(p).length > 0, "No fields to change");
+
 export const TripPatch = z
   .object({
     name: Short,
@@ -217,7 +363,22 @@ export const TripPatch = z
     people: z.array(FirstName).max(30),
     cover: z.string().max(2000).nullable(),
     notes: Text.nullable(),
+    essentials: EssentialsPatch.nullable(),
   })
+  .partial()
+  .strict()
+  .refine((p) => Object.keys(p).length > 0, "No fields to change");
+
+/* The split is replaced whole, never merged: "equal among three" and "Ana's exact Q300" don't mix. */
+export const ExpensePatch = z
+  .object({ ...ExpenseFields, itemId: Id.nullable(), note: Line.nullable(), fx: FxSchema.nullable() })
+  .partial()
+  .strict()
+  .refine((p) => Object.keys(p).length > 0, "No fields to change");
+
+/* Editing sets text and editedAt; deleting sets deletedAt and empties the text. */
+export const CommentPatch = z
+  .object({ text: CommentText, editedAt: Epoch.nullable(), deletedAt: Epoch.nullable() })
   .partial()
   .strict()
   .refine((p) => Object.keys(p).length > 0, "No fields to change");
@@ -240,8 +401,24 @@ export const OpSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("todo.add"), todo: TodoSchema, index }).strict(),
   z.object({ op: z.literal("todo.update"), id: Id, set: TodoPatch }).strict(),
   z.object({ op: z.literal("todo.remove"), id: Id }).strict(),
+  z.object({ op: z.literal("pack.add"), entry: PackEntrySchema, index }).strict(),
+  z.object({ op: z.literal("pack.update"), id: Id, set: PackPatch }).strict(),
+  // "I'll bring it" (who) or "Not me" (null). Refused if someone else already said they'd bring it.
+  z.object({ op: z.literal("pack.claim"), id: Id, who: FirstName.nullable() }).strict(),
+  // One person's tick, so two people packing at once don't overwrite each other.
+  z.object({ op: z.literal("pack.check"), id: Id, who: FirstName, packed: z.boolean() }).strict(),
+  z.object({ op: z.literal("pack.remove"), id: Id }).strict(),
   z.object({ op: z.literal("trip.update"), set: TripPatch }).strict(),
+  z.object({ op: z.literal("expense.add"), expense: ExpenseSchema, index }).strict(),
+  z.object({ op: z.literal("expense.update"), id: Id, set: ExpensePatch }).strict(),
+  z.object({ op: z.literal("expense.remove"), id: Id }).strict(),
+  // Votes and comments: each person changes only their own (see discuss.ts).
+  z.object({ op: z.literal("reaction.set"), itemId: Id, by: FirstName, vote: VoteSchema.nullable().optional(), heart: z.boolean().optional() }).strict(),
+  z.object({ op: z.literal("comment.add"), itemId: Id, comment: CommentSchema, index }).strict(),
+  z.object({ op: z.literal("comment.update"), itemId: Id, commentId: Id, set: CommentPatch }).strict(),
+  z.object({ op: z.literal("comment.remove"), itemId: Id, commentId: Id }).strict(),
 ]);
 
 export type Op = z.infer<typeof OpSchema>;
 export type ItemPatchT = z.infer<typeof ItemPatch>;
+export type ExpensePatchT = z.infer<typeof ExpensePatch>;

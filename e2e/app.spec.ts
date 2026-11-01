@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 const PHONE = { width: 390, height: 844 };
 
@@ -243,7 +244,12 @@ test("a saved post shows as a picture in Plan, Posts and opens in its own player
   await join(page);
   // Embedded players and pictures load from other sites; don't wait on them.
   await page.goto("/t/guatemala/item/activity-zipline", { waitUntil: "domcontentloaded" });
-  await page.getByLabel("Add a link").fill("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+  // Typed before the page finished loading, the link isn't seen: type it again until Add wakes up.
+  await expect(async () => {
+    await page.getByLabel("Add a link").fill("");
+    await page.getByLabel("Add a link").fill("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+    await expect(page.getByRole("button", { name: "Add", exact: true }).first()).toBeEnabled({ timeout: 1000 });
+  }).toPass();
   await page.getByRole("button", { name: "Add", exact: true }).first().click();
   await expect(page.getByRole("region", { name: "Saved posts" }).getByRole("button", { name: /^YouTube/ })).toBeVisible({ timeout: 15_000 });
 
@@ -271,4 +277,137 @@ test("reads up to ten booking screenshots at once and records each", async ({ pa
   await expect(list.getByText("Read 10 screenshots")).toBeVisible({ timeout: 60_000 });
   await expect(list.getByText(/Added “Test Posada \d+”/)).toHaveCount(10);
   await expect(list.getByRole("button", { name: "Open Test Posada 1", exact: true })).toBeVisible();
+});
+
+test("an edit the server holds back for confirmation waits on screen, survives a reload, and saves once confirmed", async ({ page }) => {
+  await join(page);
+  let first = true;
+  const sent: { confirmed?: boolean }[] = [];
+  await page.route("**/api/t/guatemala/ops", async (route) => {
+    const body = route.request().postDataJSON();
+    sent.push(body);
+    // As if someone booked what this edit touches while it was on its way.
+    if (first && !body.confirmed) {
+      first = false;
+      return route.fulfill({ status: 428, contentType: "application/json", body: JSON.stringify({ ok: false, error: "Someone booked this meanwhile.", needsConfirmation: true }) });
+    }
+    return route.continue();
+  });
+  await page.getByRole("button", { name: "Add or ask" }).click();
+  await page.keyboard.type("dinner fri 8 at casa heldback");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  const held = page.getByRole("region", { name: "Edits that need a look" });
+  await expect(held.getByText(/needs a confirmation\. Someone booked this meanwhile\./)).toBeVisible();
+  await page.reload();
+  await expect(held.getByText(/needs a confirmation/)).toBeVisible();
+  await held.getByRole("button", { name: "Confirm" }).click();
+  await expect(held).toHaveCount(0);
+  await expect.poll(async () => {
+    const body = await (await page.request.get("/api/t/guatemala")).json();
+    return body.trip.items.some((item: { title: string }) => /heldback/i.test(item.title));
+  }).toBe(true);
+  expect(sent.at(-1)?.confirmed).toBe(true);
+});
+
+test("an edit that hits server errors is kept and retried until it saves", async ({ page }) => {
+  await join(page);
+  let failures = 2;
+  await page.route("**/api/t/guatemala/ops", async (route) => {
+    if (failures-- > 0) return route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "Server trouble." }) });
+    return route.continue();
+  });
+  await page.getByRole("button", { name: "Add or ask" }).click();
+  await page.keyboard.type("dinner sat 7 at casa retried");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "1 edit waiting to sync." })).toBeVisible();
+  await expect.poll(async () => {
+    const body = await (await page.request.get("/api/t/guatemala")).json();
+    return body.trip.items.some((item: { title: string }) => /retried/i.test(item.title));
+  }, { timeout: 30_000 }).toBe(true);
+  await expect(page.getByRole("status").filter({ hasText: "waiting to sync" })).toHaveCount(0);
+});
+
+test("the trip map pins every placed item, filters by day, and places the rest", async ({ page, context }) => {
+  // Pins need no tiles: keep the tests off OpenFreeMap. The geocoder is the server's stub (GEOCODER=stub).
+  await page.route("https://tiles.openfreemap.org/**", (route) => route.abort());
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await join(page);
+  await tab(page, "Plan").click();
+  const map = page.getByRole("region", { name: "Trip map", exact: true });
+  await map.scrollIntoViewIfNeeded();
+  // The backfill places the seed trip's items (and anything earlier tests added); undecided places are left over.
+  await expect(map.getByText(/^\d{2,} places on the map/)).toBeVisible({ timeout: 30_000 });
+  await expect(map.locator(".maplibregl-canvas")).toBeVisible({ timeout: 30_000 });
+  const missing = map.getByRole("region", { name: "No location yet" });
+  await expect(missing.getByText("Transfer from GUA after landing")).toBeVisible();
+  await expect(missing.getByText(/Couldn't find “Seattle” on the map/)).toBeVisible();
+
+  // A day: its stops numbered in order, with the route drawn between them.
+  await map.getByRole("button", { name: "Thu 26", exact: true }).click();
+  await expect(map.getByRole("button", { name: "Thu 26", exact: true })).toHaveAttribute("aria-pressed", "true");
+  const first = map.getByRole("button", { name: /^1\. 10 AM · Check out: Lumina/ });
+  await expect(first).toBeVisible();
+  await expect(map.locator("[data-route-stops]")).toHaveAttribute("data-route-stops", /^[2-9]$/);
+
+  // Tap a pin: a card with the time, status, directions and the item; Escape returns to the pin.
+  await first.click();
+  const card = map.getByRole("region", { name: "Selected place" });
+  await expect(card.getByRole("heading", { name: "Check out: Lumina, AMATE Atitlán (Airbnb)" })).toBeFocused();
+  await expect(card.getByText("Thu Nov 26, 10:00 AM")).toBeVisible();
+  await expect(card.getByText("Booked")).toBeVisible();
+  await expect(card.getByRole("link", { name: "Directions" })).toHaveAttribute("href", /destination=14\.72459%2C-91\.25913/);
+  await page.keyboard.press("Escape");
+  await expect(card).toHaveCount(0);
+  await expect(first).toBeFocused();
+
+  // The list says the same thing as the map, for anyone who can't use the map.
+  await map.getByText("List of places").click();
+  await map.getByRole("list", { name: "On the map" }).getByRole("button", { name: /Jet skiing/ }).click();
+  await expect(card.getByRole("heading", { name: "Jet skiing" })).toBeVisible();
+  await card.getByRole("button", { name: "Open" }).click();
+  await expect(page).toHaveURL(/\/item\/activity-jet-ski$/);
+  await page.goBack();
+
+  // An address typed for something not on the map is found when it's saved, in the same change.
+  await map.getByRole("button", { name: "All", exact: true }).click();
+  await missing.getByRole("listitem").filter({ hasText: "Transfer from GUA after landing" }).getByRole("button", { name: "Add address" }).click();
+  const sheet = page.getByRole("dialog", { name: "Where is Transfer from GUA after landing?" });
+  await sheet.getByLabel("Address or Google Maps link").fill("Antigua Guatemala");
+  await sheet.getByRole("button", { name: "Save" }).click();
+  await expect(missing.getByText("Transfer from GUA after landing")).toHaveCount(0);
+  await expect.poll(async () => (await (await page.request.get("/api/t/guatemala")).json()).trip.items.find((i: { id: string }) => i.id === "transfer-arrival").place).toMatchObject({ address: "Antigua Guatemala", lat: 14.55861, lng: -90.73437 });
+
+  // Or a pin dropped by hand, full screen.
+  await missing.getByRole("listitem").filter({ hasText: "Arrival night hotel" }).getByRole("button", { name: "Drop a pin" }).click();
+  const full = page.getByRole("dialog", { name: "Trip map" });
+  await full.getByRole("button", { name: "Put the pin here" }).click({ timeout: 30_000 });
+  await expect(page.getByRole("status").filter({ hasText: "Pinned Arrival night hotel (name TBD) on the map" })).toBeVisible();
+  await expect.poll(async () => (await (await page.request.get("/api/t/guatemala")).json()).trip.items.find((i: { id: string }) => i.id === "lodging-nov24").place?.lat).toEqual(expect.any(Number));
+  // Escape steps back one thing at a time: the new pin's card, then the full-screen map.
+  await expect(full.getByRole("region", { name: "Selected place" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(full.getByRole("region", { name: "Selected place" })).toHaveCount(0);
+  await expect(full).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(full).toHaveCount(0);
+
+  // Offline, everything already on the phone still shows: the pins and the list.
+  await context.setOffline(true);
+  await tab(page, "Today").click();
+  await tab(page, "Plan").click();
+  await map.scrollIntoViewIfNeeded();
+  await expect(map.locator(".map-pin").first()).toBeVisible({ timeout: 15_000 });
+  await expect(map.getByText(/^\d+ places on the map/)).toBeVisible();
+  await context.setOffline(false);
+
+  for (const theme of ["light", "dark"] as const) {
+    await page.evaluate((t) => localStorage.setItem("trip-theme", t), theme);
+    await page.reload();
+    await map.scrollIntoViewIfNeeded();
+    await expect(map.locator(".map-pin").first()).toBeVisible({ timeout: 30_000 });
+    await map.locator(".map-pin button").first().click();
+    const r = await new AxeBuilder({ page }).include(".itinerary-view").withTags(["wcag2a", "wcag2aa"]).analyze();
+    const serious = r.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
+    expect(serious.map((v) => `${v.id}: ${v.nodes[0]?.target}`), `map (${theme})`).toEqual([]);
+  }
 });

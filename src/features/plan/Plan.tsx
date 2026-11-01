@@ -1,9 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { dayRows, ideas, nightOf, stayOn, toBook, tripDays } from "@/domain/derive";
-import { directionsUrl, itemPhotoUrl, mapsEmbedUrl, mapsSearchUrl, routeUrl, tripCoverUrl } from "@/domain/links";
+import { mostWanted } from "@/domain/discuss";
+import { hasCoords } from "@/domain/geo";
+import { itemPhotoUrl, routeUrl, tripCoverUrl } from "@/domain/links";
 import { addDays, formatDay, formatRange, formatTime, monthDay, weekday } from "@/domain/time";
 import type { Item } from "@/domain/types";
 import type { PlanSection, View } from "@/client/router";
@@ -12,24 +14,27 @@ import { Avatar, KindChip, KIND_LABEL, StatusPill } from "@/ui/badges";
 import { Icon } from "@/ui/Icon";
 import { btn } from "@/ui/kit";
 import { useCompose } from "../composer/Composer";
+import { IdeaFooter, IdeaSort, type IdeaOrder } from "../decide/Decide";
+import { MapDialog, TripMap } from "../map/TripMap";
 import { PostGrid, postsOf } from "../posts/Posts";
 import { ItemRow } from "../shared";
+import { LegRow, useDayLegs } from "../travel/Travel";
 import { SyncLine } from "../SyncLine";
+import { DayWeatherLine, WeatherFootnote } from "../weather/DayWeather";
 import { PastePlan } from "./PastePlan";
 
 /**
  * Plan: redesigned Voyroo trip dashboard with hero cover banner, stat cards,
- * two-column itinerary + interactive Google Maps/saved/bookings widgets, and Ask Voyroo assistant bar.
+ * two-column itinerary + trip map/saved/bookings widgets, and Ask Voyroo assistant bar.
  */
 export function Plan({ section = "days", go, onShare }: { section?: PlanSection; go: (v: View) => void; onShare?: () => void }) {
   const { trip, me, apply } = useTrip();
   const compose = useCompose();
   const [pasting, setPasting] = useState(false);
   const [askText, setAskText] = useState("");
-  const [mapTab, setMapTab] = useState<"map" | "stops">("map");
-  const [activeStop, setActiveStop] = useState<string | null>(null);
-  const [mobileMapOpen, setMobileMapOpen] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [ideaSort, setIdeaSort] = useState<IdeaOrder>("added");
   const open = (item: Item) => go({ tab: "item", itemId: item.id });
   const saved = ideas(trip);
   const posts = postsOf(trip);
@@ -57,29 +62,7 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
     .filter((item, index, arr) => arr.findIndex((x) => x.id === item.id) === index)
     .slice(0, 6);
 
-  // All unique stops across trip items
-  const allStopNames = Array.from(
-    new Set(
-      [
-        ...trip.items.map((i) => i.place?.name || i.place?.address || (i.kind === "stay" ? i.title : null)).filter((x): x is string => !!x),
-        trip.destination,
-      ].filter(Boolean),
-    ),
-  );
-  const mapStops = allStopNames.slice(0, 3);
-
-  const activeMapQuery = activeStop
-    ? activeStop.toLowerCase().includes(trip.destination.toLowerCase())
-      ? activeStop
-      : `${activeStop}, ${trip.destination}`
-    : trip.destination;
-  const embedSrc = mapsEmbedUrl(activeMapQuery, activeStop ? 13 : 9);
-
-  const fullRoute =
-    routeUrl(
-      trip.items.filter((i) => i.start && i.place).slice(0, 6),
-      trip,
-    ) ?? mapsSearchUrl(trip.destination);
+  const pinned = trip.items.filter((i) => hasCoords(i.place)).length;
 
   return (
     <div className="itinerary-view flex flex-col gap-4 px-3 pt-2.5 sm:gap-5 sm:px-4 sm:pt-3 md:px-0">
@@ -184,15 +167,12 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
         <div className="grid grid-cols-5 gap-1.5 pt-0.5 sm:hidden">
           <button
             type="button"
-            onClick={() => {
-              setMobileMapOpen(false);
-              go({ tab: "plan", section: "days" });
-            }}
+            onClick={() => go({ tab: "plan", section: "days" })}
             className="flex flex-col items-center gap-1 text-center"
           >
             <span
               className={`relative flex size-12 items-center justify-center rounded-full border transition-colors ${
-                section === "days" && !mobileMapOpen
+                section === "days"
                   ? "border-accent bg-accent text-on-accent shadow-lift"
                   : "border-line bg-k-flight-soft text-k-flight"
               }`}
@@ -207,19 +187,14 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
 
           <button
             type="button"
-            onClick={() => setMobileMapOpen((v) => !v)}
+            onClick={() => setMapOpen(true)}
+            aria-haspopup="dialog"
             className="flex flex-col items-center gap-1 text-center"
           >
-            <span
-              className={`relative flex size-12 items-center justify-center rounded-full border transition-colors ${
-                mobileMapOpen
-                  ? "border-accent bg-accent text-on-accent shadow-lift"
-                  : "border-line bg-k-activity-soft text-k-activity"
-              }`}
-            >
-              <Icon name="pin" className="size-5" />
+            <span className="relative flex size-12 items-center justify-center rounded-full border border-line bg-k-activity-soft text-k-activity transition-colors">
+              <Icon name="map" className="size-5" />
               <span className="tnum absolute -top-1 -right-1 rounded-full bg-surface px-1.5 py-0.2 text-[10px] font-extrabold text-ink ring-1 ring-line">
-                {allStopNames.length}
+                {pinned}
               </span>
             </span>
             <span className="truncate text-[11px] font-semibold text-ink">Map</span>
@@ -241,10 +216,7 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
 
           <button
             type="button"
-            onClick={() => {
-              setMobileMapOpen(false);
-              go({ tab: "plan", section: "ideas" });
-            }}
+            onClick={() => go({ tab: "plan", section: "ideas" })}
             className="flex flex-col items-center gap-1 text-center"
           >
             <span
@@ -266,10 +238,7 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
 
           <button
             type="button"
-            onClick={() => {
-              setMobileMapOpen(false);
-              go({ tab: "plan", section: "posts" });
-            }}
+            onClick={() => go({ tab: "plan", section: "posts" })}
             className="flex flex-col items-center gap-1 text-center"
           >
             <span
@@ -391,72 +360,11 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
 
       {pasting && <PastePlan onClose={() => setPasting(false)} />}
 
-      {/* Mobile Instant Interactive Map Drawer (toggled by the Map circle icon above) */}
-      {mobileMapOpen && (
-        <section
-          aria-label="Mobile trip route map"
-          className="flex flex-col gap-3 rounded-3xl border border-accent/40 bg-[#0f1528] p-3.5 text-[#f2f4fc] shadow-lift sm:hidden"
-        >
-          <div className="flex items-center justify-between gap-2">
-            <div className="inline-flex rounded-full border border-white/10 bg-[#13182b] p-1 text-xs font-bold">
-              <button
-                type="button"
-                onClick={() => setMapTab("map")}
-                className={`rounded-full px-3 py-1 transition-colors ${
-                  mapTab === "map" ? "bg-[#5b21b6] text-white" : "text-[#9ca6c7]"
-                }`}
-              >
-                Map
-              </button>
-              <button
-                type="button"
-                onClick={() => setMapTab("stops")}
-                className={`rounded-full px-3 py-1 transition-colors ${
-                  mapTab === "stops" ? "bg-[#5b21b6] text-white" : "text-[#9ca6c7]"
-                }`}
-              >
-                Stops ({allStopNames.length})
-              </button>
-            </div>
-            <button
-              type="button"
-              onClick={() => setMobileMapOpen(false)}
-              className="inline-flex min-h-8 items-center gap-1 rounded-full bg-white/10 px-2.5 text-xs font-semibold text-white"
-            >
-              Close
-            </button>
-          </div>
-          <div className="relative h-52 w-full overflow-hidden rounded-2xl border border-white/10 bg-[#0d1324]">
-            <iframe
-              key={`mob-${embedSrc}`}
-              src={embedSrc}
-              title={`Mobile Google Map of ${activeMapQuery}`}
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-              className="size-full border-0 [filter:invert(90%)_hue-rotate(180deg)_brightness(95%)_contrast(92%)]"
-            />
-          </div>
-          <div className="no-scrollbar flex gap-1.5 overflow-x-auto pb-0.5">
-            {allStopNames.map((stop) => {
-              const selected = activeStop === stop;
-              return (
-                <button
-                  key={stop}
-                  type="button"
-                  onClick={() => setActiveStop(selected ? null : stop)}
-                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold ${
-                    selected
-                      ? "border-[#a78bfa] bg-[#5b21b6] text-white"
-                      : "border-white/15 bg-[#13182b] text-white"
-                  }`}
-                >
-                  <Icon name="pin" className="size-3 text-[#a78bfa]" />
-                  <span>{stop}</span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
+      {/* Phones: the Map button opens the trip map full screen. */}
+      {mapOpen && (
+        <MapDialog onClose={() => setMapOpen(false)}>
+          <TripMap variant="plan" go={go} fullScreen onClose={() => setMapOpen(false)} />
+        </MapDialog>
       )}
 
       {/* Mobile Top Saved Places Horizontal Swipeable Strip (matching phone mockup in reference image) */}
@@ -588,6 +496,7 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
                 {visibleDays.map((d) => (
                   <Day key={d} date={d} last={d === (days.at(-1) ?? trip.endDate)} onOpen={open} onAdd={() => compose({ day: d })} />
                 ))}
+                <WeatherFootnote />
                 {!selectedDay && (
                   <button
                     type="button"
@@ -612,11 +521,14 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
                     Nothing saved without a day. Type something with no day in the + box, or paste a link.
                   </p>
                 ) : (
-                  <ul className="divide-y divide-line">
-                    {saved.map((i) => (
-                      <ItemRow key={i.id} item={i} onOpen={() => open(i)} />
-                    ))}
-                  </ul>
+                  <>
+                    {saved.length > 1 && <IdeaSort value={ideaSort} onChange={setIdeaSort} />}
+                    <ul className="divide-y divide-line">
+                      {(ideaSort === "wanted" ? mostWanted(saved) : saved).map((i) => (
+                        <ItemRow key={i.id} item={i} onOpen={() => open(i)} footer={<IdeaFooter item={i} onOpen={() => open(i)} />} />
+                      ))}
+                    </ul>
+                  </>
                 )}
                 <button type="button" onClick={() => compose({})} className={`${btn.quiet} mt-2 -ml-3`}>
                   <Icon name="plus" />
@@ -716,157 +628,11 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
           <SyncLine />
         </div>
 
-        {/* Right Column: Map Card, Top Saved Places, and Bookings */}
+        {/* Right Column: Trip map, Top Saved Places, and Bookings */}
         <aside aria-label="Trip overview widgets" className="flex min-w-0 flex-col gap-6">
-          {/* Interactive Google Maps & Route Stops Card */}
-          <section
-            aria-label="Trip route map"
-            className="relative flex flex-col gap-3.5 overflow-hidden rounded-3xl border border-line bg-[#0f1528] p-4 text-[#f2f4fc] shadow-lift sm:p-5"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <div
-                role="tablist"
-                aria-label="Map view mode"
-                className="inline-flex rounded-full border border-white/10 bg-[#13182b] p-1 text-xs font-bold"
-              >
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={mapTab === "map"}
-                  onClick={() => setMapTab("map")}
-                  className={`rounded-full px-3.5 py-1 transition-colors ${
-                    mapTab === "map" ? "bg-[#5b21b6] text-white" : "text-[#9ca6c7] hover:text-white"
-                  }`}
-                >
-                  Map
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={mapTab === "stops"}
-                  onClick={() => setMapTab("stops")}
-                  className={`rounded-full px-3.5 py-1 transition-colors ${
-                    mapTab === "stops" ? "bg-[#5b21b6] text-white" : "text-[#9ca6c7] hover:text-white"
-                  }`}
-                >
-                  Stops ({allStopNames.length})
-                </button>
-              </div>
-              <a
-                href={fullRoute}
-                target="_blank"
-                rel="noreferrer"
-                aria-label="Open route in Google Maps"
-                className="flex size-9 items-center justify-center rounded-full border border-white/10 bg-[#13182b] text-white transition-colors hover:bg-[#1f2742]"
-              >
-                <Icon name="external" className="size-4" />
-              </a>
-            </div>
-
-            {mapTab === "map" ? (
-              <div className="relative h-56 w-full overflow-hidden rounded-2xl border border-white/10 bg-[#0d1324]">
-                <iframe
-                  key={embedSrc}
-                  src={embedSrc}
-                  title={`Google Map of ${activeMapQuery}`}
-                  loading="lazy"
-                  referrerPolicy="no-referrer-when-downgrade"
-                  className="size-full border-0 [filter:invert(90%)_hue-rotate(180deg)_brightness(95%)_contrast(92%)]"
-                />
-
-                {/* Interactive Stop Pin Overlay Pills */}
-                <div className="pointer-events-none absolute inset-x-2.5 bottom-2.5 flex flex-col items-start gap-1.5">
-                  {mapStops.map((stop, idx) => {
-                    const selected = activeStop === stop;
-                    return (
-                      <button
-                        key={stop}
-                        type="button"
-                        onClick={() => setActiveStop(selected ? null : stop)}
-                        style={{ marginLeft: `${idx * 12}px` }}
-                        className={`pointer-events-auto inline-flex max-w-[92%] items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold shadow-lift backdrop-blur-md transition-colors ${
-                          selected
-                            ? "border-[#a78bfa] bg-[#5b21b6] text-white"
-                            : "border-white/15 bg-[#13182b]/90 text-white hover:bg-[#1f2742]"
-                        }`}
-                      >
-                        <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-[#8b5cf6] text-[10px] text-white">
-                          <Icon name="pin" className="size-2.5" />
-                        </span>
-                        <span className="truncate">{stop}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <ul className="flex max-h-56 flex-col gap-2 overflow-y-auto pr-1">
-                {allStopNames.map((stop, idx) => {
-                  const stopQuery = stop.toLowerCase().includes(trip.destination.toLowerCase())
-                    ? stop
-                    : `${stop}, ${trip.destination}`;
-                  return (
-                    <li
-                      key={stop}
-                      className="flex items-center justify-between gap-2 rounded-2xl border border-white/10 bg-[#161c33] px-3 py-2 text-xs"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveStop(stop);
-                          setMapTab("map");
-                        }}
-                        className="flex min-w-0 flex-1 items-center gap-2.5 text-left font-bold text-white hover:text-[#c4b5fd]"
-                      >
-                        <span className="tnum flex size-5 shrink-0 items-center justify-center rounded-full bg-[#5b21b6] text-[11px] text-white">
-                          {idx + 1}
-                        </span>
-                        <span className="truncate">{stop}</span>
-                      </button>
-                      <a
-                        href={mapsSearchUrl(stopQuery)}
-                        target="_blank"
-                        rel="noreferrer"
-                        aria-label={`Open ${stop} in Google Maps`}
-                        className="shrink-0 rounded-lg border border-white/10 bg-[#1f2742] px-2.5 py-1 font-semibold text-[#c4b5fd] hover:bg-[#2a3558]"
-                      >
-                        Maps ↗
-                      </a>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-
-            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#cbd5f5]">
-              <div className="flex min-w-0 items-center gap-2">
-                <Icon name="pin" className="size-3.5 shrink-0 text-[#a78bfa]" />
-                <span className="truncate font-semibold">{activeStop ?? trip.destination}</span>
-                {activeStop && (
-                  <button
-                    type="button"
-                    onClick={() => setActiveStop(null)}
-                    className="rounded-md bg-white/10 px-1.5 py-0.5 text-[11px] font-semibold text-white hover:bg-white/20"
-                  >
-                    Reset
-                  </button>
-                )}
-              </div>
-              <div className="flex items-center gap-3">
-                <a
-                  href={directionsUrl({ name: activeStop ?? trip.destination }, trip) ?? fullRoute}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-bold text-[#93c5fd] hover:underline"
-                >
-                  Directions
-                </a>
-                <a href={fullRoute} target="_blank" rel="noreferrer" className="font-bold text-[#c4b5fd] hover:underline">
-                  Open full map →
-                </a>
-              </div>
-            </div>
-          </section>
+          <div className="rounded-3xl border border-line bg-surface p-4 shadow-lift sm:p-5">
+            <TripMap variant="plan" go={go} />
+          </div>
 
           {/* Top Saved Places Card (Desktop sidebar; mobile uses the horizontal carousel above) */}
           <section className="hidden flex-col gap-4 rounded-3xl border border-line bg-surface p-5 shadow-lift lg:flex">
@@ -970,6 +736,7 @@ export function Plan({ section = "days", go, onShare }: { section?: PlanSection;
 function Day({ date, last, onOpen, onAdd }: { date: string; last: boolean; onOpen: (i: Item) => void; onAdd: () => void }) {
   const { trip } = useTrip();
   const rows = dayRows(trip, date);
+  const legs = useDayLegs(date);
   const stay = last ? null : stayOn(trip, date);
   const n = stay ? nightOf(stay, date) : null;
   const route = routeUrl(
@@ -1003,6 +770,7 @@ function Day({ date, last, onOpen, onAdd }: { date: string; last: boolean; onOpe
               </p>
             ))}
           {last && <p className="mt-1 text-sm text-muted">Travel home</p>}
+          <DayWeatherLine date={date} />
         </div>
         {route && (
           <a href={route} target="_blank" rel="noreferrer" className={`${btn.quiet} shrink-0 text-sm`}>
@@ -1014,7 +782,10 @@ function Day({ date, last, onOpen, onAdd }: { date: string; last: boolean; onOpe
       {rows.length > 0 && (
         <ol className="mt-2 flex flex-col gap-1.5">
           {rows.map((r) => (
-            <ItemRow key={r.key} row={r} item={r.item} onOpen={() => onOpen(r.item)} />
+            <Fragment key={r.key}>
+              <LegRow shown={legs.get(r.key)} />
+              <ItemRow row={r} item={r.item} onOpen={() => onOpen(r.item)} />
+            </Fragment>
           ))}
         </ol>
       )}

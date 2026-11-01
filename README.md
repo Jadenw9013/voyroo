@@ -26,7 +26,7 @@ Choose the **Voyroo logo** to return to your personal workspace. **New trip** op
 
 Open **Share trip** in the navigation:
 
-- **Create viewing link** creates a presentation that opens immediately without sign-up or a passcode. It shows the current itinerary, places, times and booking status, and supports printing. It does not grant editing access. Private notes, contacts and reservation confirmations are excluded.
+- **Create viewing link** creates a presentation that opens immediately without sign-up or a passcode. It shows the current itinerary, places, times, whether each thing is booked and how many people are going, and supports printing. It does not grant editing access. It never includes notes (the trip's or an item's: door codes, wifi), contacts, saved links, confirmation numbers, prices, who booked or runs what, checklists, to-dos or the group's names. The page is built from an allowlist of fields (`publicTrip` in `src/server/preview.ts`), so a new field stays private until it's added there.
 - An open preview checks for saved changes every 15 seconds while visible, and again when the viewer returns to the tab or reconnects. The existing page refreshes automatically without changing its layout or resetting scroll. Disabling a link also closes the itinerary in an open preview. A version-only endpoint checks the token on every request and never sends private trip data.
 - **Copy viewing link** copies the existing link. **Turn off viewing link** revokes it; creating another link afterward produces a new token. Viewing pages are not cached for offline use, so disabled links cannot be replayed from the offline page cache.
 - **Share invite / Copy invite** sends the group-editing invitation. New collaborators use the trip passcode; returning members use their remembered account.
@@ -75,10 +75,12 @@ Sign-in uses the [Google Auth Library](https://github.com/googleapis/google-auth
   - **Days:** every day in order, where you sleep each night, and a link that opens the day's route in Google Maps.
   - **Ideas:** things saved without a day yet.
   - **Posts:** every saved TikTok, Reel and YouTube video as a grid of pictures. Tap one to play it full screen in its own player, swipe through the rest, or open it in the app.
-- **To-do**: things still to book (with their booking link and **Mark as booked**, which asks for the confirmation number), what's missing (a night with no bed, the flight home), and the group's list.
+- **To-do**: things still to book (with their booking link and **Mark as booked**, which asks for the confirmation number), what's missing (a night with no bed, the flight home), and the group's list, with who's on each to-do and its note.
+  - **Packing** (`/todo/packing`): a **Shared** list of who brings what ("I'll bring it", then tick it packed) and **Mine**, your own list. Your own list shows only to you in the app, but it's saved in the trip like everything else, so it isn't a place for secrets. **Suggest from our plan** asks the assistant what the itinerary needs (a headlamp for the volcano hike, a dry bag for the boat) and shows a list to pick from; nothing is added until you choose. The button is hidden without `GEMINI_API_KEY`.
 - **Trip**: details, people, inviting someone, the passcode, trip notes (entry rules, money), costs, everything that's changed with **Undo**, and display settings: light, dark, **Sunlight** (black on white for reading outdoors) and large text.
 - **The + button**: one box for everything.
   - Type a plan ("dinner fri 7 at Sabe Rico") and it's added. It guesses AM or PM when you don't say, and shows the guess.
+  - Type "pack sunscreen" for your own packing list, or "bring speaker - Ben" for the shared one.
   - Paste a link (TikTok, Instagram, YouTube, Airbnb, Booking.com, Google Maps, anything) and it's saved to an item or as a new idea.
   - Ask a question and the assistant answers.
   - **Add bookings from screenshots:** choose up to 10 at once (confirmation emails, Airbnb, airline and tour bookings), or paste or drop them in. They're read one after another, and each shows what it recorded:
@@ -109,12 +111,35 @@ Sign-in uses the [Google Auth Library](https://github.com/googleapis/google-auth
 
 Pictures are kept on the phone by the service worker, so the grid still shows offline. The videos themselves need a connection.
 
+## Travel time between stops
+
+Between two stops on a day that both have coordinates, Today, the Plan and the item page ("From previous stop") show how to get from one to the next: "About 25 min drive · 12 km · Leave by 8:35 AM". Under 1.5 km it's a walk. When the gap is shorter than the trip plus ten minutes, it says so in words with a clock icon: "Tight: 40 min drive, 30 min gap". The first timed stop of a day also gets a line from where you slept. Nothing is drawn to or from a flight, out of a shuttle or boat (it carries you; its place is usually the pickup), or between untimed things whose order isn't known. Stops without coordinates just have no line.
+
+Road times come from [openrouteservice](https://openrouteservice.org) (HeiGIT, OpenStreetMap data). We compared:
+
+| Service | Key | Cost and limits | Fit |
+|---|---|---|---|
+| OSRM demo server | None | Free, 1 request a second, non-commercial, no uptime promise | Not meant for apps |
+| FOSSGIS OSRM / Valhalla | None | Free, 1 request a second, a single donated server, high-traffic sites not allowed | Not meant for apps |
+| **openrouteservice** | **Free key** | **2,000 routes a day, 40 a minute; drive and walk; OpenStreetMap data (ODbL), so results can be kept with attribution** | **Chosen** |
+| Google Routes API | Key and a billing account | About 10,000 free a month, then about $5 per 1,000; the terms limit caching | Can't be kept on the phone for offline |
+
+The first three share OpenStreetMap's roads, which cover Guatemala's highways and the towns around Antigua, Atitlán and the capital; Google adds live traffic, which this kind of trip rarely needs. Boats across the lake aren't roads: add the boat as a transport item and no drive is drawn after it.
+
+- The key is `OPENROUTESERVICE_API_KEY`, read on the server only (get one free at [account.heigit.org](https://account.heigit.org)). Without it, phones show a straight-line guess marked "(estimate)", and the item page says why.
+- `GET /api/t/{id}/routes` works out the legs from the stored trip, so it can't be used to route anywhere else. Each (from, to, mode) is cached in Redis for 90 days ("no road" for 7). Lookups are limited to 150 per trip per hour and 1,500 a day for the whole site, under the free plan's 2,000.
+- The phone keeps every leg's route for the whole trip in localStorage (`trip:{id}:routes`), next to the trip, so the lines show with no signal.
+- `ROUTING_MOCK=1` (never in production) gives made-up road times with no network, for local testing and the browser tests.
+
 ## Privacy
 
 Each trip has its own link and a passcode the group shares. Joining asks for your first name and the passcode, and sets a cookie for that trip only. An editing invite alone doesn't open the trip. An explicitly enabled viewing link does open a limited itinerary for anyone who has it; it can be revoked in **Share trip**.
 
-- The original trip (`/t/guatemala`) takes its passcode from `TRIP_PASSCODE`, or from the first person to join.
-- Change the passcode under **Trip** → **Change passcode**. People already in stay in.
+- The original trip (`/t/guatemala`) takes its passcode from `TRIP_PASSCODE`, or from the first person to join. The name must be exactly `TRIP_PASSCODE`: a `TRIP_PASSPHRASE` variable (which some older deployments have) is not read. It only applies while the trip has no passcode stored yet.
+- Everyone who joins with the link and passcode is in the group, with or without Google. People who joined with Google get a check next to their name under **Trip**. Opening a trip never changes who's in it; removing someone is a logged change with **Undo**.
+- Change the passcode under **Trip** → **Change passcode**. It takes the current passcode; only the Google account that created the trip can leave it blank. Ten wrong tries lock it for 15 minutes. People already in stay in.
+- Things that cost money or reach other sites are rate limited per Google account, or per network address for guests: assistant messages, screenshot reading, link previews, new trips and picture lookups.
+- Item and cover pictures (`/api/photo`) are looked up only for someone with a trip or a valid viewing link; everyone else gets a stock picture. What's found is cached in Redis for every server, and every download goes through the same private-address guard as link previews.
 - Card numbers and CVV codes are stripped from anything saved. Confirmation numbers, phones and links are kept: that's what the app is for.
 - The assistant never sees confirmation numbers.
 
@@ -143,6 +168,14 @@ npm run import:eval             # reads the screenshots in evals/screenshots, as
 
 To click through the assistant without a key, run `CHAT_MOCK=1 npm run dev`. That uses a scripted stand-in (its places are made up and say so).
 
+## Weather and essentials
+
+**Weather** shows on Today and under each day of the Plan, in words as well as an icon: "Partly cloudy, 75° / 54°F, 30% chance of rain". Each day's weather is for where you sleep that night, else the day's first stop with coordinates, else (the day you fly home) where you slept the night before, else the trip's destination. Beyond the 16-day forecast it shows typical weather for those dates, averaged over the last 10 years and labelled **Typical** ("Usually 75° / 54°F, dry season"). °F or °C follows the group's home time zone until someone picks one under **Trip** → **Display**.
+
+The data comes from [Open-Meteo](https://open-meteo.com/): free for non-commercial use with no key, under CC BY 4.0, credited next to every forecast. The server calls it, never the phones: forecasts are cached 3 hours per place, typical weather 30 days, town lookups 30 days, and an hourly and daily budget keeps well inside the 10,000-calls-a-day free limit. Places with coordinates are used as they are; otherwise Open-Meteo's own geocoder finds the town. The last report is kept on the phone with the trip, so it shows offline with its "as of" time. `WEATHER=stub` answers from fixed numbers (tests); `WEATHER=off` turns it off; a commercial deploy sets `OPEN_METEO_API_KEY`.
+
+**Essentials** (Trip → Essentials, one tap from Today) holds emergency numbers, the nearest embassy or consulate for the group's passports, entry rules, money, tipping, plugs and tap water. **Draft with a web search** asks Gemini with Google Search grounding for a first draft; it's saved in the trip as ordinary, undoable, editable text with its sources and the date it was looked up. The card always says **Verify before you go**, and phone numbers only become tap-to-call after someone taps **I checked these**. **Show to driver** puts a stay's name and address in big type under "please take me to this address" in the local language (Spanish for Guatemala), with a copy button. Essentials never appear on the view-only link.
+
 ## How it works
 
 Read the architecture and the reasons behind it in [`docs/REBUILD-PLAN.md`](docs/REBUILD-PLAN.md). In short:
@@ -155,8 +188,9 @@ Read the architecture and the reasons behind it in [`docs/REBUILD-PLAN.md`](docs
 - **Offline first.**
   - The trip is kept in localStorage.
   - Edits show at once and wait in an outbox until there's a connection.
+  - An edit the server won't take as is is never dropped. One that touches something someone booked meanwhile waits as a card to confirm; one that can't apply waits as a card to retry or discard; server errors are retried with a growing wait (5 s up to 5 min), and after six tries the edit becomes a card too, so the edits behind it still go out (`src/client/outbox.ts`).
   - Moving between screens happens on the phone (`history.pushState`), so every screen opens with no signal. The service worker serves the trip's page when it can't reach the server.
-- **Storage.** Upstash Redis, one JSON document per trip with compare-and-set writes: `t:{id}:state`, `t:{id}:version`, `t:{id}:log`, `t:{id}:pass`, plus a `trips` index. The original v1 trip (`trip:v1:state`) is migrated on first read, so nothing typed on the old site is lost.
+- **Storage.** Upstash Redis, one JSON document per trip with compare-and-set writes: `t:{id}:state`, `t:{id}:version`, `t:{id}:log`, `t:{id}:pass`, `t:{id}:owner` (the Google account that created it), plus a `trips` index, `rl:*` rate-limit counters and `cache:photo:*` picture lookups. The original v1 trip (`trip:v1:state`) is migrated on first read, so nothing typed on the old site is lost.
 
 ```
 src/domain/     types, schemas, ops with inverses, derived views, quick-add parsing, v1 migration (pure, tested)
@@ -186,8 +220,11 @@ Private trip routes require a remembered account membership or a trip cookie fro
 | `POST /api/t/{id}/undo` | `{ entryId }`. Undoes that change on top of whatever happened since |
 | `GET /api/t/{id}/history` | The change log, newest first |
 | `POST /api/t/{id}/unfurl` | `{ url }`. A link's title, picture and kind |
+| `GET /api/t/{id}/routes` | `{ routes: { key: { s, m } \| null }, pending, provider }`. Road times for every leg on the trip, cached and rationed |
 | `GET /api/t/{id}/thumb` | `?item=&link=` a saved link's picture, or `?post=` a post's picture before saving (post links only) |
 | `POST /api/t/{id}/chat` | The assistant (AI SDK UI message stream) |
+| `GET /api/t/{id}/weather` | `{ asOf, days, years? }`: each remaining day's forecast or typical weather, in °C. Rate-limited per trip |
+| `POST /api/t/{id}/essentials` | `{ nationality }`. A web-search draft of the essentials with its sources; saves nothing. 10 a day per trip |
 | `POST /api/t/{id}/import` | `{ image, index, total }`. Reads one booking screenshot and records what it shows. One per request, so ten screenshots stay well under Vercel's 4.5 MB request limit |
 
 ## Product and branding
@@ -215,7 +252,7 @@ npm run summary      # the seed trip as the app sees it: nights, what's missing,
 
 1. Import the repo at vercel.com/new. Leave the build settings alone.
 2. Storage → Upstash for Redis → connect it. That sets `KV_REST_API_URL` and `KV_REST_API_TOKEN`.
-3. Settings → Environment Variables: `GEMINI_API_KEY`. Optionally also `SESSION_SECRET` and `TRIP_PASSCODE`.
+3. Settings → Environment Variables: `GEMINI_API_KEY`. Optionally also `SESSION_SECRET`, `TRIP_PASSCODE` and `OPENROUTESERVICE_API_KEY` (road times between stops).
 4. Redeploy. Environment variable changes only apply to new deployments.
 
 The first visit to `/t/guatemala` migrates the old trip if there is one, or seeds it from `src/data/trip.ts`.

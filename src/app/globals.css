@@ -1916,3 +1916,31 @@
     min-height: 80px;
   }
 }
+
+/* Trip map (MapLibre). Pins are buttons inside marker wrappers; the canvas
+   underneath takes the keyboard. Placing a pin by hand shows a crosshair. */
+.trip-map .maplibregl-canvas-container.map-picking,
+.trip-map .maplibregl-canvas-container.map-picking .maplibregl-canvas {
+  cursor: crosshair;
+}
+.map-pin {
+  cursor: pointer;
+}
+.map-pin:focus-within {
+  z-index: 4 !important;
+}
+.map-me {
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: var(--accent);
+  border: 3px solid var(--surface);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+:root[data-sunlight] .map-me {
+  box-shadow: 0 0 0 3px #000;
+}
+.trip-map .maplibregl-cooperative-gesture-screen {
+  font-family: var(--font-sans);
+  font-size: 1rem;
+}

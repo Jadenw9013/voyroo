@@ -5,7 +5,9 @@ import { useEffect, useState } from "react";
 import type { ChangeEntry } from "@/domain/change";
 import { costs } from "@/domain/derive";
 import { formatRange, formatTime, localParts, monthDay, zoneName } from "@/domain/time";
-import { useTheme, useSunlight, useTextSize, type Theme } from "@/client/prefs";
+import { defaultTempUnit } from "@/domain/weather";
+import { useTempUnit, useTheme, useSunlight, useTextSize, type Theme } from "@/client/prefs";
+import { useView } from "@/client/router";
 import { useTrip } from "@/client/store";
 import { Avatar } from "@/ui/badges";
 import { Icon } from "@/ui/Icon";
@@ -13,11 +15,14 @@ import { btn, field, label, SectionTitle } from "@/ui/kit";
 import { Sheet } from "@/ui/Sheet";
 import { money } from "../item/ItemPage";
 import { AccountPanel } from "../account/AccountPanel";
+import { Essentials } from "../essentials/Essentials";
+import { MoneyCard } from "../expenses/Expenses";
 import { ShareTrip } from "./ShareTrip";
 
-/** Trip: details, people and invites, trip-wide notes, costs, what changed, and display settings. */
-export function TripSettings() {
-  const { trip, me } = useTrip();
+/** Trip: essentials, details, people and invites, trip-wide notes, costs, what changed, and display settings. */
+export function TripSettings({ section }: { section?: "essentials" } = {}) {
+  const { trip, me, tripId } = useTrip();
+  const { go } = useView(tripId);
   const [editing, setEditing] = useState(false);
   const totals = costs(trip);
 
@@ -39,6 +44,8 @@ export function TripSettings() {
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
         <div className="flex flex-col gap-6">
+          <Essentials focus={section === "essentials"} />
+
           <div className="rounded-3xl border border-line bg-surface p-5 shadow-lift">
             <People />
           </div>
@@ -55,6 +62,7 @@ export function TripSettings() {
         </div>
 
         <div className="flex flex-col gap-6">
+          <MoneyCard go={go} />
           {totals.length > 0 && (
             <section className="rounded-3xl border border-line bg-surface p-5 shadow-lift">
               <SectionTitle>Costs</SectionTitle>
@@ -97,7 +105,7 @@ export function TripSettings() {
 }
 
 function People() {
-  const { trip, me, apply, setMe } = useTrip();
+  const { trip, me, apply, setMe, verified } = useTrip();
   const [renaming, setRenaming] = useState(false);
   const [passOpen, setPassOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -111,6 +119,12 @@ function People() {
           <li key={p} className="flex min-h-10 items-center gap-2 rounded-full border border-line bg-surface py-1 pr-1 pl-1 text-base font-semibold">
             <Avatar name={p} />
             {p}
+            {verified.includes(p) && (
+              <span title="Joined with Google" className="flex items-center text-accent">
+                <Icon name="check" className="size-4" />
+                <span className="sr-only">(joined with Google)</span>
+              </span>
+            )}
             {p === me ? (
               <button type="button" onClick={() => setRenaming(true)} className="min-h-9 rounded-full px-2 text-sm text-accent hover:bg-sunken">
                 (you) change
@@ -128,7 +142,7 @@ function People() {
           </li>
         ))}
       </ul>
-      <p className="mt-3 text-sm text-muted">Only users with valid Google accounts can join the planners group. Invite them below to collaborate.</p>
+      <p className="mt-3 text-sm text-muted">Everyone who joins with the link and passcode is in the group. A check means they joined with Google.</p>
       <div className="mt-3 flex flex-wrap gap-2">
         <button type="button" onClick={() => setSharing(true)} className={btn.primary}>
           <Icon name="share" />
@@ -200,7 +214,7 @@ function PasscodeSheet({ onClose }: { onClose: () => void }) {
         <label className={label}>
           Current passcode
           <input type="password" value={cur} onChange={(e) => setCur(e.target.value)} autoComplete="current-password" className={field} />
-          <span className="text-xs text-muted">If you’re signed in with Google, you can leave this blank.</span>
+          <span className="text-xs text-muted">If you made this trip while signed in with Google, you can leave this blank.</span>
         </label>
         <label className={label}>
           New passcode
@@ -285,6 +299,8 @@ function Display() {
   const [theme, setTheme] = useTheme();
   const [sun, setSun] = useSunlight();
   const [size, setSize] = useTextSize();
+  const { trip } = useTrip();
+  const [unit, setUnit] = useTempUnit(defaultTempUnit(trip));
   const seg = (on: boolean) => `min-h-10 flex-1 rounded-lg px-2 text-sm font-semibold ${on ? "bg-surface text-ink shadow-lift" : "text-muted"}`;
   return (
     <section className="flex flex-col gap-4">
@@ -307,6 +323,13 @@ function Display() {
         {(["normal", "large"] as const).map((s) => (
           <button key={s} type="button" role="radio" aria-checked={size === s} onClick={() => setSize(s)} className={`${seg(size === s)} ${s === "large" ? "text-base" : ""}`}>
             {s === "normal" ? "Normal text" : "Large text"}
+          </button>
+        ))}
+      </div>
+      <div className="flex gap-1 rounded-xl bg-sunken p-1" role="radiogroup" aria-label="Temperature">
+        {(["C", "F"] as const).map((u) => (
+          <button key={u} type="button" role="radio" aria-checked={unit === u} onClick={() => setUnit(u)} className={seg(unit === u)}>
+            {u === "C" ? "Celsius (°C)" : "Fahrenheit (°F)"}
           </button>
         ))}
       </div>

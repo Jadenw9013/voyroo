@@ -1,10 +1,11 @@
+import { formatMoney } from "./money";
 import type { Op } from "./schema";
 import { formatDay } from "./time";
-import type { CheckItem, Item, Link, Todo, Trip } from "./types";
+import type { CheckItem, Comment, Expense, Item, Link, PackEntry, Reaction, Todo, Trip } from "./types";
 
 export type { Op } from "./schema";
 
-export type OpErrorCode = "missing" | "duplicate" | "invalid" | "needs_confirmation";
+export type OpErrorCode = "missing" | "duplicate" | "invalid" | "needs_confirmation" | "forbidden";
 
 export class OpError extends Error {
   constructor(
@@ -51,12 +52,24 @@ function patchItem(prev: Item, set: Patch): Item {
   return next as unknown as Item;
 }
 
+/** Keys of the trip that merge one level deep, so two people correcting different lines both land. */
+const TRIP_NESTED = new Set(["essentials"]);
+
+function mergeOne(prev: Obj | undefined, set: Obj): Obj | undefined {
+  const merged: Obj = { ...prev };
+  for (const [k, v] of Object.entries(set)) {
+    if (v === null) delete merged[k];
+    else merged[k] = v;
+  }
+  return Object.keys(merged).length ? merged : undefined;
+}
+
 /** The patch that puts back whatever `set` is about to change. */
-function inversePatch(prev: Obj, set: Patch): Patch {
+function inversePatch(prev: Obj, set: Patch, nested = NESTED): Patch {
   const inv: Patch = {};
   for (const [k, v] of Object.entries(set)) {
     const before = prev[k];
-    if (NESTED.has(k) && v !== null && before !== undefined) {
+    if (nested.has(k) && v !== null && before !== undefined) {
       const sub: Obj = {};
       for (const sk of Object.keys(v as Obj)) sub[sk] = (before as Obj)[sk] ?? null;
       inv[k] = sub;
@@ -84,6 +97,33 @@ function findTodo(trip: Trip, id: string): { todo: Todo; index: number } {
   const index = trip.todos.findIndex((t) => t.id === id);
   if (index < 0) throw new OpError("missing", `No to-do "${id}". Someone may have removed it.`);
   return { todo: trip.todos[index], index };
+}
+
+function findExpense(trip: Trip, id: string): { expense: Expense; index: number; list: Expense[] } {
+  const list = trip.expenses ?? [];
+  const index = list.findIndex((e) => e.id === id);
+  if (index < 0) throw new OpError("missing", "That expense isn't on the trip any more. Someone may have removed it.");
+  return { expense: list[index], index, list };
+}
+
+/** No expenses left: no list at all, the way a trip from before expenses looks. */
+function withExpenses(trip: Trip, list: Expense[]): Trip {
+  const next: Trip = { ...trip, expenses: list };
+  if (!list.length) delete next.expenses;
+  return next;
+}
+
+function findPack(trip: Trip, id: string): { entry: PackEntry; index: number; list: PackEntry[] } {
+  const list = trip.packing ?? [];
+  const index = list.findIndex((p) => p.id === id);
+  if (index < 0) throw new OpError("missing", "That's no longer on the packing list. Someone may have removed it.");
+  return { entry: list[index], index, list };
+}
+
+function replacePack(trip: Trip, list: PackEntry[], index: number, entry: PackEntry): Trip {
+  const packing = list.slice();
+  packing[index] = entry;
+  return { ...trip, packing };
 }
 
 /** Applies one op. Returns the new trip and the ops that would undo it. Never mutates `trip`. */
@@ -205,13 +245,144 @@ export function applyOp(trip: Trip, op: Op): { trip: Trip; inverse: Op[] } {
       const { todo, index } = findTodo(trip, op.id);
       return { trip: { ...trip, todos: trip.todos.filter((t) => t.id !== op.id) }, inverse: [{ op: "todo.add", todo, index } as Op] };
     }
-    case "trip.update": {
-      const next: Obj = { ...trip };
+    case "pack.add": {
+      const list = trip.packing ?? [];
+      if (list.some((p) => p.id === op.entry.id)) throw new OpError("duplicate", "That's already on the packing list.");
+      return { trip: { ...trip, packing: insertAt(list, op.entry as PackEntry, op.index) }, inverse: [{ op: "pack.remove", id: op.entry.id }] };
+    }
+    case "pack.update": {
+      const { entry, index, list } = findPack(trip, op.id);
+      const next: Obj = { ...entry };
       for (const [k, v] of Object.entries(op.set)) {
         if (v === null) delete next[k];
         else next[k] = v;
       }
-      return { trip: next as unknown as Trip, inverse: [{ op: "trip.update", set: inversePatch(trip as unknown as Obj, op.set as Patch) } as Op] };
+      return {
+        trip: replacePack(trip, list, index, next as unknown as PackEntry),
+        inverse: [{ op: "pack.update", id: op.id, set: inversePatch(entry as unknown as Obj, op.set as Patch) } as Op],
+      };
+    }
+    case "pack.claim": {
+      const { entry, index, list } = findPack(trip, op.id);
+      if (entry.kind !== "shared") throw new OpError("invalid", "Only things on the shared list need someone to bring them.");
+      if (op.who && entry.assignee && entry.assignee !== op.who) throw new OpError("invalid", `${entry.assignee} is already bringing “${entry.text}”.`);
+      const next: PackEntry = { ...entry };
+      if (op.who) next.assignee = op.who;
+      else delete next.assignee;
+      return { trip: replacePack(trip, list, index, next), inverse: [{ op: "pack.claim", id: op.id, who: entry.assignee ?? null }] };
+    }
+    case "pack.check": {
+      const { entry, index, list } = findPack(trip, op.id);
+      if (entry.kind === "personal" && op.who !== entry.owner) throw new OpError("invalid", "Only its owner can tick something on their own list.");
+      const before = entry.packedBy ?? [];
+      const was = before.includes(op.who);
+      const packedBy = op.packed ? (was ? before : [...before, op.who]) : before.filter((n) => n !== op.who);
+      const next: PackEntry = { ...entry, packedBy };
+      if (!packedBy.length) delete next.packedBy;
+      return { trip: replacePack(trip, list, index, next), inverse: [{ op: "pack.check", id: op.id, who: op.who, packed: was }] };
+    }
+    case "pack.remove": {
+      const { entry, index, list } = findPack(trip, op.id);
+      const rest = list.filter((p) => p.id !== op.id);
+      const next: Trip = { ...trip, packing: rest };
+      if (!rest.length) delete next.packing;
+      return { trip: next, inverse: [{ op: "pack.add", entry, index } as Op] };
+    }
+    case "trip.update": {
+      const next: Obj = { ...trip };
+      for (const [k, v] of Object.entries(op.set)) {
+        const merged = TRIP_NESTED.has(k) && v !== null ? mergeOne(next[k] as Obj | undefined, v as Obj) : v;
+        if (merged === null || merged === undefined) delete next[k];
+        else next[k] = merged;
+      }
+      return { trip: next as unknown as Trip, inverse: [{ op: "trip.update", set: inversePatch(trip as unknown as Obj, op.set as Patch, TRIP_NESTED) } as Op] };
+    }
+    case "expense.add": {
+      const list = trip.expenses ?? [];
+      if (list.some((e) => e.id === op.expense.id)) throw new OpError("duplicate", "That expense is already logged.");
+      return { trip: withExpenses(trip, insertAt(list, op.expense as Expense, op.index)), inverse: [{ op: "expense.remove", id: op.expense.id }] };
+    }
+    case "expense.update": {
+      const { expense, index, list } = findExpense(trip, op.id);
+      const next: Obj = { ...expense };
+      for (const [k, v] of Object.entries(op.set)) {
+        if (v === null) delete next[k];
+        else next[k] = v;
+      }
+      const updated = list.slice();
+      updated[index] = next as unknown as Expense;
+      return {
+        trip: withExpenses(trip, updated),
+        inverse: [{ op: "expense.update", id: op.id, set: inversePatch(expense as unknown as Obj, op.set as Patch) } as Op],
+      };
+    }
+    case "expense.remove": {
+      const { expense, index, list } = findExpense(trip, op.id);
+      return { trip: withExpenses(trip, list.filter((e) => e.id !== op.id)), inverse: [{ op: "expense.add", expense, index } as Op] };
+    }
+    case "reaction.set": {
+      if (op.vote === undefined && op.heart === undefined) throw new OpError("invalid", "Nothing to change.");
+      const { item, index } = findItem(trip, op.itemId);
+      const list = item.reactions ?? [];
+      const ri = list.findIndex((r) => r.by === op.by);
+      const before = ri < 0 ? undefined : list[ri];
+      const vote = op.vote === undefined ? before?.vote : (op.vote ?? undefined);
+      const heart = op.heart === undefined ? !!before?.heart : op.heart;
+      const after: Reaction = { by: op.by, ...(vote ? { vote } : {}), ...(heart ? { heart: true as const } : {}) };
+      const reactions = !vote && !heart ? list.filter((r) => r.by !== op.by) : ri < 0 ? [...list, after] : list.map((r, i) => (i === ri ? after : r));
+      const next: Item = { ...item, reactions };
+      if (!reactions.length) delete next.reactions;
+      return {
+        trip: replaceItem(trip, index, next),
+        inverse: [
+          {
+            op: "reaction.set",
+            itemId: op.itemId,
+            by: op.by,
+            ...(op.vote !== undefined ? { vote: before?.vote ?? null } : {}),
+            ...(op.heart !== undefined ? { heart: !!before?.heart } : {}),
+          },
+        ],
+      };
+    }
+    case "comment.add": {
+      const { item, index } = findItem(trip, op.itemId);
+      const list = item.comments ?? [];
+      if (list.some((c) => c.id === op.comment.id)) throw new OpError("duplicate", "That comment is already there.");
+      return {
+        trip: replaceItem(trip, index, { ...item, comments: insertAt(list, op.comment as Comment, op.index) }),
+        inverse: [{ op: "comment.remove", itemId: op.itemId, commentId: op.comment.id }],
+      };
+    }
+    case "comment.update": {
+      const { item, index } = findItem(trip, op.itemId);
+      const list = item.comments ?? [];
+      const ci = list.findIndex((c) => c.id === op.commentId);
+      if (ci < 0) throw new OpError("missing", `That comment is no longer on "${item.title}".`);
+      const before = list[ci] as unknown as Obj;
+      const next: Obj = { ...before };
+      for (const [k, v] of Object.entries(op.set)) {
+        if (v === null) delete next[k];
+        else next[k] = v;
+      }
+      const deleted = next.deletedAt !== undefined;
+      if (deleted ? next.text !== "" : !next.text) throw new OpError("invalid", deleted ? "A deleted comment keeps no words." : "A comment needs some words.");
+      const updated = list.slice();
+      updated[ci] = next as unknown as Comment;
+      return {
+        trip: replaceItem(trip, index, { ...item, comments: updated }),
+        inverse: [{ op: "comment.update", itemId: op.itemId, commentId: op.commentId, set: inversePatch(before, op.set as Patch) } as Op],
+      };
+    }
+    case "comment.remove": {
+      const { item, index } = findItem(trip, op.itemId);
+      const list = item.comments ?? [];
+      const ci = list.findIndex((c) => c.id === op.commentId);
+      if (ci < 0) throw new OpError("missing", `That comment is no longer on "${item.title}".`);
+      const rest = list.filter((c) => c.id !== op.commentId);
+      const next: Item = { ...item, comments: rest };
+      if (!rest.length) delete next.comments;
+      return { trip: replaceItem(trip, index, next), inverse: [{ op: "comment.add", itemId: op.itemId, comment: list[ci], index: ci }] };
     }
   }
 }
@@ -312,14 +483,84 @@ export function describeOp(before: Trip, op: Op): string {
     }
     case "todo.remove":
       return `removed the to-do ${quote(before.todos.find((t) => t.id === op.id)?.text ?? "")}`;
+    // The history is the group's: what's on someone's own list never shows in it.
+    case "pack.add":
+      if (op.entry.kind === "personal") return "added to their own packing list";
+      return op.entry.assignee ? `put ${op.entry.assignee} down to bring ${quote(op.entry.text)}` : `added ${quote(op.entry.text)} to the packing list`;
+    case "pack.update": {
+      const entry = before.packing?.find((p) => p.id === op.id);
+      if (!entry) return "edited the packing list";
+      if (op.set.kind === "personal") return `moved ${quote(entry.text)} to their own list`;
+      if (entry.kind === "personal") return op.set.kind === "shared" ? `shared ${quote(op.set.text ?? entry.text)} with the group` : "edited their own packing list";
+      const keys = Object.keys(op.set);
+      if (keys.length === 1 && keys[0] === "assignee") return op.set.assignee ? `put ${op.set.assignee} down to bring ${quote(entry.text)}` : `took the bringer off ${quote(entry.text)}`;
+      return `edited ${quote(entry.text)} on the packing list`;
+    }
+    case "pack.claim": {
+      const text = quote(before.packing?.find((p) => p.id === op.id)?.text ?? "something");
+      return op.who ? `put ${op.who} down to bring ${text}` : `cleared who's bringing ${text}`;
+    }
+    case "pack.check": {
+      const entry = before.packing?.find((p) => p.id === op.id);
+      if (!entry || entry.kind === "personal") return op.packed ? "packed something on their own list" : "unpacked something on their own list";
+      return `${op.packed ? "packed" : "unpacked"} ${quote(entry.text)}`;
+    }
+    case "pack.remove": {
+      const entry = before.packing?.find((p) => p.id === op.id);
+      if (!entry || entry.kind === "personal") return "removed something from their own packing list";
+      return `removed ${quote(entry.text)} from the packing list`;
+    }
     case "trip.update":
+      if (Object.keys(op.set).every((k) => k === "essentials")) return op.set.essentials === null ? "cleared the trip essentials" : "updated the trip essentials";
       return "updated the trip details";
+    case "expense.add":
+      return describeExpense(op.expense as Expense);
+    case "expense.update": {
+      const e = before.expenses?.find((x) => x.id === op.id);
+      return e?.settlement ? `edited ${payment(e)}` : `edited the expense ${quote(e?.title ?? "")}`;
+    }
+    case "expense.remove": {
+      const e = before.expenses?.find((x) => x.id === op.id);
+      if (!e) return "removed an expense";
+      return e.settlement ? `removed ${payment(e)}` : `removed the expense ${quote(e.title)}`;
+    }
+    case "reaction.set": {
+      const t = itemTitle(op.itemId);
+      const parts: string[] = [];
+      if (op.vote !== undefined) parts.push(op.vote === "in" ? `is in for ${t}` : op.vote === "maybe" ? `is a maybe for ${t}` : op.vote === "out" ? `passed on ${t}` : `took back their vote on ${t}`);
+      if (op.heart !== undefined) parts.push(op.heart ? `hearted ${t}` : `took back their heart on ${t}`);
+      return parts.join(" and ");
+    }
+    case "comment.add":
+      return `commented on ${itemTitle(op.itemId)}`;
+    case "comment.update":
+      if (op.set.deletedAt) return `deleted a comment on ${itemTitle(op.itemId)}`;
+      if (op.set.deletedAt === null) return `restored a comment on ${itemTitle(op.itemId)}`;
+      return `edited a comment on ${itemTitle(op.itemId)}`;
+    case "comment.remove":
+      return `removed a comment from ${itemTitle(op.itemId)}`;
   }
 }
 
-/** Ids of items an op adds or changes, for highlighting and "Updated" markers. */
+const paidTo = (e: Expense) => (e.split.how === "equal" ? e.split.among : e.split.among.map((p) => p.name)).join(" and ");
+
+/** "the payment from Ana to Ben". */
+const payment = (e: Expense) => `the payment from ${e.paidBy} to ${paidTo(e)}`;
+
+/** "logged “Dinner”, Q420 paid by Ana" or, for paying back, "recorded Ana paid Ben Q350". */
+function describeExpense(e: Expense): string {
+  const amount = formatMoney(e.amount, e.currency);
+  if (e.settlement) return `recorded ${e.paidBy} paid ${paidTo(e)} ${amount}`;
+  return `logged ${quote(e.title)}, ${amount} paid by ${e.paidBy}`;
+}
+
+/** Ids of items (and expenses) an op adds or changes, for highlighting and "Updated" markers. */
 export function itemsTouched(op: Op): string[] {
   switch (op.op) {
+    case "expense.add":
+      return [op.expense.id];
+    case "expense.update":
+      return [op.id];
     case "item.add":
       return [op.item.id];
     case "item.update":
@@ -331,6 +572,10 @@ export function itemsTouched(op: Op): string[] {
     case "check.add":
     case "check.set":
     case "check.remove":
+    case "reaction.set":
+    case "comment.add":
+    case "comment.update":
+    case "comment.remove":
       return [op.itemId];
     default:
       return [];

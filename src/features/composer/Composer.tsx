@@ -5,7 +5,7 @@ import { tripDays } from "@/domain/derive";
 import { newId } from "@/domain/ids";
 import { classifyLink, postInfo } from "@/domain/links";
 import type { Op } from "@/domain/ops";
-import { parseLine, type Draft } from "@/domain/parse";
+import { parseLine, type Draft, type ExpenseDraft } from "@/domain/parse";
 import { addDays, formatDay, formatTime } from "@/domain/time";
 import type { Item, ItemKind, Link } from "@/domain/types";
 import { useClock } from "@/client/hooks";
@@ -15,9 +15,11 @@ import { Icon, LINK_ICON } from "@/ui/Icon";
 import { btn, field } from "@/ui/kit";
 import { Sheet } from "@/ui/Sheet";
 import { Assistant } from "../assistant/Assistant";
+import { ExpenseForm } from "../expenses/ExpenseForm";
 import { unfurl, type Preview } from "../links/unfurl";
 import { InstagramThumb, postThumbSrc } from "../posts/Posts";
-import { ImportProgress, ImportProvider, MAX_SCREENSHOTS, ScreenshotButton, useImport } from "./ScreenshotImport";
+import { PackPreview } from "../todo/Packing";
+import { ImportProgress, ImportProvider, MAX_SCREENSHOTS, ReceiptsToggle, ScreenshotButton, useImport } from "./ScreenshotImport";
 
 /*
  * The one box. Type a plan and it's added; paste a link and it's saved; ask
@@ -67,7 +69,7 @@ export function ComposerProvider({ children, serverNow }: { children: ReactNode;
 const KIND_WORD: Record<ItemKind, string> = { stay: "Place to stay", flight: "Flight", transport: "Getting around", activity: "Activity", food: "Food and drink", other: "Other" };
 
 function ComposerBody({ req, serverNow, onDone }: { req: ComposeRequest; serverNow: number; onDone: () => void }) {
-  const { trip, notify } = useTrip();
+  const { trip, notify, me } = useTrip();
   const { start } = useImport();
   const nowMs = useClock(serverNow);
   const [text, setText] = useState(req.text ?? "");
@@ -78,7 +80,7 @@ function ComposerBody({ req, serverNow, onDone }: { req: ComposeRequest; serverN
     if (left > 0) notify(`Reading the first ${MAX_SCREENSHOTS}. Add the other ${left} after.`);
   };
   const [asking, setAsking] = useState<string | null>(req.ask || req.itemId ? (req.text ?? "") : null);
-  const parsed = useMemo(() => parseLine(text, { trip, nowMs, day: req.day }), [text, trip, nowMs, req.day]);
+  const parsed = useMemo(() => parseLine(text, { trip, nowMs, day: req.day, me }), [text, trip, nowMs, req.day, me]);
 
   if (asking !== null) return <Assistant first={asking} itemId={req.itemId ?? null} day={req.day ?? null} />;
   if (manual) return (
@@ -135,10 +137,11 @@ function ComposerBody({ req, serverNow, onDone }: { req: ComposeRequest; serverN
         <div className="flex flex-col gap-1">
           <ScreenshotButton className="self-start" />
           <p className="text-sm text-muted">Up to {MAX_SCREENSHOTS} at once: confirmation emails, Airbnb, airline and tour bookings. Each one becomes a booking with its dates, confirmation number and address.</p>
+          <ReceiptsToggle />
         </div>
       )}
 
-      {parsed.type !== "item" && parsed.type !== "links" && (
+      {(parsed.type === "empty" || parsed.type === "ask") && (
         <button type="button" onClick={() => setManual(true)} className={`${btn.secondary} self-start`}>Add details manually</button>
       )}
       {parsed.type === "empty" && <Hints day={req.day ?? null} onPick={setText} onAsk={(t) => setAsking(t)} />}
@@ -152,6 +155,8 @@ function ComposerBody({ req, serverNow, onDone }: { req: ComposeRequest; serverN
         </div>
       )}
       {parsed.type === "item" && <ItemPreview draft={parsed.draft} kindHint={req.kind} onDone={onDone} onAsk={() => setAsking(text.trim())} />}
+      {parsed.type === "expense" && <ExpensePreview draft={parsed.draft} onDone={onDone} onAsk={() => setAsking(text.trim())} />}
+      {parsed.type === "pack" && <PackPreview draft={parsed.pack} onDone={onDone} onPlan={() => setManual(true)} />}
       {parsed.type === "links" && <LinkSaver urls={parsed.urls} rest={parsed.rest} itemId={req.itemId ?? null} day={req.day ?? null} onDone={onDone} />}
     </div>
   );
@@ -167,7 +172,7 @@ function Hints({ day, onPick, onAsk }: { day: string | null; onPick: (t: string)
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm text-muted">
-        Try <button type="button" className="font-semibold text-accent underline-offset-2 hover:underline" onClick={() => onPick("Sunrise hike sat 5am")}>“Sunrise hike sat 5am”</button>, paste a link from TikTok, Instagram or a booking site, or ask:
+        Try <button type="button" className="font-semibold text-accent underline-offset-2 hover:underline" onClick={() => onPick("Sunrise hike sat 5am")}>“Sunrise hike sat 5am”</button>, <button type="button" className="font-semibold text-accent underline-offset-2 hover:underline" onClick={() => onPick(`Taxi 80 ${trip.currency} split all`)}>“Taxi 80 {trip.currency} split all”</button> or <button type="button" className="font-semibold text-accent underline-offset-2 hover:underline" onClick={() => onPick("bring speaker - ")}>“bring speaker - Ben”</button>, paste a link from TikTok, Instagram or a booking site, or ask:
       </p>
       <ul className="flex flex-col gap-2">
         {asks.map((a) => (
@@ -310,6 +315,28 @@ function ItemPreview({ draft, kindHint, onDone, onAsk }: { draft: Draft; kindHin
           Ask instead
         </button>
       </div>
+    </div>
+  );
+}
+
+/** "dinner 420 GTQ paid by Ana split all": the expense as read, ready to log or adjust. */
+function ExpensePreview({ draft, onDone, onAsk }: { draft: ExpenseDraft; onDone: () => void; onAsk: () => void }) {
+  return (
+    <div className="flex flex-col gap-3 rounded-2xl border border-line bg-canvas p-4">
+      <p className="flex items-center gap-2 text-base font-semibold">
+        <Icon name="receipt" className="size-5 text-accent" />
+        An expense, split {draft.among.length === 1 ? `for ${draft.among[0]}` : `${draft.among.length} ways`}
+      </p>
+      {draft.unknown.length > 0 && (
+        <p className="text-sm font-semibold text-todo">
+          {draft.unknown.join(", ")} {draft.unknown.length === 1 ? "isn't" : "aren't"} in the group, so they&apos;re left out. Invite them from Trip, or pick someone below.
+        </p>
+      )}
+      <ExpenseForm start={draft} onDone={onDone} primaryId="composer-primary" autoFocus={false} />
+      <button type="button" onClick={onAsk} className={`${btn.quiet} self-start`}>
+        <Icon name="sparkles" />
+        Ask instead
+      </button>
     </div>
   );
 }

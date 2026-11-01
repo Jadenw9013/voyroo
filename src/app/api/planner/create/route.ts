@@ -5,7 +5,7 @@ import { stripCards, tripProblems } from "@/domain/change";
 import { PlannerSnapshotSchema, plannerProblems, plannerTrip } from "@/domain/planner";
 import { isZone } from "@/domain/time";
 import { hashPasscode, newTripId, readAccount, readSession, writeSession } from "@/server/auth";
-import { firstName, getStore, jsonError, readJson, sameSite } from "@/server/http";
+import { firstName, getStore, jsonError, rateLimit, readJson, sameSite } from "@/server/http";
 import { resolveContextualPhotoUrl } from "@/server/photos";
 
 const schema = z.object({ snapshot: PlannerSnapshotSchema, homeTz: z.string().refine(isZone), homeCurrency: z.string().regex(/^[A-Z]{3}$/) });
@@ -13,6 +13,8 @@ const schema = z.object({ snapshot: PlannerSnapshotSchema, homeTz: z.string().re
 export async function POST(request: Request) {
   const denied = sameSite(request);
   if (denied) return denied;
+  const limited = await rateLimit(request, "trips", 20, 3600, "That's a lot of new trips this hour. Try again later.");
+  if (limited) return limited;
   const body = await readJson(request, 100_000);
   if (!body.ok) return body.res;
   const parsed = schema.safeParse(JSON.parse(stripCards(JSON.stringify(body.body))));
@@ -41,7 +43,7 @@ export async function POST(request: Request) {
   const existing = await getStore().get(id);
   if (existing) return await readSession(id) ? NextResponse.json({ ok: true, id, passcode: null }) : jsonError(409, "This trip has already been saved. Open it from Your trips.");
   const passcode = randomBytes(9).toString("base64url");
-  if (!await getStore().create(trip, await hashPasscode(passcode))) return jsonError(409, "This trip is already being saved. Try again.");
+  if (!await getStore().create(trip, await hashPasscode(passcode), account?.id)) return jsonError(409, "This trip is already being saved. Try again.");
   await writeSession({ tripId: id, name });
   if (account) await getStore().setPlanner(account.id, "");
   return NextResponse.json({ ok: true, id, passcode }, { headers: { "Cache-Control": "no-store" } });

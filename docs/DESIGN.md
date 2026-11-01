@@ -41,12 +41,17 @@ Color never carries meaning alone:
 - every kind has its icon
 - every status pill has a mark and a word: ✓ Booked, ○ To book, ? Maybe
 - a missing night's amber dot comes with the words "nowhere to stay" for screen readers
+- a balance has an arrow and words: ↑ Gets back (ok), ↓ Owes (todo), ✓ Square (muted)
 
 **Sunlight** turns everything black on white with heavier type and outlined chips, and hides photos behind text.
 
 ## The bold elements
 
 Today's **Next** card is a ticket stub: marigold, a big tabular time, the title, a perforated edge, and under it the actions you need right then (Directions, Call, WhatsApp, the confirmation to copy). The other is **saved posts**: tall picture tiles in a three-column grid, like a profile, opening into a full-screen black viewer that plays the post. Everything else is plain lists with hairline dividers and small colored chips: no stacks of identical cards, no eyebrow labels, no decoration.
+
+## Deciding together
+
+Every item, ideas most of all, takes one tap per person: **I'm in** (thumbs up), **Maybe** (question mark), **Not for me** (thumbs down), and a heart. On the item page each answer has its word; in the Ideas list phones show the icon and count, with the word in the button's name. Your own answer is a filled button (pressed), never color alone, and tapping it again takes it back. Tallies name people for screen readers: "3 people are in: Ana, Ben, Cara". Ideas sort by **Most wanted** (most people in, then hearts, then maybes). A comment that's new on this phone carries a dot and the word "New". Only you change your vote or edit and delete your comments; the assistant reads the tallies and posts a comment when you ask, but never votes. None of it is on the view-only link.
 
 ## Layout
 

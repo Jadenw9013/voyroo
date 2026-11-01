@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { tripDays } from "@/domain/derive";
 import { newId } from "@/domain/ids";
-import { classifyLink, directionsUrl, extractUrls, hasContact, instagramUrl, isPost, itemPhotoUrl, mailUrl, mapsLink, placeEmbedUrl, telUrl, whatsappUrl } from "@/domain/links";
+import { classifyLink, directionsUrl, extractUrls, hasContact, instagramUrl, isPost, itemPhotoUrl, mailUrl, mapsLink, telUrl, whatsappUrl } from "@/domain/links";
 import type { Op } from "@/domain/ops";
 import type { ItemPatchT } from "@/domain/schema";
 import { formatDay, zoneName } from "@/domain/time";
@@ -15,9 +15,13 @@ import { Icon, LINK_ICON, type IconName } from "@/ui/Icon";
 import { ActionChip, btn, field, label, useCopy } from "@/ui/kit";
 import { Sheet, SheetAction } from "@/ui/Sheet";
 import { useCompose } from "../composer/Composer";
+import { Comments, GroupVotes } from "../decide/Decide";
+import { ItemExpenses } from "../expenses/ItemExpenses";
 import { unfurl } from "../links/unfurl";
+import { TripMap } from "../map/TripMap";
 import { PostGrid, thumbSrc } from "../posts/Posts";
 import { Marks, timeLabel, whenLabel } from "../shared";
+import { FromPrevious } from "../travel/Travel";
 
 type EditKind = "title" | "when" | "where" | "booking" | "contact" | "menu" | "delete" | null;
 
@@ -133,6 +137,8 @@ export function ItemPage({ itemId, back, go }: { itemId: string; back: () => voi
         </div>
       </div>
 
+      <GroupVotes item={item} />
+
       {posts.length > 0 && (
         <section aria-label="Saved posts" className="rounded-3xl border border-line bg-surface p-5 shadow-lift">
           <h2 className="mb-3 text-sm font-bold text-muted">
@@ -171,17 +177,7 @@ export function ItemPage({ itemId, back, go }: { itemId: string; back: () => voi
                   </button>
                 )}
               </div>
-              {placeEmbedUrl(item.place, trip) && (
-                <div className="h-44 w-full overflow-hidden rounded-2xl border border-line bg-[#0d1324]">
-                  <iframe
-                    src={placeEmbedUrl(item.place, trip)!}
-                    title={`Google Map of ${item.place.name || item.place.address || item.title}`}
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                    className="size-full border-0 [filter:invert(90%)_hue-rotate(180deg)_brightness(95%)_contrast(92%)]"
-                  />
-                </div>
-              )}
+              <TripMap variant="item" itemId={item.id} go={go} />
               <div className="flex flex-wrap items-center gap-4">
                 {mapsLink(item.place, trip) && (
                   <a href={mapsLink(item.place, trip)!} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-2 font-semibold text-accent">
@@ -201,6 +197,8 @@ export function ItemPage({ itemId, back, go }: { itemId: string; back: () => voi
             <Empty onClick={() => setEdit("where")}>Add an address or a Maps link</Empty>
           )}
         </Section>
+
+        <FromPrevious item={item} onOpen={(i) => go({ tab: "item", itemId: i.id })} />
 
         <Section title="Reservation" onEdit={() => setEdit("booking")}>
           <BookingState item={item} onSet={(state) => update(state === null ? { booking: null } : { booking: { state } })} />
@@ -249,6 +247,10 @@ export function ItemPage({ itemId, back, go }: { itemId: string; back: () => voi
           )}
         </Section>
 
+        <Section title="Expenses">
+          <ItemExpenses item={item} />
+        </Section>
+
         <Section title="Contact" onEdit={() => setEdit("contact")}>
           {hasContact(c) ? <ContactList contact={c} /> : <Empty onClick={() => setEdit("contact")}>Add a phone, WhatsApp or email</Empty>}
         </Section>
@@ -269,6 +271,8 @@ export function ItemPage({ itemId, back, go }: { itemId: string; back: () => voi
           <Who item={item} />
         </Section>
       </div>
+
+      <Comments item={item} />
 
       {edit === "title" && <TitleSheet item={item} onClose={() => setEdit(null)} />}
       {edit === "when" && <WhenSheet item={item} onClose={() => setEdit(null)} />}
@@ -293,6 +297,9 @@ export function ItemPage({ itemId, back, go }: { itemId: string; back: () => voi
                 setEdit(null);
                 const copyOf: Item = { ...structuredClone(item), id: newId("i"), title: `${item.title} (copy)`.slice(0, 200) };
                 delete copyOf.booking;
+                // A copy starts its own conversation: votes and comments stay with the original.
+                delete copyOf.reactions;
+                delete copyOf.comments;
                 void apply([{ op: "item.add", item: copyOf }], { message: "Duplicated" }).then((r) => r.ok && go({ tab: "item", itemId: copyOf.id }));
               }}
             >

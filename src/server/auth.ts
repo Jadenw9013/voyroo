@@ -114,6 +114,17 @@ export async function joinedTrips(): Promise<string[]> {
     });
 }
 
+/** Whether this browser is signed in with Google or has joined at least one trip. */
+export async function hasTripAccess(): Promise<boolean> {
+  if (await readAccount()) return true;
+  const jar = await cookies();
+  return jar.getAll().some((c) => {
+    if (!c.name.startsWith("trip_")) return false;
+    const s = decodeSession(c.value, c.name.slice(5));
+    return s !== null && !s.accountId;
+  });
+}
+
 export interface Account { id: string; name: string; email: string }
 export const ACCOUNT_COOKIE = "travel_account";
 

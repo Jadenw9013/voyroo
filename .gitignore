@@ -51,3 +51,6 @@ next-env.d.ts
 # benchmark runs against the real model (keep the context-size baselines)
 /bench/results/*
 !/bench/results/context-*.json
+
+# copied from node_modules at install (scripts/vendor-maplibre.mjs)
+/public/vendor/
