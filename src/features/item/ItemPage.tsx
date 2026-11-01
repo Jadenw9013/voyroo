@@ -13,6 +13,9 @@ import { useTrip } from "@/client/store";
 import { Avatar, KindChip } from "@/ui/badges";
 import { Icon, LINK_ICON, type IconName } from "@/ui/Icon";
 import { ActionChip, btn, field, label, useCopy } from "@/ui/kit";
+import { DriverChip, DriverSheet } from "../essentials/Driver";
+import { MarkBooked } from "../todo/Todo";
+import { liveComments, tally } from "@/domain/discuss";
 import { Sheet, SheetAction } from "@/ui/Sheet";
 import { useCompose } from "../composer/Composer";
 import { Comments, GroupVotes } from "../decide/Decide";
@@ -52,103 +55,62 @@ export function ItemPage({ itemId, back, go }: { itemId: string; back: () => voi
   const posts = (item.links ?? []).filter((l) => isPost(l.kind)).map((link) => ({ link, item }));
   const coverLink = posts.length ? undefined : item.links?.find((l) => l.image);
   const coverUrl = posts.length ? undefined : coverLink ? thumbSrc(trip.id, item.id, coverLink.id) : itemPhotoUrl(item, trip, 0);
+  // An idea is a question for the group, so what everyone thinks comes first; a planned thing leads with how to get there.
+  const idea = !item.start;
+  const votes = (
+    <div className="flex flex-col gap-6">
+      <GroupVotes item={item} />
+      <Comments item={item} />
+    </div>
+  );
 
   return (
-    <article className="flex flex-col gap-4 px-3 pt-2 pb-6 sm:px-4 md:px-0">
-      <div className="sticky top-16 z-20 flex items-center justify-between rounded-2xl border border-line bg-surface/90 px-3 py-1.5 backdrop-blur-xl">
-        <button type="button" onClick={back} className="flex min-h-10 items-center gap-1 rounded-xl px-2.5 text-base font-semibold text-accent hover:bg-sunken">
+    <article className="flex flex-col gap-6 px-4 pb-6 md:px-0">
+      <div className="sticky top-[env(safe-area-inset-top)] z-20 -mx-4 flex items-center justify-between border-b border-line bg-canvas px-2 py-1 md:top-[calc(4rem+env(safe-area-inset-top))] md:mx-0">
+        <button type="button" onClick={back} className="flex min-h-11 items-center gap-1 rounded-xl px-2 text-base font-semibold text-accent hover:bg-sunken">
           <Icon name="back" />
           Back
         </button>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setEdit("delete")}
-            aria-label="Delete this event"
-            title="Delete this event"
-            className="flex size-10 items-center justify-center rounded-xl text-muted hover:bg-danger/10 hover:text-danger"
-          >
-            <Icon name="trash" className="size-4" />
-          </button>
-          <button type="button" onClick={() => setEdit("menu")} aria-label="More actions" className="flex size-10 items-center justify-center rounded-xl hover:bg-sunken">
-            <Icon name="more" />
-          </button>
-        </div>
+        <button type="button" onClick={() => setEdit("menu")} aria-label="More actions" className="flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-base font-semibold text-ink hover:bg-sunken">
+          <Icon name="more" />
+          More
+        </button>
       </div>
 
-      <div className="overflow-hidden rounded-3xl border border-line bg-surface p-5 shadow-lift">
+      <header className="flex flex-col gap-3">
         {coverUrl && (
-          <div className="cover-photo -mx-5 -mt-5 mb-4 h-48 overflow-hidden bg-sunken">
+          <div className="cover-photo h-48 overflow-hidden rounded-2xl bg-sunken">
             {/* eslint-disable-next-line @next/next/no-img-element -- through our own route; not worth the image optimizer */}
             <img src={coverUrl} alt="" loading="lazy" className="size-full object-cover" />
           </div>
         )}
-
-        <header className="flex flex-col gap-2">
-          <button type="button" onClick={() => setEdit("title")} className="group flex items-start gap-3 text-left">
-            <KindChip kind={item.kind} size="lg" />
-            <h1 className="pt-1 text-2xl leading-tight font-extrabold tracking-tight">
-              {item.title}
-              <Icon name="pencil" className="ml-2 inline size-4 align-baseline text-muted opacity-60 group-hover:opacity-100" />
-            </h1>
-          </button>
-          <div className="pl-14">
-            <Marks item={item} />
-          </div>
-        </header>
-
-        <div className="no-scrollbar mt-4 flex gap-2 overflow-x-auto pb-1">
-          {dir && (
-            <ActionChip icon="directions" href={dir}>
-              Directions
-            </ActionChip>
-          )}
-          {c?.phone && (
-            <ActionChip icon="phone" href={telUrl(c.phone)}>
-              Call
-            </ActionChip>
-          )}
-          {c?.whatsapp && (
-            <ActionChip icon="whatsapp" href={whatsappUrl(c.whatsapp)}>
-              WhatsApp
-            </ActionChip>
-          )}
-          {b?.url && (
-            <ActionChip icon="ticket" href={b.url}>
-              {b.state === "booked" ? "Booking" : "Book"}
-            </ActionChip>
-          )}
-          {b?.confirmation && (
-            <ActionChip icon="copy" onClick={() => copy(b.confirmation!, "Confirmation")}>
-              {b.confirmation}
-            </ActionChip>
-          )}
-          {c?.website && (
-            <ActionChip icon="globe" href={c.website}>
-              Website
-            </ActionChip>
-          )}
-          <ActionChip icon="sparkles" onClick={() => compose({ ask: true, itemId: item.id, text: "" })}>
-            Ask about this
-          </ActionChip>
-          <ActionChip icon="trash" onClick={() => setEdit("delete")}>
-            Delete
-          </ActionChip>
+        <button type="button" onClick={() => setEdit("title")} className="group flex items-start gap-3 text-left">
+          <KindChip kind={item.kind} size="lg" />
+          <h1 className="min-w-0 pt-1 text-2xl leading-tight font-bold">
+            {item.title}
+            <Icon name="pencil" className="ml-2 inline size-4 align-baseline text-muted" />
+            <span className="sr-only">, edit the name</span>
+          </h1>
+        </button>
+        <div className="pl-14">
+          <Marks item={item} />
         </div>
-      </div>
+        <ItemActions item={item} dir={dir} onCopy={(code) => copy(code, "Confirmation")} onAsk={() => compose({ ask: true, itemId: item.id, text: "" })} />
+        {!idea && <DiscussionLink item={item} />}
+      </header>
 
-      <GroupVotes item={item} />
+      {idea && votes}
 
       {posts.length > 0 && (
-        <section aria-label="Saved posts" className="rounded-3xl border border-line bg-surface p-5 shadow-lift">
-          <h2 className="mb-3 text-sm font-bold text-muted">
-            Posts <span className="tnum">{posts.length}</span>
+        <section aria-label="Saved posts">
+          <h2 className="mb-3 text-lg font-bold">
+            Posts <span className="tnum font-semibold text-muted">{posts.length}</span>
           </h2>
           <PostGrid entries={posts} go={go} />
         </section>
       )}
 
-      <div className="flex flex-col divide-y divide-line rounded-3xl border border-line bg-surface px-5 py-1 shadow-lift">
+      <div className="flex flex-col divide-y divide-line border-y border-line">
         <Section title="When" onEdit={() => setEdit("when")}>
           {item.start ? (
             <p className="text-base">
@@ -158,6 +120,8 @@ export function ItemPage({ itemId, back, go }: { itemId: string; back: () => voi
                   <br />
                   <span className="text-muted">{item.kind === "stay" ? "Check out " : item.kind === "flight" ? "Lands " : "Until "}</span>
                   {item.end.date === item.start.date ? (timeLabel(item.end, trip) ?? "") : whenLabel(item.end, trip)}
+                  {/* Left in one zone, land in another: say which one the landing time is in. */}
+                  {item.start.tz && item.start.tz !== trip.tz && item.end.time && !(item.end.tz && item.end.tz !== trip.tz) && ` ${zoneName(trip.tz)}`}
                 </>
               )}
             </p>
@@ -172,7 +136,7 @@ export function ItemPage({ itemId, back, go }: { itemId: string; back: () => voi
               <div className="flex flex-col gap-1">
                 {item.place.name && <p className="text-base font-semibold">{item.place.name}</p>}
                 {item.place.address && (
-                  <button type="button" onClick={() => copy(item.place!.address!, "Address")} className="text-left text-base text-muted">
+                  <button type="button" onClick={() => copy(item.place!.address!, "Address")} className="text-left text-base text-ink">
                     {item.place.address}
                   </button>
                 )}
@@ -183,12 +147,6 @@ export function ItemPage({ itemId, back, go }: { itemId: string; back: () => voi
                   <a href={mapsLink(item.place, trip)!} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-2 font-semibold text-accent">
                     <Icon name="pin" className="size-4" />
                     Open in Maps
-                  </a>
-                )}
-                {dir && (
-                  <a href={dir} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-2 font-semibold text-accent">
-                    <Icon name="directions" className="size-4" />
-                    Get directions
                   </a>
                 )}
               </div>
@@ -272,7 +230,7 @@ export function ItemPage({ itemId, back, go }: { itemId: string; back: () => voi
         </Section>
       </div>
 
-      <Comments item={item} />
+      {!idea && votes}
 
       {edit === "title" && <TitleSheet item={item} onClose={() => setEdit(null)} />}
       {edit === "when" && <WhenSheet item={item} onClose={() => setEdit(null)} />}
@@ -283,6 +241,7 @@ export function ItemPage({ itemId, back, go }: { itemId: string; back: () => voi
       {edit === "menu" && (
         <Sheet open onClose={() => setEdit(null)} title={item.title}>
           <div className="flex flex-col gap-1">
+
             <SheetAction icon="idea" onClick={() => (setEdit(null), void update({ maybe: item.maybe ? null : true }))}>
               {item.maybe ? "It's happening (not a maybe)" : "Mark as maybe"}
             </SheetAction>
@@ -312,6 +271,85 @@ export function ItemPage({ itemId, back, go }: { itemId: string; back: () => voi
         </Sheet>
       )}
     </article>
+  );
+}
+
+/** What you do with it on the move, each in words: directions, call, the driver card, the booking, its code. */
+function ItemActions({ item, dir, onCopy, onAsk }: { item: Item; dir: string | null; onCopy: (code: string) => void; onAsk: () => void }) {
+  const [driver, setDriver] = useState(false);
+  const [marking, setMarking] = useState(false);
+  const c = item.contact;
+  const b = item.booking;
+  const canDrive = item.kind !== "flight";
+  return (
+    <div className="flex flex-col items-start gap-2">
+      <div className="flex flex-wrap gap-2">
+        {dir && (
+          <ActionChip icon="directions" href={dir}>
+            Directions
+          </ActionChip>
+        )}
+        {c?.phone && (
+          <ActionChip icon="phone" href={telUrl(c.phone)}>
+            Call
+          </ActionChip>
+        )}
+        {c?.whatsapp && (
+          <ActionChip icon="whatsapp" href={whatsappUrl(c.whatsapp)}>
+            WhatsApp
+          </ActionChip>
+        )}
+        {canDrive && <DriverChip item={item} onOpen={() => setDriver(true)} />}
+        {b?.url && (
+          <ActionChip icon="ticket" href={b.url}>
+            {b.state === "booked" ? "Open booking" : "Book online"}
+          </ActionChip>
+        )}
+        {b?.state === "todo" && (
+          <ActionChip icon="check" onClick={() => setMarking(true)}>
+            Mark as booked
+          </ActionChip>
+        )}
+        {b?.confirmation && (
+          <ActionChip icon="copy" onClick={() => onCopy(b.confirmation!)}>
+            <span className="sr-only">Copy confirmation </span>
+            <span className="tnum">{b.confirmation}</span>
+          </ActionChip>
+        )}
+        {c?.website && (
+          <ActionChip icon="globe" href={c.website}>
+            Website
+          </ActionChip>
+        )}
+      </div>
+      <button type="button" onClick={onAsk} className={`${btn.quiet} -ml-3`}>
+        <Icon name="message" className="size-4" />
+        Ask about this
+      </button>
+      {driver && <DriverSheet item={item} onClose={() => setDriver(false)} />}
+      {marking && <MarkBooked item={item} onClose={() => setMarking(false)} />}
+    </div>
+  );
+}
+
+/** On a planned thing the discussion is at the end of the page: this line says what's there and goes to it. */
+function DiscussionLink({ item }: { item: Item }) {
+  const { trip } = useTrip();
+  const t = tally(item, trip.people);
+  const comments = liveComments(item).length;
+  const words = [
+    t.in.length ? `${t.in.length} in` : null,
+    t.maybe.length ? `${t.maybe.length} maybe` : null,
+    t.out.length ? `${t.out.length} not for them` : null,
+    comments ? `${comments} ${comments === 1 ? "comment" : "comments"}` : null,
+  ].filter(Boolean);
+  return (
+    <button type="button" onClick={() => document.getElementById("votes-title")?.scrollIntoView({ block: "start" })} className={`${btn.quiet} -ml-3 self-start text-left`}>
+      <Icon name="thumbsUp" className="size-4 shrink-0" />
+      <span>
+        Votes and comments <span className="font-normal text-muted">{words.length ? words.join(", ") : "none yet"}</span>
+      </span>
+    </button>
   );
 }
 
@@ -363,7 +401,7 @@ function BookingState({ item, onSet }: { item: Item; onSet: (s: Booking["state"]
           role="radio"
           aria-checked={cur === v}
           onClick={() => cur !== v && onSet(v)}
-          className={`min-h-10 rounded-lg px-2 text-sm font-semibold ${cur === v ? "bg-surface text-ink shadow-lift" : "text-muted"}`}
+          className={`min-h-11 rounded-lg px-2 text-base font-semibold ${cur === v ? "bg-surface font-bold text-ink shadow-lift ring-2 ring-accent" : "text-muted"}`}
         >
           {l}
         </button>
@@ -530,7 +568,7 @@ function Checklist({ item }: { item: Item }) {
               checked={c.done}
               onChange={(e) => void apply([{ op: "check.set", itemId: item.id, checkId: c.id, done: e.target.checked }])}
               aria-label={c.text}
-              className="mt-0.5 size-6 shrink-0 accent-[var(--accent)]"
+              className="mt-0.5 size-6 shrink-0 accent-accent"
             />
             <span className={`flex-1 text-base ${c.done ? "text-muted line-through" : ""}`}>{c.text}</span>
             <button

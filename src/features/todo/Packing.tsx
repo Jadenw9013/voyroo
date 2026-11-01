@@ -82,15 +82,15 @@ export function Packing({ go }: { go: (v: View) => void }) {
   ];
 
   return (
-    <section aria-labelledby="packing" className="rounded-3xl border border-line bg-surface p-5 shadow-lift">
+    <section aria-labelledby="packing">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 id="packing" className="text-lg font-bold">
+        <h2 id="packing" className="sr-only">
           Packing list
         </h2>
         {canSuggest &&
           (online ? (
-            <button type="button" onClick={() => setSuggesting(true)} className={`${btn.secondary} min-h-10 text-sm`}>
-              <Icon name="sparkles" className="size-4 text-accent" />
+            <button type="button" onClick={() => setSuggesting(true)} className={btn.secondary}>
+              <Icon name="plan" className="size-4" />
               Suggest from our plan
             </button>
           ) : (
@@ -108,7 +108,7 @@ export function Packing({ go }: { go: (v: View) => void }) {
             aria-selected={list === t.id}
             aria-controls="pack-panel"
             onClick={() => setList(t.id)}
-            className={`flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg px-3 text-base font-semibold ${list === t.id ? "bg-surface text-ink shadow-lift" : "text-muted hover:text-ink"}`}
+            className={`flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg px-3 text-base font-semibold ${list === t.id ? "bg-surface font-bold text-ink shadow-lift ring-2 ring-accent" : "text-muted hover:text-ink"}`}
           >
             {t.label}
             {t.count > 0 && <span className="tnum rounded-full bg-sunken px-2 py-0.5 text-sm">{t.count}</span>}
@@ -199,7 +199,7 @@ function PackRow({ entry, go }: { entry: PackEntry; go: (v: View) => void }) {
         checked={packed}
         onChange={(e) => void tick(e.target.checked)}
         aria-label={`Packed: ${entry.text}`}
-        className="mt-1 size-6 shrink-0 accent-[var(--accent)]"
+        className="mt-1 size-6 shrink-0 accent-accent"
       />
       <div className="min-w-0 flex-1">
         <p className={`text-base ${packed ? "text-muted line-through" : ""}`}>
@@ -225,7 +225,7 @@ function PackRow({ entry, go }: { entry: PackEntry; go: (v: View) => void }) {
             ) : (
               <>
                 <span className="text-todo">Nobody&apos;s bringing it yet</span>
-                <button type="button" onClick={() => void run([{ op: "pack.claim", id: entry.id, who: me }], `You're bringing ${quote(entry.text)}`)} className={`${btn.secondary} my-1 min-h-10 px-3 text-sm`}>
+                <button type="button" onClick={() => void run([{ op: "pack.claim", id: entry.id, who: me }], `You're bringing ${quote(entry.text)}`)} className={`${btn.secondary} my-1 px-3 text-sm`}>
                   I&apos;ll bring it
                 </button>
               </>
@@ -233,13 +233,13 @@ function PackRow({ entry, go }: { entry: PackEntry; go: (v: View) => void }) {
           </div>
         )}
         {item && (
-          <button type="button" onClick={() => go({ tab: "item", itemId: item.id })} className="flex min-h-8 items-start gap-1.5 text-left text-sm font-semibold text-accent">
+          <button type="button" onClick={() => go({ tab: "item", itemId: item.id })} className="flex min-h-11 items-center gap-1.5 text-left text-sm font-semibold text-accent">
             <Icon name={KIND_ICON[item.kind]} className="mt-0.5 size-3.5 shrink-0" />
             {item.title}
           </button>
         )}
       </div>
-      <button type="button" onClick={() => setEditing(true)} aria-label={`Edit ${entry.text}`} className="flex size-10 shrink-0 items-center justify-center rounded-xl text-muted hover:bg-sunken">
+      <button type="button" onClick={() => setEditing(true)} aria-label={`Edit ${entry.text}`} className="flex size-11 shrink-0 items-center justify-center rounded-xl text-muted hover:bg-sunken">
         <Icon name="pencil" className="size-4" />
       </button>
       {editing && <EditPack entry={entry} onClose={() => setEditing(false)} />}
@@ -273,12 +273,19 @@ function AddPack({ kind }: { kind: PackKind }) {
         const r = await apply([{ op: "pack.add", entry }], kind === "personal" ? { message: `Added ${quote(entry.text)} to your list` } : {});
         if (r.ok) setText("");
       }}
-      className="flex gap-2"
+      className="flex flex-col gap-1"
     >
-      <input value={text} onChange={(e) => setText(e.target.value)} placeholder={kind === "shared" ? "Speaker, or speaker - Ben" : "Charger, swimsuit…"} aria-label={label} maxLength={300} className={field} />
-      <button type="submit" disabled={!text.trim()} className={btn.secondary}>
-        Add
-      </button>
+      {/* The label stays visible; the example says how to put someone down for it. */}
+      <label htmlFor={`pack-add-${kind}`} className="text-sm font-semibold text-muted">
+        {label}
+        {kind === "shared" && <span className="font-normal">. Add “- Ben” to say who brings it.</span>}
+      </label>
+      <div className="flex gap-2">
+        <input id={`pack-add-${kind}`} value={text} onChange={(e) => setText(e.target.value)} placeholder={kind === "shared" ? "Speaker - Ben" : "Charger, swimsuit…"} maxLength={300} className={field} />
+        <button type="submit" disabled={!text.trim()} className={btn.secondary}>
+          Add
+        </button>
+      </div>
     </form>
   );
 }
@@ -310,7 +317,7 @@ export function PeoplePicker({ legend, value, onChange, none }: { legend: string
 }
 
 function ListChoice({ value, onChange }: { value: PackKind; onChange: (k: PackKind) => void }) {
-  const seg = (on: boolean) => `min-h-11 flex-1 rounded-lg px-2 text-base font-semibold ${on ? "bg-surface text-ink shadow-lift" : "text-muted"}`;
+  const seg = (on: boolean) => `min-h-11 flex-1 rounded-lg px-2 text-base font-semibold ${on ? "bg-surface font-bold text-ink shadow-lift ring-2 ring-accent" : "text-muted"}`;
   return (
     <div className="flex flex-col gap-1">
       <div role="radiogroup" aria-label="Which list" className="flex gap-1 rounded-xl bg-sunken p-1">
@@ -519,7 +526,7 @@ function SuggestSheet({ onClose, onAdded }: { onClose: () => void; onAdded: (k: 
       <div className="flex flex-col gap-4 pt-1">
         {loaded.state === "loading" && (
           <p role="status" className="flex items-center gap-2 text-base text-muted">
-            <Icon name="sparkles" className="size-4 animate-pulse text-accent" />
+            <Icon name="clock" className="size-4" />
             Reading your plan…
           </p>
         )}
@@ -554,7 +561,7 @@ function SuggestSheet({ onClose, onAdded }: { onClose: () => void; onAdded: (k: 
                   return (
                     <li key={i}>
                       <label className="flex min-h-11 cursor-pointer items-start gap-3 py-2.5">
-                        <input type="checkbox" checked={picked.has(i)} onChange={() => toggle(i)} className="mt-1 size-6 shrink-0 accent-[var(--accent)]" />
+                        <input type="checkbox" checked={picked.has(i)} onChange={() => toggle(i)} className="mt-1 size-6 shrink-0 accent-accent" />
                         <span className="min-w-0 flex-1">
                           <span className="block text-base font-semibold">
                             {s.text}

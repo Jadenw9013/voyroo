@@ -1,31 +1,31 @@
 "use client";
 
-import Image from "next/image";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { dayRows, nightOf, nights, nowNext, phase, stayOn, toBook, tripDays, type Row } from "@/domain/derive";
-import { directionsUrl, telUrl, tripCoverUrl, whatsappUrl } from "@/domain/links";
-import { daysBetween, formatDay, formatDuration, formatRange, formatTime, monthDay, todayIn, weekday } from "@/domain/time";
+import { directionsUrl, telUrl, whatsappUrl } from "@/domain/links";
+import { daysBetween, formatDay, formatDuration, formatTime, monthDay, todayIn, weekday } from "@/domain/time";
 import type { Item } from "@/domain/types";
 import { useClock } from "@/client/hooks";
 import type { View } from "@/client/router";
 import { useTrip } from "@/client/store";
-import { Avatar, KindChip } from "@/ui/badges";
-import { Icon, type IconName } from "@/ui/Icon";
+import { KindChip, StatusPill } from "@/ui/badges";
+import { Icon } from "@/ui/Icon";
 import { ActionChip, btn, useCopy } from "@/ui/kit";
 import { useCompose } from "../composer/Composer";
 import { DriverChip, DriverSheet } from "../essentials/Driver";
+import { drivable } from "@/domain/essentials";
 import { DayWeatherCard } from "../weather/DayWeather";
-import { TripMap } from "../map/TripMap";
 import { ItemRow, rowTitle, timeLabel } from "../shared";
 import { LegRow, useDayLegs } from "../travel/Travel";
 import { SyncLine } from "../SyncLine";
 
 /**
  * Today: what's next and how to get there, where you sleep tonight, and the
- * rest of the day. Before the trip it opens on day one with a countdown.
+ * rest of the day. Nothing sits above the Next ticket but the row of days.
+ * Before the trip it opens on day one with a countdown.
  */
 export function Today({ day: chosen, go, serverNow }: { day?: string; go: (v: View) => void; serverNow: number }) {
-  const { trip, me } = useTrip();
+  const { trip } = useTrip();
   const nowMs = useClock(serverNow);
   const compose = useCompose();
   const today = todayIn(trip.tz, nowMs);
@@ -39,195 +39,86 @@ export function Today({ day: chosen, go, serverNow }: { day?: string; go: (v: Vi
   const nn = isToday ? nowNext(trip, day, nowMs) : null;
   const ticketRow = nn ? (nn.now ?? nn.next) : (timed[0] ?? null);
   const ticketLabel = nn?.now ? "Now" : nn?.next ? "Next" : "First up";
+  const countdown = when === "before" && day === trip.startDate ? daysBetween(today, trip.startDate) : null;
   const stay = stayOn(trip, day);
+  // When the next thing is checking in, the ticket already says where you sleep: one block, not two.
+  const stayInTicket = !!stay && ticketRow?.item.id === stay.id;
   const open = (item: Item) => go({ tab: "item", itemId: item.id });
-  const people = [...new Set([me, ...trip.people])];
-  const coverSrc = tripCoverUrl(trip);
-
-  const quickCircles: { label: string; icon: IconName; tone: string; onClick: () => void }[] = [
-    { label: "Itinerary", icon: "today", tone: "bg-k-flight-soft text-k-flight", onClick: () => go({ tab: "plan" }) },
-    { label: "Bookings", icon: "ticket", tone: "bg-k-activity-soft text-k-activity", onClick: () => go({ tab: "todo" }) },
-    { label: "Saved", icon: "heart", tone: "bg-k-food-soft text-k-food", onClick: () => go({ tab: "plan", section: "ideas" }) },
-    { label: "Posts", icon: "image", tone: "bg-accent-soft text-accent", onClick: () => go({ tab: "plan", section: "posts" }) },
-    { label: "Members", icon: "users", tone: "bg-k-stay-soft text-k-stay", onClick: () => go({ tab: "trip" }) },
-  ];
 
   return (
-    <div className="flex flex-col gap-4 px-3 pt-2.5 sm:gap-5 sm:px-4 sm:pt-3 md:px-0">
-      {/* Trip Hero Card (matching mobile & desktop reference image) */}
-      <header className="flex flex-col gap-3.5 sm:gap-4">
-        <div className="relative overflow-hidden rounded-3xl border border-line bg-[#0f1322] p-4 text-[#f2f4fc] shadow-lift sm:p-6">
-          <div className="cover-photo absolute inset-0">
-            <Image
-              src={coverSrc}
-              alt=""
-              fill
-              priority
-              sizes="(max-width: 768px) 100vw, 72rem"
-              unoptimized={coverSrc.startsWith("http") || coverSrc.startsWith("/api/")}
-              className="size-full object-cover object-center opacity-65"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#0b0d17] via-[#0b0d17]/60 to-transparent" />
-            <div className="absolute inset-0 bg-gradient-to-r from-[#0b0d17]/80 via-[#0b0d17]/30 to-transparent" />
-          </div>
+    <div className="flex flex-col gap-4 px-4 pt-4 md:px-0">
+      {/* Which trip this is, for anyone in more than one; the screen's title. */}
+      <h1 className="text-2xl font-bold">{trip.name}</h1>
+      <DayStrip
+        days={tripDays(trip)}
+        selected={day}
+        today={today}
+        noBed={new Set(nights(trip).filter((n) => !n.stay).map((n) => n.date))}
+        onPick={(d) => go({ tab: "today", day: d })}
+      />
 
-          <div className="relative z-10 flex flex-col gap-3 sm:gap-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-[#cbd5f5]">
-                  {formatRange(trip.startDate, trip.endDate)}, {trip.startDate.slice(0, 4)}
-                </p>
-                <h1 className="mt-0.5 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">{trip.name}</h1>
-              </div>
-              <Countdown when={when} startDate={trip.startDate} today={today} />
-            </div>
-
-            <div className="flex items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={() => go({ tab: "trip" })}
-                aria-label={`People: ${people.join(", ")}`}
-                className="flex shrink-0 -space-x-2 rounded-full bg-[#131728]/80 p-1 pr-2.5 backdrop-blur-md transition-colors hover:bg-[#1b2138]"
-              >
-                {people.slice(0, 4).map((p) => (
-                  <span key={p} className="rounded-full ring-2 ring-[#0f1322]">
-                    <Avatar name={p} size="sm" />
-                  </span>
-                ))}
-                {people.length > 4 && <span className="ml-3 self-center text-xs font-bold text-white">+{people.length - 4}</span>}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => go({ tab: "plan" })}
-                className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-white/15 bg-[#131728]/85 px-3.5 py-1.5 text-xs font-bold text-white backdrop-blur-md transition-colors hover:bg-[#1b2138]"
-              >
-                Full Itinerary
-                <Icon name="chevronRight" className="size-3.5" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Circular Quick-Action Pills (matching mobile mockup in reference image) */}
-        <div className="grid grid-cols-5 gap-1.5 pt-0.5 md:hidden">
-          {quickCircles.map((q) => (
-            <button
-              key={q.label}
-              type="button"
-              onClick={q.onClick}
-              className="flex flex-col items-center gap-1 text-center"
-            >
-              <span className={`flex size-12 items-center justify-center rounded-full border border-line ${q.tone}`}>
-                <Icon name={q.icon} className="size-5" />
-              </span>
-              <span className="truncate text-[11px] font-semibold text-ink">{q.label}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* Day Strip */}
-        <DayStrip
-          days={tripDays(trip)}
-          selected={day}
-          today={today}
-          noBed={new Set(nights(trip).filter((n) => !n.stay).map((n) => n.date))}
-          onPick={(d) => go({ tab: "today", day: d })}
-        />
-      </header>
-
-      <div className="grid grid-cols-1 items-start gap-4 sm:gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1.3fr)]">
-        {/* Highlighted Ticket + Tonight's Stay + Before Trip */}
-        <div className="flex flex-col gap-3.5 sm:gap-4">
+      <div className="mt-2 grid grid-cols-1 items-start gap-8 lg:grid-cols-2">
+        <div className="flex flex-col gap-6">
           {ticketRow && (
             <Ticket
               row={ticketRow}
               label={ticketLabel}
-              minutes={nn?.now ? null : (nn?.minutesToNext ?? null)}
+              until={countdown !== null ? (countdown === 1 ? "tomorrow" : `in ${countdown} days`) : !nn?.now && nn?.minutesToNext != null && nn.minutesToNext >= 0 ? `in ${formatDuration(nn.minutesToNext)}` : null}
               onOpen={() => open(ticketRow.item)}
             />
           )}
 
-          <Tonight
-            stay={stay}
-            day={day}
-            last={day === trip.endDate}
-            onOpen={open}
-            onFind={() => compose({ ask: true, text: `Find us a place to stay the night of ${formatDay(day)}`, day })}
-            onAdd={() => compose({ day, kind: "stay", text: "" })}
-          />
-
-          <EssentialsLink onOpen={() => go({ tab: "trip", section: "essentials" })} />
+          {!stayInTicket && (
+            <Tonight
+              stay={stay}
+              day={day}
+              last={day === trip.endDate}
+              onOpen={open}
+              onFind={() => compose({ ask: true, text: `Find us a place to stay the night of ${formatDay(day)}`, day })}
+              onAdd={() => compose({ day, kind: "stay", text: "" })}
+            />
+          )}
 
           {when === "before" && day === trip.startDate && <BeforeTrip onTodo={() => go({ tab: "todo" })} />}
-
-          {/* The day's map: in the left column on desktop. Only the visible copy loads a map. */}
-          <div className="hidden rounded-3xl border border-line bg-surface p-4 shadow-lift sm:p-5 lg:block">
-            <TripMap variant="day" day={day} go={go} />
-          </div>
         </div>
 
-        {/* Selected Day Schedule Card + the day's map on smaller screens */}
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-3.5 rounded-3xl border border-line bg-surface p-4 shadow-lift sm:gap-4 sm:p-5">
-            <div className="flex items-baseline justify-between gap-3 border-b border-line pb-3">
-              <h2 className="text-lg font-extrabold sm:text-xl">
-                {weekday(day, true)}, {monthDay(day)}
-                {isToday && <span className="ml-2 align-middle text-sm font-bold text-accent">Today</span>}
-              </h2>
-              <button
-                type="button"
-                onClick={() => compose({ day })}
-                className="inline-flex min-h-9 items-center gap-1 rounded-full bg-accent-soft px-3 text-xs font-bold text-accent transition-colors hover:bg-accent hover:text-on-accent"
-              >
-                <Icon name="plus" className="size-3.5" />
-                Add to {weekday(day)}
-              </button>
-            </div>
-
-            <DayWeatherCard date={day} />
-
-            <section aria-label={`Everything on ${formatDay(day)}`}>
-              {rows.length === 0 ? (
-                <p className="py-4 text-base text-muted">Nothing planned yet for this day.</p>
-              ) : (
-                <ol className="flex flex-col gap-1.5">
-                  {timed.map((r) => (
-                    <Fragment key={r.key}>
-                      <LegRow shown={legs.get(r.key)} />
-                      <ItemRow row={r} item={r.item} onOpen={() => open(r.item)} />
-                    </Fragment>
-                  ))}
-                  {untimed.map((r) => (
-                    <Fragment key={r.key}>
-                      <LegRow shown={legs.get(r.key)} />
-                      <ItemRow row={r} item={r.item} onOpen={() => open(r.item)} />
-                    </Fragment>
-                  ))}
-                </ol>
-              )}
-            </section>
-
-            <SyncLine />
+        <section aria-labelledby="day-title" className="flex flex-col gap-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 id="day-title" className="text-xl font-bold">
+              {weekday(day, true)}, {monthDay(day)}
+              {isToday && <span className="ml-2 text-base font-semibold text-muted">Today</span>}
+            </h2>
+            <button type="button" onClick={() => go({ tab: "plan", section: "map", day })} className={`${btn.quiet} -mr-3 shrink-0`}>
+              <Icon name="map" className="size-5" />
+              Map
+            </button>
           </div>
 
-          {/* The day's map on phones and tablets: below the schedule so it stays above the fold. */}
-          <div className="rounded-3xl border border-line bg-surface p-4 shadow-lift lg:hidden">
-            <TripMap variant="day" day={day} go={go} />
+          <DayWeatherCard date={day} />
+
+          <div aria-label={`Everything on ${formatDay(day)}`} role="group">
+            {rows.length === 0 ? (
+              <p className="py-2 text-base text-muted">Nothing planned yet for this day.</p>
+            ) : (
+              <ol className="-mx-2 flex flex-col">
+                {[...timed, ...untimed].map((r) => (
+                  <Fragment key={r.key}>
+                    <LegRow shown={legs.get(r.key)} />
+                    <ItemRow row={r} item={r.item} onOpen={() => open(r.item)} />
+                  </Fragment>
+                ))}
+              </ol>
+            )}
+            <button type="button" onClick={() => compose({ day })} className={`${btn.quiet} -ml-3`}>
+              <Icon name="plus" />
+              Add to {weekday(day, true)}
+            </button>
           </div>
-        </div>
+
+          <SyncLine />
+        </section>
       </div>
     </div>
-  );
-}
-
-function Countdown({ when, startDate, today }: { when: ReturnType<typeof phase>; startDate: string; today: string }) {
-  if (when !== "before") return null;
-  const n = daysBetween(today, startDate);
-  return (
-    <p className="shrink-0 rounded-full border border-white/15 bg-[#131728]/85 px-3 py-1 text-xs font-bold text-[#c4b5fd] backdrop-blur-md">
-      {n === 1 ? "Tomorrow" : `In ${n} days`}
-    </p>
   );
 }
 
@@ -249,7 +140,7 @@ function DayStrip({
     ref.current?.querySelector("[aria-current='date']")?.scrollIntoView({ block: "nearest", inline: "center" });
   }, [selected]);
   return (
-    <ul ref={ref} className="no-scrollbar flex gap-1.5 overflow-x-auto pb-1 sm:gap-2" aria-label="Trip days">
+    <ul ref={ref} className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4 md:mx-0 md:px-0" aria-label="Trip days">
       {days.map((d) => {
         const sel = d === selected;
         return (
@@ -259,15 +150,11 @@ function DayStrip({
               onClick={() => onPick(d)}
               aria-current={sel ? "date" : undefined}
               aria-label={`${weekday(d, true)} ${monthDay(d)}${d === today ? ", today" : ""}${noBed.has(d) ? ", nowhere to stay yet" : ""}`}
-              className={`flex h-15 w-12.5 flex-col items-center justify-center rounded-2xl border leading-none transition-colors sm:h-16 sm:w-13 ${
-                sel
-                  ? "border-accent bg-accent text-on-accent shadow-lift"
-                  : "border-line bg-surface text-ink hover:bg-sunken"
-              } ${d === today && !sel ? "ring-2 ring-accent ring-inset" : ""}`}
+              className={`flex h-16 w-13 flex-col items-center justify-center rounded-xl leading-none ${sel ? "bg-accent text-on-accent" : "text-ink hover:bg-sunken"} ${d === today && !sel ? "ring-2 ring-accent ring-inset" : ""}`}
             >
-              <span className="text-[11px] font-semibold sm:text-xs">{weekday(d)}</span>
-              <span className="tnum mt-1 text-base font-extrabold sm:text-lg">{Number(d.slice(8))}</span>
-              <span aria-hidden="true" className={`mt-0.5 size-1.5 rounded-full ${noBed.has(d) ? "bg-todo" : "bg-transparent"}`} />
+              <span className="text-sm font-semibold">{weekday(d)}</span>
+              <span className="tnum mt-1 text-lg font-bold">{Number(d.slice(8))}</span>
+              <span aria-hidden="true" className={`mt-1 size-1.5 rounded-full ${noBed.has(d) ? "bg-todo" : "bg-transparent"}`} />
             </button>
           </li>
         );
@@ -277,27 +164,30 @@ function DayStrip({
 }
 
 /** The one loud thing on the screen: what's next, when, and one tap to get there or call. */
-function Ticket({ row, label, minutes, onOpen }: { row: Row; label: string; minutes: number | null; onOpen: () => void }) {
+function Ticket({ row, label, until, onOpen }: { row: Row; label: string; until: string | null; onOpen: () => void }) {
   const { trip } = useTrip();
   const copy = useCopy();
+  const [showDriver, setShowDriver] = useState(false);
   const item = row.item;
   const place = item.place?.address || item.place?.name;
   // A flight's place is where it lands: no use for directions on the way out.
   const dir = item.kind !== "flight" && (row.part === "start" || item.kind === "stay") ? directionsUrl(item.place, trip) : null;
   const c = item.contact;
+  const zone = row.when.tz && row.when.tz !== trip.tz ? timeLabel(row.when, trip)?.replace(/^[\d:]+ [AP]M /, "") : null;
+  const hasDriver = row.part === "start" && drivable(item);
   return (
     <section aria-label={label} className="overflow-hidden rounded-3xl bg-ticket text-on-ticket shadow-lift">
-      <button type="button" onClick={onOpen} className="flex w-full flex-col gap-0.5 px-4 pt-3.5 pb-4 text-left sm:gap-1 sm:px-5 sm:pt-4 sm:pb-5">
-        <span className="flex items-baseline justify-between gap-3">
-          <span className="text-sm font-bold sm:text-base">{label}</span>
-          {minutes !== null && minutes >= 0 && <span className="text-sm font-semibold sm:text-base">in {formatDuration(minutes)}</span>}
+      <button type="button" onClick={onOpen} className="flex w-full flex-col gap-1 px-5 pt-4 pb-5 text-left">
+        <span className="flex items-baseline justify-between gap-3 text-base font-bold">
+          <span>{label}</span>
+          {until && <span className="tnum font-semibold">{until}</span>}
         </span>
-        <time className="tnum text-3xl leading-none font-bold tracking-tight sm:text-5xl">{row.when.time ? formatTime(row.when.time) : "Anytime"}</time>
-        {row.when.tz && row.when.tz !== trip.tz && <span className="text-xs font-semibold sm:text-sm">{timeLabel(row.when, trip)?.replace(/^[\d:]+ [AP]M /, "")}</span>}
-        <span className="mt-1.5 text-lg leading-snug font-bold sm:mt-2 sm:text-xl">{rowTitle(row)}</span>
-        {place && <span className="text-sm sm:text-base">{place}</span>}
+        <time className="tnum text-4xl leading-none font-bold sm:text-5xl">{row.when.time ? formatTime(row.when.time) : "Anytime"}</time>
+        {zone && <span className="text-sm font-semibold">{zone}</span>}
+        <span className="mt-2 text-xl leading-snug font-bold">{rowTitle(row)}</span>
+        {place && <span className="text-base">{place}</span>}
       </button>
-      {(dir || c?.phone || c?.whatsapp || item.booking?.confirmation) && (
+      {(dir || c?.phone || c?.whatsapp || item.booking?.confirmation || hasDriver) && (
         <div className="perforation mx-5 flex flex-wrap gap-2 pt-4 pb-5">
           {dir && (
             <ActionChip icon="directions" href={dir} tone="ticket">
@@ -314,17 +204,25 @@ function Ticket({ row, label, minutes, onOpen }: { row: Row; label: string; minu
               WhatsApp
             </ActionChip>
           )}
+          {hasDriver && (
+            <ActionChip icon="bus" onClick={() => setShowDriver(true)} tone="ticket">
+              Show to driver
+            </ActionChip>
+          )}
           {item.booking?.confirmation && (
             <ActionChip icon="copy" onClick={() => copy(item.booking!.confirmation!, "Confirmation")} tone="ticket">
-              {item.booking.confirmation}
+              <span className="sr-only">Copy confirmation </span>
+              <span className="tnum">{item.booking.confirmation}</span>
             </ActionChip>
           )}
         </div>
       )}
+      {showDriver && <DriverSheet item={item} onClose={() => setShowDriver(false)} />}
     </section>
   );
 }
 
+/** Where you sleep tonight, and the two things you need on the way there. */
 function Tonight({
   stay,
   day,
@@ -346,19 +244,19 @@ function Tonight({
   if (last) return null;
   if (!stay) {
     return (
-      <section className="flex flex-col gap-3 rounded-3xl border border-dashed border-todo bg-todo-soft p-5">
-        <p className="flex items-center gap-2 text-base font-bold text-todo">
+      <section aria-labelledby="tonight" className="flex flex-col gap-3 rounded-2xl border-2 border-dashed border-todo bg-todo-soft p-4">
+        <h2 id="tonight" className="flex items-center gap-2 text-base font-bold text-todo">
           <Icon name="bed" />
           Nowhere to stay tonight yet
-        </p>
+        </h2>
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={onFind} className={btn.secondary}>
-            <Icon name="sparkles" />
-            Find options
-          </button>
-          <button type="button" onClick={onAdd} className={btn.quiet}>
+          <button type="button" onClick={onAdd} className={btn.secondary}>
             <Icon name="plus" />
             Add a stay
+          </button>
+          <button type="button" onClick={onFind} className={btn.quiet}>
+            <Icon name="search" />
+            Find options
           </button>
         </div>
       </section>
@@ -368,23 +266,22 @@ function Tonight({
   const checkIn = stay.start?.date === day ? timeLabel(stay.start, trip) : null;
   const dir = directionsUrl(stay.place, trip);
   return (
-    <section className="rounded-3xl border border-line bg-surface p-5 shadow-lift">
-      <button type="button" onClick={() => onOpen(stay)} className="flex w-full items-start gap-3 text-left">
+    <section aria-labelledby="tonight" className="flex flex-col gap-3">
+      <h2 id="tonight" className="text-lg font-bold">
+        Tonight
+        {n && n.of > 1 && <span className="font-semibold text-muted">, night {n.night} of {n.of}</span>}
+      </h2>
+      <button type="button" onClick={() => onOpen(stay)} className="-mx-2 flex items-start gap-3 rounded-xl px-2 py-2 text-left hover:bg-sunken">
         <KindChip kind={stay.kind} />
         <span className="min-w-0 flex-1">
-          <span className="block text-sm font-semibold text-muted">
-            Tonight{n && n.of > 1 ? `, night ${n.night} of ${n.of}` : ""}
-            {checkIn ? `. Check in ${checkIn}` : ""}
-          </span>
-          <span className="block text-lg leading-snug font-bold">{stay.title}</span>
-          {(stay.place?.address || stay.place?.name) && (
-            <span className="block text-base text-muted">{stay.place.address || stay.place.name}</span>
-          )}
+          <span className="block text-base leading-snug font-semibold">{stay.title}</span>
+          {(stay.place?.address || stay.place?.name) && <span className="block text-sm text-muted">{stay.place.address || stay.place.name}</span>}
+          {checkIn && <span className="block text-sm text-muted">Check in {checkIn}</span>}
         </span>
-        <Icon name="chevronRight" className="mt-1 size-4 text-muted" />
+        <Icon name="chevronRight" className="mt-2.5 size-4 shrink-0 text-muted" />
       </button>
       {(dir || stay.booking?.confirmation || stay.place?.address || stay.place?.name) && (
-        <div className="mt-3 flex flex-wrap gap-2 pl-9">
+        <div className="flex flex-wrap gap-2">
           {dir && (
             <ActionChip icon="directions" href={dir}>
               Directions
@@ -393,7 +290,8 @@ function Tonight({
           <DriverChip item={stay} onOpen={() => setDriver(true)} />
           {stay.booking?.confirmation && (
             <ActionChip icon="copy" onClick={() => copy(stay.booking!.confirmation!, "Confirmation")}>
-              {stay.booking.confirmation}
+              <span className="sr-only">Copy confirmation </span>
+              <span className="tnum">{stay.booking.confirmation}</span>
             </ActionChip>
           )}
         </div>
@@ -403,45 +301,15 @@ function Tonight({
   );
 }
 
-/** One tap to emergency numbers, the embassy and the stays' addresses for a driver. */
-function EssentialsLink({ onOpen }: { onOpen: () => void }) {
-  const { trip } = useTrip();
-  const e = trip.essentials;
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="flex items-center gap-3 rounded-3xl border border-line bg-surface p-4 text-left shadow-lift transition-colors hover:bg-sunken"
-    >
-      <Icon name="compass" className="size-6 shrink-0 text-accent" />
-      <span className="min-w-0 flex-1">
-        <span className="block text-base font-bold">Trip essentials</span>
-        <span className="block text-sm text-muted">
-          {e?.emergency ? "Emergency numbers, embassy, entry rules, show to driver" : "Emergency numbers, embassy and more: not added yet"}
-        </span>
-      </span>
-      <Icon name="chevronRight" className="size-4 text-muted" />
-    </button>
-  );
-}
-
+/** Before the trip, on day one: how much is still to book, one tap from the list. */
 function BeforeTrip({ onTodo }: { onTodo: () => void }) {
   const { trip } = useTrip();
   const n = toBook(trip).length;
   if (!n) return null;
   return (
-    <button
-      type="button"
-      onClick={onTodo}
-      className="flex items-center gap-3 rounded-3xl border border-line bg-surface p-4 text-left shadow-lift transition-colors hover:bg-sunken"
-    >
-      <Icon name="todo" className="size-6 text-todo" />
-      <span className="flex-1 text-base">
-        <span className="font-bold">
-          {n} {n === 1 ? "thing" : "things"} to book
-        </span>{" "}
-        before you go
-      </span>
+    <button type="button" onClick={onTodo} className="-mx-2 flex min-h-14 items-center gap-3 rounded-xl px-2 text-left hover:bg-sunken">
+      <StatusPill status="todo" label={`${n} to book`} />
+      <span className="flex-1 text-base">before you go</span>
       <Icon name="chevronRight" className="size-4 text-muted" />
     </button>
   );

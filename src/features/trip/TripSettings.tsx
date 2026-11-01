@@ -3,36 +3,29 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { ChangeEntry } from "@/domain/change";
-import { costs } from "@/domain/derive";
 import { formatRange, formatTime, localParts, monthDay, zoneName } from "@/domain/time";
 import { defaultTempUnit } from "@/domain/weather";
 import { useTempUnit, useTheme, useSunlight, useTextSize, type Theme } from "@/client/prefs";
-import { useView } from "@/client/router";
 import { useTrip } from "@/client/store";
 import { Avatar } from "@/ui/badges";
 import { Icon } from "@/ui/Icon";
 import { btn, field, label, SectionTitle } from "@/ui/kit";
 import { Sheet } from "@/ui/Sheet";
-import { money } from "../item/ItemPage";
 import { AccountPanel } from "../account/AccountPanel";
 import { Essentials } from "../essentials/Essentials";
-import { MoneyCard } from "../expenses/Expenses";
 import { ShareTrip } from "./ShareTrip";
 
 /** Trip: essentials, details, people and invites, trip-wide notes, costs, what changed, and display settings. */
 export function TripSettings({ section }: { section?: "essentials" } = {}) {
-  const { trip, me, tripId } = useTrip();
-  const { go } = useView(tripId);
+  const { trip, me } = useTrip();
   const [editing, setEditing] = useState(false);
-  const totals = costs(trip);
 
   return (
-    <div className="flex flex-col gap-6 px-3 pt-3 sm:px-4 md:px-0">
-      <header className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-line bg-surface p-5 shadow-lift sm:p-6">
+    <div className="flex flex-col gap-8 px-4 pt-4 md:px-0">
+      <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-bold tracking-wider text-accent uppercase">Trip Settings & Members</p>
-          <h1 className="mt-1 text-2xl font-extrabold tracking-tight sm:text-3xl">{trip.name}</h1>
-          <p className="mt-1 text-base text-muted">
+          <h1 className="text-2xl font-bold">{trip.name}</h1>
+          <p className="text-base text-muted">
             {formatRange(trip.startDate, trip.endDate)} in {trip.destination}
           </p>
         </div>
@@ -42,54 +35,21 @@ export function TripSettings({ section }: { section?: "essentials" } = {}) {
         </button>
       </header>
 
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
-        <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-2">
+        <div className="flex flex-col gap-8">
           <Essentials focus={section === "essentials"} />
-
-          <div className="rounded-3xl border border-line bg-surface p-5 shadow-lift">
-            <People />
-          </div>
-
-          <div className="rounded-3xl border border-line bg-surface p-5 shadow-lift">
-            <SectionTitle>Account</SectionTitle>
-            <AccountPanel />
-          </div>
-
-          <section className="rounded-3xl border border-line bg-surface p-5 shadow-lift">
+          <People />
+          <AccountPanel title={<SectionTitle>Account</SectionTitle>} />
+          <section>
             <SectionTitle>Trip notes</SectionTitle>
             <TripNotes />
           </section>
         </div>
 
-        <div className="flex flex-col gap-6">
-          <MoneyCard go={go} />
-          {totals.length > 0 && (
-            <section className="rounded-3xl border border-line bg-surface p-5 shadow-lift">
-              <SectionTitle>Costs</SectionTitle>
-              <dl className="flex flex-col gap-2 text-base">
-                {totals.map((t) => (
-                  <div key={t.currency} className="flex justify-between gap-3 rounded-xl bg-sunken/60 px-3.5 py-2.5">
-                    <dt className="font-bold text-muted">{t.currency}</dt>
-                    <dd className="tnum text-right font-semibold">
-                      {money(t.booked, t.currency)} booked
-                      {t.toBook > 0 && <span className="text-muted">, {money(t.toBook, t.currency)} still to book</span>}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-              <p className="mt-2 text-sm text-muted">From the prices on reservations.</p>
-            </section>
-          )}
-
-          <div className="rounded-3xl border border-line bg-surface p-5 shadow-lift">
-            <Display />
-          </div>
-
-          <div className="rounded-3xl border border-line bg-surface p-5 shadow-lift">
-            <Activity />
-          </div>
-
-          <section className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-line bg-surface p-5 shadow-lift">
+        <div className="flex flex-col gap-8">
+          <Display />
+          <Activity />
+          <section className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-base text-muted">You&apos;re signed in to this trip as {me}.</p>
             <Link href="/?all=1" className={btn.secondary}>
               <Icon name="suitcase" />
@@ -126,7 +86,7 @@ function People() {
               </span>
             )}
             {p === me ? (
-              <button type="button" onClick={() => setRenaming(true)} className="min-h-9 rounded-full px-2 text-sm text-accent hover:bg-sunken">
+              <button type="button" onClick={() => setRenaming(true)} className="min-h-11 rounded-full px-2 text-sm text-accent hover:bg-sunken">
                 (you) change
               </button>
             ) : (
@@ -134,7 +94,7 @@ function People() {
                 type="button"
                 onClick={() => void apply([{ op: "trip.update", set: { people: trip.people.filter((x) => x !== p) } }])}
                 aria-label={`Remove ${p}`}
-                className="flex size-9 items-center justify-center rounded-full text-muted hover:bg-sunken"
+                className="flex size-11 items-center justify-center rounded-full text-muted hover:bg-sunken"
               >
                 <Icon name="close" className="size-4" />
               </button>
@@ -214,7 +174,7 @@ function PasscodeSheet({ onClose }: { onClose: () => void }) {
         <label className={label}>
           Current passcode
           <input type="password" value={cur} onChange={(e) => setCur(e.target.value)} autoComplete="current-password" className={field} />
-          <span className="text-xs text-muted">If you made this trip while signed in with Google, you can leave this blank.</span>
+          <span className="text-sm text-muted">If you made this trip while signed in with Google, you can leave this blank.</span>
         </label>
         <label className={label}>
           New passcode
@@ -301,7 +261,7 @@ function Display() {
   const [size, setSize] = useTextSize();
   const { trip } = useTrip();
   const [unit, setUnit] = useTempUnit(defaultTempUnit(trip));
-  const seg = (on: boolean) => `min-h-10 flex-1 rounded-lg px-2 text-sm font-semibold ${on ? "bg-surface text-ink shadow-lift" : "text-muted"}`;
+  const seg = (on: boolean) => `min-h-11 flex-1 rounded-lg px-2 text-base font-semibold ${on ? "bg-surface font-bold text-ink shadow-lift ring-2 ring-accent" : "text-muted"}`;
   return (
     <section className="flex flex-col gap-4">
       <SectionTitle>Display on this phone</SectionTitle>
@@ -317,7 +277,7 @@ function Display() {
           <span className="block font-semibold">Sunlight mode</span>
           <span className="block text-sm text-muted">Black on white with heavier text, for reading outdoors.</span>
         </span>
-        <input type="checkbox" checked={sun} onChange={(e) => setSun(e.target.checked)} className="size-6 shrink-0 accent-[var(--accent)]" />
+        <input type="checkbox" checked={sun} onChange={(e) => setSun(e.target.checked)} className="size-6 shrink-0 accent-accent" />
       </label>
       <div className="flex gap-1 rounded-xl bg-sunken p-1" role="radiogroup" aria-label="Text size">
         {(["normal", "large"] as const).map((s) => (

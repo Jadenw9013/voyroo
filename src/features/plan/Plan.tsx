@@ -1,21 +1,18 @@
 "use client";
 
-import Image from "next/image";
 import { Fragment, useState } from "react";
-import { dayRows, ideas, nightOf, stayOn, toBook, tripDays } from "@/domain/derive";
+import { dayRows, ideas, nightOf, stayOn, tripDays } from "@/domain/derive";
 import { mostWanted } from "@/domain/discuss";
-import { hasCoords } from "@/domain/geo";
-import { itemPhotoUrl, routeUrl, tripCoverUrl } from "@/domain/links";
-import { addDays, formatDay, formatRange, formatTime, monthDay, weekday } from "@/domain/time";
+import { addDays, formatDay, monthDay, weekday } from "@/domain/time";
 import type { Item } from "@/domain/types";
 import type { PlanSection, View } from "@/client/router";
 import { useTrip } from "@/client/store";
-import { Avatar, KindChip, KIND_LABEL, StatusPill } from "@/ui/badges";
+import { StatusPill } from "@/ui/badges";
 import { Icon } from "@/ui/Icon";
-import { btn } from "@/ui/kit";
+import { btn, SectionNav } from "@/ui/kit";
 import { useCompose } from "../composer/Composer";
 import { IdeaFooter, IdeaSort, type IdeaOrder } from "../decide/Decide";
-import { MapDialog, TripMap } from "../map/TripMap";
+import { TripMap } from "../map/TripMap";
 import { PostGrid, postsOf } from "../posts/Posts";
 import { ItemRow } from "../shared";
 import { LegRow, useDayLegs } from "../travel/Travel";
@@ -23,712 +20,123 @@ import { SyncLine } from "../SyncLine";
 import { DayWeatherLine, WeatherFootnote } from "../weather/DayWeather";
 import { PastePlan } from "./PastePlan";
 
+const SECTIONS: { id: PlanSection; label: string }[] = [
+  { id: "days", label: "Days" },
+  { id: "map", label: "Map" },
+  { id: "ideas", label: "Ideas" },
+  { id: "posts", label: "Posts" },
+];
+
 /**
- * Plan: redesigned Voyroo trip dashboard with hero cover banner, stat cards,
- * two-column itinerary + trip map/saved/bookings widgets, and Ask Voyroo assistant bar.
+ * Plan: the whole trip, in four parts named at the top. Days is one scrolling
+ * list with each day's stay, weather and travel times; Map shows the same
+ * places by day; Ideas are what has no day yet, with the group's votes; Posts
+ * are the saved TikToks and Reels.
  */
-export function Plan({ section = "days", go, onShare }: { section?: PlanSection; go: (v: View) => void; onShare?: () => void }) {
-  const { trip, me, apply } = useTrip();
+export function Plan({ section = "days", day, go }: { section?: PlanSection; day?: string; go: (v: View) => void }) {
+  const { trip, apply } = useTrip();
   const compose = useCompose();
   const [pasting, setPasting] = useState(false);
-  const [askText, setAskText] = useState("");
-  const [mapOpen, setMapOpen] = useState(false);
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [ideaSort, setIdeaSort] = useState<IdeaOrder>("added");
   const open = (item: Item) => go({ tab: "item", itemId: item.id });
   const saved = ideas(trip);
   const posts = postsOf(trip);
   const days = tripDays(trip);
-  const visibleDays = selectedDay && days.includes(selectedDay) ? [selectedDay] : days;
-  const planned = trip.items.filter((i) => i.start).length;
-  const bookedItems = trip.items.filter((i) => i.booking?.state === "booked");
-  const pendingBookings = toBook(trip);
-  const allBookings = [...bookedItems, ...pendingBookings];
-  const people = [...new Set([me, ...trip.people])];
-  const coverSrc = tripCoverUrl(trip);
-
-  const tabs: { id: PlanSection; label: string; count: number }[] = [
-    { id: "days", label: "Days", count: days.length },
-    { id: "ideas", label: "Ideas", count: saved.length },
-    { id: "posts", label: "Posts", count: posts.length },
-  ];
-
-  // Places to highlight in Top Saved Places (saved ideas first, then stays/food/activities)
-  const highlightedPlaces = [
-    ...saved,
-    ...trip.items.filter((i) => i.start && i.kind !== "flight" && i.kind !== "transport"),
-    ...trip.items.filter((i) => i.start && (i.kind === "flight" || i.kind === "transport")),
-  ]
-    .filter((item, index, arr) => arr.findIndex((x) => x.id === item.id) === index)
-    .slice(0, 6);
-
-  const pinned = trip.items.filter((i) => hasCoords(i.place)).length;
+  const lastDay = days.at(-1) ?? trip.endDate;
 
   return (
-    <div className="itinerary-view flex flex-col gap-4 px-3 pt-2.5 sm:gap-5 sm:px-4 sm:pt-3 md:px-0">
-      {/* Hero Banner */}
-      <header className="flex flex-col gap-3.5 sm:gap-4">
-        <div className="relative min-h-42 overflow-hidden rounded-3xl border border-line bg-[#0f1322] p-4 text-[#f2f4fc] shadow-lift sm:min-h-60 sm:p-7">
-          <div className="cover-photo absolute inset-0">
-            <Image
-              src={coverSrc}
-              alt=""
-              fill
-              priority
-              sizes="(max-width: 768px) 100vw, 72rem"
-              unoptimized={coverSrc.startsWith("http") || coverSrc.startsWith("/api/")}
-              className="size-full object-cover object-center opacity-70"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#0b0d17] via-[#0b0d17]/60 to-transparent" />
-            <div className="absolute inset-0 bg-gradient-to-r from-[#0b0d17]/85 via-[#0b0d17]/30 to-transparent" />
-          </div>
+    <div className="itinerary-view flex flex-col gap-6 px-4 pt-4 md:px-0">
+      <h1 className="sr-only">Plan</h1>
+      <SectionNav label="Plan" items={SECTIONS} current={section} onPick={(id) => go({ tab: "plan", section: id })} />
 
-          <div className="relative z-10 flex h-full min-h-34 flex-col justify-between gap-3 sm:min-h-44 sm:gap-4">
-            <div className="flex items-start justify-between gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#131728]/85 px-3 py-1 text-xs font-semibold text-[#e2e8f0] backdrop-blur-md">
-                <Icon name="pin" className="size-3.5 text-[#a78bfa]" />
-                {trip.destination}
-              </span>
-              <button
-                type="button"
-                onClick={() => go({ tab: "trip" })}
-                className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-white/15 bg-[#131728]/80 px-3 py-1.5 text-xs font-semibold text-[#f2f4fc] backdrop-blur-md transition-colors hover:bg-[#1b2138] sm:min-h-10"
-              >
-                <Icon name="image" className="size-3.5 text-[#a78bfa]" />
-                Edit Trip
-              </button>
-            </div>
-
-            <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end sm:gap-4">
-              <div className="min-w-0">
-                <p className="text-xs font-semibold tracking-wide text-[#cbd5f5] sm:text-sm">
-                  {formatRange(days[0] ?? trip.startDate, days.at(-1) ?? trip.endDate)}, {(days[0] ?? trip.startDate).slice(0, 4)}
-                </p>
-                <h1 className="mt-0.5 text-2xl leading-tight font-extrabold tracking-tight text-white sm:mt-1 sm:text-4xl">
-                  {trip.name}
-                </h1>
-                <div className="mt-2.5 flex flex-wrap items-center gap-2 sm:mt-3 sm:gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => go({ tab: "trip" })}
-                    aria-label={`People: ${people.join(", ")}`}
-                    className="flex min-h-9 shrink-0 items-center -space-x-2 rounded-full bg-[#131728]/85 p-1 pr-3 backdrop-blur-md transition-colors hover:bg-[#1b2138] sm:min-h-10"
-                  >
-                    {people.slice(0, 4).map((p) => (
-                      <span key={p} className="rounded-full ring-2 ring-[#0f1322]">
-                        <Avatar name={p} size="sm" />
-                      </span>
-                    ))}
-                    <span className="ml-3 self-center text-xs font-bold text-[#e2e8f0]">
-                      {people.length} {people.length === 1 ? "member" : "members"}
-                    </span>
-                  </button>
-                  {onShare && (
-                    <button
-                      type="button"
-                      onClick={onShare}
-                      className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-white/15 bg-[#1b2138]/90 px-3 py-1 text-xs font-bold text-white backdrop-blur-md transition-colors hover:bg-[#252d4a] sm:min-h-10 sm:px-3.5 sm:py-1.5"
-                    >
-                      <Icon name="users" className="size-3.5 text-[#a78bfa]" />
-                      Invite
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    compose({
-                      ask: true,
-                      text: "Help me refine this itinerary. What would you adjust, and what still needs arranging?",
-                    })
-                  }
-                  className="inline-flex min-h-9.5 flex-1 items-center justify-center gap-1.5 rounded-2xl bg-accent px-3 py-2 text-xs font-bold whitespace-nowrap text-on-accent shadow-lift transition-transform active:scale-98 sm:min-h-11 sm:flex-initial sm:px-4 sm:text-sm"
-                >
-                  <Icon name="sparkles" className="size-3.5 shrink-0 sm:size-4" />
-                  <span>Plan with your assistant</span>
+      {section === "days" && (
+        <section aria-label="Days" className="flex flex-col gap-8">
+          {trip.items.length === 0 && (
+            <div className="flex flex-col gap-3">
+              <h2 className="text-xl font-bold">Make this trip yours</h2>
+              <p className="text-base text-muted">Start with where you sleep or how you get there. Ideas without a day go in Ideas.</p>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => compose({ day: trip.startDate, kind: "stay" })} className={btn.primary}>
+                  Add a stay
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setPasting(true)}
-                  className="inline-flex min-h-9.5 items-center justify-center gap-1.5 rounded-2xl border border-white/15 bg-[#131728]/85 px-3 py-2 text-xs font-bold whitespace-nowrap text-white backdrop-blur-md transition-colors hover:bg-[#1b2138] sm:min-h-11 sm:px-4 sm:text-sm"
-                >
-                  <Icon name="plan" className="size-3.5 shrink-0 text-[#a78bfa] sm:size-4" />
-                  <span>Paste a travel plan</span>
+                <button type="button" onClick={() => compose({ day: trip.startDate, kind: "flight" })} className={btn.secondary}>
+                  Add a flight
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* Mobile 5-Circle Quick-Action Hub (matching the mobile screen in the reference mockup) */}
-        <div className="grid grid-cols-5 gap-1.5 pt-0.5 sm:hidden">
-          <button
-            type="button"
-            onClick={() => go({ tab: "plan", section: "days" })}
-            className="flex flex-col items-center gap-1 text-center"
-          >
-            <span
-              className={`relative flex size-12 items-center justify-center rounded-full border transition-colors ${
-                section === "days"
-                  ? "border-accent bg-accent text-on-accent shadow-lift"
-                  : "border-line bg-k-flight-soft text-k-flight"
-              }`}
-            >
-              <Icon name="today" className="size-5" />
-              <span className="tnum absolute -top-1 -right-1 rounded-full bg-surface px-1.5 py-0.2 text-[10px] font-extrabold text-ink ring-1 ring-line">
-                {days.length}
-              </span>
-            </span>
-            <span className="truncate text-[11px] font-semibold text-ink">Itinerary</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setMapOpen(true)}
-            aria-haspopup="dialog"
-            className="flex flex-col items-center gap-1 text-center"
-          >
-            <span className="relative flex size-12 items-center justify-center rounded-full border border-line bg-k-activity-soft text-k-activity transition-colors">
-              <Icon name="map" className="size-5" />
-              <span className="tnum absolute -top-1 -right-1 rounded-full bg-surface px-1.5 py-0.2 text-[10px] font-extrabold text-ink ring-1 ring-line">
-                {pinned}
-              </span>
-            </span>
-            <span className="truncate text-[11px] font-semibold text-ink">Map</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => go({ tab: "todo" })}
-            className="flex flex-col items-center gap-1 text-center"
-          >
-            <span className="relative flex size-12 items-center justify-center rounded-full border border-line bg-todo-soft text-todo">
-              <Icon name="ticket" className="size-5" />
-              <span className="tnum absolute -top-1 -right-1 rounded-full bg-surface px-1.5 py-0.2 text-[10px] font-extrabold text-ink ring-1 ring-line">
-                {allBookings.length}
-              </span>
-            </span>
-            <span className="truncate text-[11px] font-semibold text-ink">Bookings</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => go({ tab: "plan", section: "ideas" })}
-            className="flex flex-col items-center gap-1 text-center"
-          >
-            <span
-              className={`relative flex size-12 items-center justify-center rounded-full border transition-colors ${
-                section === "ideas"
-                  ? "border-accent bg-accent text-on-accent shadow-lift"
-                  : "border-line bg-k-food-soft text-k-food"
-              }`}
-            >
-              <Icon name="heart" className="size-5" />
-              {saved.length > 0 && (
-                <span className="tnum absolute -top-1 -right-1 rounded-full bg-surface px-1.5 py-0.2 text-[10px] font-extrabold text-ink ring-1 ring-line">
-                  {saved.length}
-                </span>
-              )}
-            </span>
-            <span className="truncate text-[11px] font-semibold text-ink">Saved</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => go({ tab: "plan", section: "posts" })}
-            className="flex flex-col items-center gap-1 text-center"
-          >
-            <span
-              className={`relative flex size-12 items-center justify-center rounded-full border transition-colors ${
-                section === "posts"
-                  ? "border-accent bg-accent text-on-accent shadow-lift"
-                  : "border-line bg-k-stay-soft text-k-stay"
-              }`}
-            >
-              <Icon name="image" className="size-5" />
-              {posts.length > 0 && (
-                <span className="tnum absolute -top-1 -right-1 rounded-full bg-surface px-1.5 py-0.2 text-[10px] font-extrabold text-ink ring-1 ring-line">
-                  {posts.length}
-                </span>
-              )}
-            </span>
-            <span className="truncate text-[11px] font-semibold text-ink">Posts</span>
-          </button>
-        </div>
-
-        {/* Section Tabs (Days / Ideas / Posts — shown on sm+ desktop/tablet; mobile uses the 5-circle hub above) */}
-        <div className="hidden items-center justify-between gap-4 border-b border-line px-1 sm:flex">
-          <div role="tablist" aria-label="Plan" className="flex flex-1 gap-2 sm:flex-initial sm:gap-4">
-            {tabs.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                role="tab"
-                aria-selected={section === t.id}
-                onClick={() => go({ tab: "plan", section: t.id })}
-                className={`-mb-px flex min-h-10 flex-1 items-center justify-center gap-2 border-b-2 px-3 text-xs font-bold transition-colors sm:min-h-11 sm:flex-initial sm:px-4 sm:text-base ${
-                  section === t.id ? "border-accent text-accent" : "border-transparent text-muted hover:text-ink"
-                }`}
-              >
-                <Icon name={t.id === "days" ? "today" : t.id === "ideas" ? "heart" : "image"} className="size-4" />
-                {t.label}
-                {t.count > 0 && t.id !== "days" && (
-                  <span className="tnum rounded-full bg-sunken px-2 py-0.5 text-xs text-muted">{t.count}</span>
-                )}
-              </button>
-            ))}
-          </div>
-
-          <div className="hidden items-center gap-2 md:flex">
+          )}
+          {days.map((d) => (
+            <Day key={d} date={d} last={d === lastDay} onOpen={open} onAdd={() => compose({ day: d })} />
+          ))}
+          <div className="flex flex-col items-start gap-1">
             <button
               type="button"
-              onClick={() => go({ tab: "todo" })}
-              className="flex min-h-10 items-center gap-1.5 rounded-xl px-3 text-sm font-semibold text-muted transition-colors hover:bg-sunken hover:text-ink"
+              onClick={() => void apply([{ op: "trip.update", set: { endDate: addDays(lastDay, 1) } }], { message: "Trip extended" })}
+              className={`${btn.quiet} -ml-3`}
             >
-              <Icon name="ticket" className="size-4 text-k-activity" />
-              Bookings ({allBookings.length})
+              <Icon name="plus" className="size-4" />
+              Add a day ({formatDay(addDays(lastDay, 1))})
             </button>
-            <button
-              type="button"
-              onClick={() => go({ tab: "trip" })}
-              className="flex min-h-10 items-center gap-1.5 rounded-xl px-3 text-sm font-semibold text-muted transition-colors hover:bg-sunken hover:text-ink"
-            >
-              <Icon name="wallet" className="size-4 text-k-stay" />
-              Expenses & Settings
+            <button type="button" onClick={() => setPasting(true)} className={`${btn.quiet} -ml-3`}>
+              <Icon name="plan" className="size-4" />
+              Paste a travel plan
             </button>
           </div>
-        </div>
-
-        {/* Stat Cards Row (Tablet & Desktop; on mobile, replaced by the 5-circle quick-action hub above) */}
-        <dl className="hidden grid-cols-2 gap-2.5 sm:grid sm:grid-cols-4 sm:gap-3.5">
-          <div className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-3.5 shadow-lift">
-            <dt className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-k-flight-soft text-k-flight">
-              <span className="sr-only">Days</span>
-              <Icon name="today" className="size-5" />
-            </dt>
-            <dd className="min-w-0">
-              <span className="tnum block text-xl leading-tight font-extrabold">{days.length}</span>
-              <span aria-hidden="true" className="block truncate text-xs font-medium text-muted">
-                Days
-              </span>
-            </dd>
-          </div>
-
-          <div className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-3.5 shadow-lift">
-            <dt className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
-              <span className="sr-only">Planned Stops</span>
-              <Icon name="pin" className="size-5" />
-            </dt>
-            <dd className="min-w-0">
-              <span className="tnum block text-xl leading-tight font-extrabold">{planned}</span>
-              <span aria-hidden="true" className="block truncate text-xs font-medium text-muted">
-                Planned Stops
-              </span>
-            </dd>
-          </div>
-
-          <div className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-3.5 shadow-lift">
-            <dt className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-k-activity-soft text-k-activity">
-              <span className="sr-only">Bookings</span>
-              <Icon name="ticket" className="size-5" />
-            </dt>
-            <dd className="min-w-0">
-              <span className="tnum block text-xl leading-tight font-extrabold">{bookedItems.length}</span>
-              <span aria-hidden="true" className="block truncate text-xs font-medium text-muted">
-                Bookings
-              </span>
-            </dd>
-          </div>
-
-          <div className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-3.5 shadow-lift">
-            <dt className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-k-food-soft text-k-food">
-              <span className="sr-only">Saved Places</span>
-              <Icon name="heart" className="size-5" />
-            </dt>
-            <dd className="min-w-0">
-              <span className="tnum block text-xl leading-tight font-extrabold">{saved.length + posts.length}</span>
-              <span aria-hidden="true" className="block truncate text-xs font-medium text-muted">
-                Saved Places
-              </span>
-            </dd>
-          </div>
-        </dl>
-      </header>
-
-      {pasting && <PastePlan onClose={() => setPasting(false)} />}
-
-      {/* Phones: the Map button opens the trip map full screen. */}
-      {mapOpen && (
-        <MapDialog onClose={() => setMapOpen(false)}>
-          <TripMap variant="plan" go={go} fullScreen onClose={() => setMapOpen(false)} />
-        </MapDialog>
-      )}
-
-      {/* Mobile Top Saved Places Horizontal Swipeable Strip (matching phone mockup in reference image) */}
-      {section === "days" && highlightedPlaces.length > 0 && (
-        <section aria-label="Mobile saved places" className="flex flex-col gap-2.5 lg:hidden">
-          <div className="flex items-center justify-between px-1">
-            <h2 className="text-base font-extrabold tracking-tight">Top Saved Places</h2>
-            <button
-              type="button"
-              onClick={() => go({ tab: "plan", section: "ideas" })}
-              className="text-xs font-bold text-accent hover:underline"
-            >
-              See All
-            </button>
-          </div>
-          <ul className="no-scrollbar -mx-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-3 pb-1">
-            {highlightedPlaces.map((place, idx) => {
-              const thumbUrl = itemPhotoUrl(place, trip, idx);
-              return (
-                <li key={place.id} className="w-38 shrink-0 snap-start sm:w-44">
-                  <button
-                    type="button"
-                    onClick={() => open(place)}
-                    className="group flex w-full flex-col gap-1.5 rounded-2xl border border-line bg-surface p-2 text-left shadow-lift"
-                  >
-                    <span className="relative block aspect-[4/3] w-full overflow-hidden rounded-xl bg-sunken">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={thumbUrl}
-                        alt=""
-                        loading="lazy"
-                        className="size-full object-cover object-center transition-transform duration-300 group-hover:scale-105"
-                      />
-                      <span className="absolute right-1.5 bottom-1.5 flex size-6 items-center justify-center rounded-full bg-white text-[#e11d48] shadow">
-                        <Icon name="heart" className="size-3.5" />
-                      </span>
-                    </span>
-                    <span className="min-w-0 px-0.5">
-                      <span className="block truncate text-xs font-bold text-ink sm:text-sm">{place.title}</span>
-                      <span className="block truncate text-[11px] text-muted">
-                        {place.place?.name || KIND_LABEL[place.kind]}
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+          <WeatherFootnote />
         </section>
       )}
 
-      {/* Two-Column Dashboard Content */}
-      <div className="grid grid-cols-1 items-start gap-5 sm:gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
-        {/* Left Column: Main Tabpanel + Ask Voyroo Card */}
-        <div className="flex min-w-0 flex-col gap-5 sm:gap-6" role="tabpanel">
-          <div className="flex flex-col gap-4 rounded-3xl border border-line bg-surface p-3.5 shadow-lift sm:gap-6 sm:p-6">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="min-w-0 truncate text-lg font-extrabold tracking-tight sm:text-xl">
-                {section === "days" ? "Upcoming Itinerary" : section === "ideas" ? "Saved Places & Ideas" : "Saved Posts"}
-              </h2>
-              {section === "days" && (
-                <button
-                  type="button"
-                  onClick={() => go({ tab: "today" })}
-                  className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-full border border-line bg-sunken px-3 text-xs font-bold whitespace-nowrap text-ink transition-colors hover:border-accent sm:min-h-10"
-                >
-                  Day-by-Day View
-                  <Icon name="chevronRight" className="size-3.5" />
-                </button>
-              )}
-            </div>
+      {section === "map" && <TripMap variant="plan" day={day} go={go} tall />}
 
-            {/* Horizontal Day Filter Pills for fast single-day focus on mobile */}
-            {section === "days" && days.length > 1 && (
-              <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
-                <button
-                  type="button"
-                  onClick={() => setSelectedDay(null)}
-                  className={`min-h-8 shrink-0 rounded-full border px-3 py-1 text-xs font-bold transition-colors ${
-                    selectedDay === null
-                      ? "border-accent bg-accent text-on-accent"
-                      : "border-line bg-sunken/70 text-muted hover:text-ink"
-                  }`}
-                >
-                  All Days ({days.length})
-                </button>
-                {days.map((d) => {
-                  const active = selectedDay === d;
-                  return (
-                    <button
-                      key={d}
-                      type="button"
-                      onClick={() => setSelectedDay(active ? null : d)}
-                      className={`min-h-8 shrink-0 rounded-full border px-3 py-1 text-xs font-bold transition-colors ${
-                        active
-                          ? "border-accent bg-accent text-on-accent"
-                          : "border-line bg-sunken/70 text-muted hover:text-ink"
-                      }`}
-                    >
-                      {monthDay(d)}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {trip.items.length === 0 && (
-              <section aria-label="Start planning" className="flex flex-col gap-3 rounded-2xl border border-line bg-sunken/50 p-4">
-                <h3 className="text-lg font-bold">Make this trip yours</h3>
-                <p className="text-sm text-muted">
-                  Start with a stay or flight, save ideas for later, or use the + button to import booking screenshots.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={() => compose({ day: trip.startDate, kind: "stay" })} className={btn.primary}>
-                    Add a stay
-                  </button>
-                  <button type="button" onClick={() => compose({ day: trip.startDate, kind: "flight" })} className={btn.secondary}>
-                    Add a flight
-                  </button>
-                  <button type="button" onClick={() => compose({})} className={btn.secondary}>
-                    Save an idea
-                  </button>
-                </div>
-              </section>
-            )}
-
-            {section === "days" && (
-              <div className="flex flex-col gap-6 sm:gap-7">
-                {visibleDays.map((d) => (
-                  <Day key={d} date={d} last={d === (days.at(-1) ?? trip.endDate)} onOpen={open} onAdd={() => compose({ day: d })} />
-                ))}
-                <WeatherFootnote />
-                {!selectedDay && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const lastDay = days.at(-1) ?? trip.endDate;
-                      const nextDay = addDays(lastDay, 1);
-                      void apply([{ op: "trip.update", set: { endDate: nextDay } }], { message: "Trip extended" });
-                    }}
-                    className={`${btn.quiet} self-start flex items-center gap-2 text-sm text-muted hover:text-foreground`}
-                  >
-                    <Icon name="plus" className="size-4" />
-                    Add day ({formatDay(addDays(days.at(-1) ?? trip.endDate, 1))})
-                  </button>
-                )}
-              </div>
-            )}
-
-            {section === "ideas" && (
-              <section aria-label="Ideas">
-                {saved.length === 0 ? (
-                  <p className="py-2 text-base text-muted">
-                    Nothing saved without a day. Type something with no day in the + box, or paste a link.
-                  </p>
-                ) : (
-                  <>
-                    {saved.length > 1 && <IdeaSort value={ideaSort} onChange={setIdeaSort} />}
-                    <ul className="divide-y divide-line">
-                      {(ideaSort === "wanted" ? mostWanted(saved) : saved).map((i) => (
-                        <ItemRow key={i.id} item={i} onOpen={() => open(i)} footer={<IdeaFooter item={i} onOpen={() => open(i)} />} />
-                      ))}
-                    </ul>
-                  </>
-                )}
-                <button type="button" onClick={() => compose({})} className={`${btn.quiet} mt-2 -ml-3`}>
-                  <Icon name="plus" />
-                  Save an idea
-                </button>
-              </section>
-            )}
-
-            {section === "posts" && (
-              <section aria-label="Saved posts" className="flex flex-col gap-3">
-                {posts.length === 0 ? (
-                  <div className="flex flex-col items-start gap-3 rounded-2xl bg-sunken/50 p-5">
-                    <div className="flex gap-2">
-                      {(["tiktok", "instagram", "youtube"] as const).map((n) => (
-                        <span key={n} className="flex size-10 items-center justify-center rounded-xl bg-surface">
-                          <Icon name={n} />
-                        </span>
-                      ))}
-                    </div>
-                    <p className="text-base">
-                      <span className="font-bold">Save the TikToks, Reels and videos that made you want to go.</span> Paste a link in the + box, or share it to the app from TikTok or Instagram on Android. They show up here and on the item they&apos;re about.
-                    </p>
-                    <button type="button" onClick={() => compose({})} className={btn.primary}>
-                      <Icon name="link" />
-                      Paste a link
-                    </button>
-                  </div>
-                ) : (
-                  <PostGrid entries={posts} showItem go={go} />
-                )}
-              </section>
-            )}
-          </div>
-
-          {/* Ask Voyroo Card (matching bottom-left of reference image) */}
-          <section
-            aria-label="Ask Voyroo"
-            className="relative overflow-hidden rounded-3xl border border-line bg-surface p-4 shadow-lift sm:p-5"
-          >
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-r from-accent/15 via-k-stay/15 to-k-food/10 opacity-80"
-            />
-            <div className="relative z-10 flex flex-col gap-3.5">
-              <div className="flex items-center gap-2.5">
-                <span className="flex size-8 items-center justify-center rounded-xl bg-accent-soft text-accent">
-                  <Icon name="sparkles" className="size-4" />
-                </span>
-                <h2 className="text-lg font-extrabold">Ask Voyroo</h2>
-              </div>
-
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const q = askText.trim();
-                  setAskText("");
-                  compose({ ask: true, text: q || "Help me plan the next step of our trip." });
-                }}
-                className="flex items-center gap-2 rounded-2xl border border-line bg-canvas p-1.5 pl-4 focus-within:border-accent"
-              >
-                <input
-                  value={askText}
-                  onChange={(e) => setAskText(e.target.value)}
-                  placeholder="Plan, find, or ask anything about your trip…"
-                  aria-label="Ask Voyroo anything about your trip"
-                  className="min-h-11 min-w-0 flex-1 bg-transparent text-base text-ink placeholder:text-muted focus:outline-none sm:text-sm"
-                />
-                <button
-                  type="submit"
-                  aria-label="Send to Voyroo"
-                  className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-accent text-on-accent transition-transform active:scale-95"
-                >
-                  <Icon name="send" className="size-4" />
-                </button>
-              </form>
-
-              <div className="flex flex-wrap gap-2">
-                {[
-                  ["Create a day plan", `Plan a great day in ${trip.destination} around what we have booked.`],
-                  ["Find restaurants", `Where should we eat in ${trip.destination}?`],
-                  ["Budget tips", `What are smart budget and money tips for ${trip.destination}?`],
-                  ["Local tips", `What local tips should we know before arriving in ${trip.destination}?`],
-                ].map(([labelText, prompt]) => (
-                  <button
-                    key={labelText}
-                    type="button"
-                    onClick={() => compose({ ask: true, text: prompt })}
-                    className="min-h-10 rounded-full border border-line bg-sunken/70 px-3.5 py-1.5 text-xs font-semibold text-muted transition-colors hover:border-accent hover:bg-accent-soft hover:text-accent"
-                  >
-                    {labelText}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          <SyncLine />
-        </div>
-
-        {/* Right Column: Trip map, Top Saved Places, and Bookings */}
-        <aside aria-label="Trip overview widgets" className="flex min-w-0 flex-col gap-6">
-          <div className="rounded-3xl border border-line bg-surface p-4 shadow-lift sm:p-5">
-            <TripMap variant="plan" go={go} />
-          </div>
-
-          {/* Top Saved Places Card (Desktop sidebar; mobile uses the horizontal carousel above) */}
-          <section className="hidden flex-col gap-4 rounded-3xl border border-line bg-surface p-5 shadow-lift lg:flex">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-base font-extrabold">Top Saved Places</h2>
-              <button
-                type="button"
-                onClick={() => go({ tab: "plan", section: "ideas" })}
-                className="text-xs font-bold text-accent hover:underline"
-              >
-                View All
-              </button>
-            </div>
-
-            {highlightedPlaces.length === 0 ? (
-              <p className="text-sm text-muted">Save ideas or places to see them highlighted here.</p>
-            ) : (
-              <ul className="grid grid-cols-2 gap-3">
-                {highlightedPlaces.slice(0, 4).map((place, idx) => {
-                  const thumbUrl = itemPhotoUrl(place, trip, idx);
-                  return (
-                    <li key={place.id}>
-                      <button
-                        type="button"
-                        onClick={() => open(place)}
-                        className="group flex w-full flex-col gap-2 text-left"
-                      >
-                        <span className="relative block aspect-[4/3] w-full overflow-hidden rounded-2xl border border-line bg-sunken">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={thumbUrl}
-                            alt=""
-                            loading="lazy"
-                            className="size-full object-cover object-center transition-transform duration-300 group-hover:scale-105"
-                          />
-                          <span className="absolute right-2 bottom-2 flex size-6 items-center justify-center rounded-full bg-white text-[#e11d48] shadow">
-                            <Icon name="heart" className="size-3.5" />
-                          </span>
-                        </span>
-                        <span className="min-w-0">
-                          <span className="block truncate text-sm font-bold text-ink">{place.title}</span>
-                          <span className="block truncate text-xs text-muted">{place.place?.name || KIND_LABEL[place.kind]}</span>
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
-
-          {/* Bookings Card */}
-          <section className="flex flex-col gap-3.5 rounded-3xl border border-line bg-surface p-5 shadow-lift">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-base font-extrabold">Bookings</h2>
-              <button
-                type="button"
-                onClick={() => go({ tab: "todo" })}
-                className="text-xs font-bold text-accent hover:underline"
-              >
-                View All
-              </button>
-            </div>
-
-            {allBookings.length === 0 ? (
-              <p className="text-sm text-muted">No reservations tracked yet.</p>
-            ) : (
-              <ul className="flex flex-col gap-2.5">
-                {allBookings.slice(0, 3).map((bItem) => (
-                  <li key={bItem.id}>
-                    <button
-                      type="button"
-                      onClick={() => open(bItem)}
-                      className="flex w-full items-center gap-3 rounded-2xl border border-line bg-sunken/50 p-3 text-left transition-colors hover:bg-sunken"
-                    >
-                      <KindChip kind={bItem.kind} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-bold">{bItem.title}</span>
-                        <span className="block truncate text-xs text-muted">
-                          {bItem.start
-                            ? `${formatDay(bItem.start.date)}${bItem.start.time ? ` · ${formatTime(bItem.start.time)}` : ""}`
-                            : "Date TBD"}
-                        </span>
-                      </span>
-                      <StatusPill
-                        status={bItem.booking?.state === "booked" ? "booked" : "todo"}
-                        label={bItem.booking?.state === "booked" ? "Confirmed" : "To book"}
-                      />
-                    </button>
-                  </li>
+      {section === "ideas" && (
+        <section aria-label="Ideas" className="flex flex-col gap-3">
+          <p className="text-base text-muted">No day yet. Say if you&apos;re in, and see what the rest of the group thinks.</p>
+          {saved.length === 0 ? (
+            <p className="text-base">Nothing saved without a day. Tap Add or ask and type something with no day, or paste a link.</p>
+          ) : (
+            <>
+              {saved.length > 1 && <IdeaSort value={ideaSort} onChange={setIdeaSort} />}
+              <ul className="-mx-2 flex flex-col divide-y divide-line">
+                {(ideaSort === "wanted" ? mostWanted(saved) : saved).map((i) => (
+                  <ItemRow key={i.id} item={i} onOpen={() => open(i)} footer={<IdeaFooter item={i} onOpen={() => open(i)} />} />
                 ))}
               </ul>
-            )}
-          </section>
-        </aside>
-      </div>
+            </>
+          )}
+          <button type="button" onClick={() => compose({})} className={`${btn.quiet} -ml-3 self-start`}>
+            <Icon name="plus" />
+            Save an idea
+          </button>
+        </section>
+      )}
+
+      {section === "posts" && (
+        <section aria-label="Saved posts" className="flex flex-col gap-3">
+          {posts.length === 0 ? (
+            <div className="flex flex-col items-start gap-3">
+              <div className="flex gap-2">
+                {(["tiktok", "instagram", "youtube"] as const).map((n) => (
+                  <span key={n} className="flex size-11 items-center justify-center rounded-xl bg-sunken">
+                    <Icon name={n} />
+                  </span>
+                ))}
+              </div>
+              <p className="text-base">
+                <span className="font-semibold">Save the TikToks, Reels and videos that made you want to go.</span> Paste a link in Add or ask, or share it to the app from TikTok or Instagram on Android. They show up here and on the item they&apos;re about.
+              </p>
+              <button type="button" onClick={() => compose({})} className={btn.primary}>
+                <Icon name="link" />
+                Paste a link
+              </button>
+            </div>
+          ) : (
+            <PostGrid entries={posts} showItem go={go} />
+          )}
+        </section>
+      )}
+
+      <SyncLine />
+      {pasting && <PastePlan onClose={() => setPasting(false)} />}
     </div>
   );
 }
@@ -739,48 +147,31 @@ function Day({ date, last, onOpen, onAdd }: { date: string; last: boolean; onOpe
   const legs = useDayLegs(date);
   const stay = last ? null : stayOn(trip, date);
   const n = stay ? nightOf(stay, date) : null;
-  const route = routeUrl(
-    rows.filter((r) => r.part === "start").map((r) => r.item),
-    trip,
-  );
   return (
-    <section id={`day-${date}`} aria-labelledby={`day-${date}-title`} className="itinerary-day scroll-mt-4">
-      <div className="flex items-start justify-between gap-3 border-b border-line pb-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-baseline gap-2">
-            <span className="rounded-lg bg-accent-soft px-2 py-0.5 text-xs font-extrabold text-accent">
-              {monthDay(date)}
-            </span>
-            <h2 id={`day-${date}-title`} className="text-lg leading-tight font-bold">
-              {weekday(date, true)}, {monthDay(date)}
-            </h2>
-          </div>
-          {!last &&
-            (stay ? (
-              <p className="mt-1 flex items-center gap-1.5 text-sm text-muted">
-                <Icon name="bed" className="size-4 text-k-stay" />
-                <span className="truncate">
-                  {stay.title}
-                  {n && n.of > 1 ? `, night ${n.night} of ${n.of}` : ""}
-                </span>
-              </p>
-            ) : (
-              <p className="mt-1.5">
-                <StatusPill status="missing" label="No place to stay yet" />
-              </p>
-            ))}
-          {last && <p className="mt-1 text-sm text-muted">Travel home</p>}
-          <DayWeatherLine date={date} />
-        </div>
-        {route && (
-          <a href={route} target="_blank" rel="noreferrer" className={`${btn.quiet} shrink-0 text-sm`}>
-            <Icon name="route" className="size-4" />
-            Route
-          </a>
-        )}
+    <section id={`day-${date}`} aria-labelledby={`day-${date}-title`} className="scroll-mt-4">
+      <div className="flex flex-col gap-1 border-b border-line pb-3">
+        <h2 id={`day-${date}-title`} className="text-xl leading-tight font-bold">
+          {weekday(date, true)}, {monthDay(date)}
+        </h2>
+        {!last &&
+          (stay ? (
+            <p className="flex items-start gap-1.5 text-sm text-muted">
+              <Icon name="bed" className="mt-0.5 size-4 shrink-0" />
+              <span className="min-w-0">
+                {stay.title}
+                {n && n.of > 1 ? `, night ${n.night} of ${n.of}` : ""}
+              </span>
+            </p>
+          ) : (
+            <p>
+              <StatusPill status="missing" label="No place to stay yet" />
+            </p>
+          ))}
+        {last && <p className="text-sm text-muted">Travel home</p>}
+        <DayWeatherLine date={date} />
       </div>
       {rows.length > 0 && (
-        <ol className="mt-2 flex flex-col gap-1.5">
+        <ol className="-mx-2 mt-2 flex flex-col">
           {rows.map((r) => (
             <Fragment key={r.key}>
               <LegRow shown={legs.get(r.key)} />
@@ -789,9 +180,9 @@ function Day({ date, last, onOpen, onAdd }: { date: string; last: boolean; onOpe
           ))}
         </ol>
       )}
-      <button type="button" onClick={onAdd} className={`${btn.quiet} mt-1.5 -ml-3 text-sm`}>
+      <button type="button" onClick={onAdd} className={`${btn.quiet} mt-1 -ml-3`}>
         <Icon name="plus" />
-        Add
+        Add to {weekday(date, true)}
       </button>
     </section>
   );

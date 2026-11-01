@@ -74,9 +74,11 @@ test("essentials: one tap from Today, a draft that says verify, sources, correct
   await clearEssentials(page);
   await page.reload();
 
-  await page.getByRole("button", { name: /Trip essentials/ }).click();
-  await expect(page).toHaveURL(/\/t\/guatemala\/trip\/essentials$/);
+  await tab(page, "Trip").click();
+  await expect(page).toHaveURL(/\/t\/guatemala\/trip$/);
   const card = page.getByRole("region", { name: "Essentials" });
+  // First on the Trip tab: on screen without scrolling.
+  await expect(card.getByRole("heading", { name: "Essentials" })).toBeInViewport();
   await expect(card.getByLabel("Passports from")).toHaveValue("United States");
   await card.getByRole("button", { name: "Draft with a web search" }).click();
 
@@ -99,7 +101,9 @@ test("essentials: one tap from Today, a draft that says verify, sources, correct
   await expect(card).toContainText("verify before you go");
   await expect(card.locator('a[href="tel:110"]')).toBeVisible();
 
-  await card.getByRole("button", { name: /Lumina, AMATE Atitlán/ }).click();
+  // The driver card is on the place you're going to.
+  await page.goto("/t/guatemala/item/lodging-atitlan");
+  await page.getByRole("button", { name: "Show to driver" }).click();
   const driver = page.getByRole("dialog", { name: "Show to driver" });
   await expect(driver.locator('[lang="es"]')).toContainText("Por favor, lléveme a esta dirección:");
   await expect(driver).toContainText("San Marcos La Laguna");
@@ -111,13 +115,15 @@ test("essentials: one tap from Today, a draft that says verify, sources, correct
   // It's in the trip on this phone, so it opens with no signal.
   expect(await page.evaluate(() => localStorage.getItem("trip:guatemala:snapshot"))).toContain("Bottled only, even for brushing teeth.");
 
-  // The view-only link leaves essentials out.
+  // The view-only link shows the essentials for people coming along, and when they were checked, not who checked them.
   const { path } = await (await page.request.post("/api/t/guatemala/preview")).json();
   const guest = await browser.newContext();
   try {
     const html = await (await (await guest.newPage()).goto(new URL(path, page.url()).toString()))!.text();
-    expect(html).toContain("Shared Travel Guide");
-    for (const secret of ["Bottled only", "PROATUR", "Avenida Reforma", "Por favor", "travel.state.gov"]) expect(html).not.toContain(secret);
+    expect(html).toContain("Shared travel guide");
+    for (const shown of ["Bottled only, even for brushing teeth.", "travel.state.gov", 'href="tel:110"']) expect(html).toContain(shown);
+    expect(html).toContain("Checked by the group on");
+    expect(html).not.toContain("Checked by Sam");
   } finally {
     await guest.close();
     await page.request.delete("/api/t/guatemala/preview");
@@ -143,7 +149,8 @@ for (const scheme of ["light", "dark"] as const) {
     await page.getByRole("status").getByRole("button", { name: "Dismiss" }).click();
     await noSeriousProblems(page, `Trip with checked essentials (${scheme})`);
 
-    await card.getByRole("button", { name: /Lumina, AMATE Atitlán/ }).click();
+    await page.goto("/t/guatemala/item/lodging-atitlan");
+    await page.getByRole("button", { name: "Show to driver" }).click();
     await expect(page.getByRole("dialog", { name: "Show to driver" })).toBeVisible();
     await noSeriousProblems(page, `Show to driver (${scheme})`);
     await page.keyboard.press("Escape");

@@ -2,6 +2,7 @@
 
 import { useEffect, type ReactNode } from "react";
 import { useTrip } from "@/client/store";
+import { actionClass } from "./action";
 import { Icon, type IconName } from "./Icon";
 
 /* Shared class strings, so every button and field looks and behaves the same. */
@@ -14,11 +15,14 @@ export const btn = {
 };
 
 export const field =
-  "min-h-11 w-full rounded-xl border border-line bg-surface px-3 py-2 text-base text-ink placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30";
+  "min-h-11 w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-base text-ink placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30";
 
 export const label = "flex flex-col gap-1 text-sm font-semibold text-muted";
 
-/** A round-cornered action with an icon: Directions, Call, Copy. Links when given href. */
+/**
+ * A round-cornered action with an icon: Directions, Call, Copy. Links when given href.
+ * These are used walking, in a taxi or at a desk, so they're 56px tall (8px apart where they wrap).
+ */
 export function ActionChip({
   icon,
   children,
@@ -32,21 +36,19 @@ export function ActionChip({
   onClick?: () => void;
   tone?: "default" | "ticket";
 }) {
-  const cls = `inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-base font-semibold ${
-    tone === "ticket" ? "bg-on-ticket text-ticket" : "border border-line bg-surface text-ink hover:bg-sunken"
-  }`;
+  const cls = actionClass(tone);
   if (href) {
     const external = /^https?:/.test(href);
     return (
       <a href={href} className={cls} {...(external ? { target: "_blank", rel: "noreferrer" } : {})}>
-        <Icon name={icon} className="size-[1.1rem]" />
+        <Icon name={icon} className="size-5" />
         {children}
       </a>
     );
   }
   return (
     <button type="button" onClick={onClick} className={cls}>
-      <Icon name={icon} className="size-[1.1rem]" />
+      <Icon name={icon} className="size-5" />
       {children}
     </button>
   );
@@ -105,5 +107,31 @@ export function SectionTitle({ children, action }: { children: ReactNode; action
       <h2 className="text-lg font-bold">{children}</h2>
       {action}
     </div>
+  );
+}
+
+/**
+ * The parts of one screen, side by side under its title: Days, Map, Ideas, Posts.
+ * Each one is a place with its own address, so this is navigation (aria-current),
+ * not tabs, and every part has a word on it.
+ */
+export function SectionNav<T extends string>({ label: name, items, current, onPick }: { label: string; items: { id: T; label: string }[]; current: T; onPick: (id: T) => void }) {
+  return (
+    <nav aria-label={name}>
+      <ul className="flex gap-1 rounded-xl bg-sunken p-1">
+        {items.map((it) => (
+          <li key={it.id} className="flex min-w-0 flex-1">
+            <button
+              type="button"
+              aria-current={current === it.id ? "page" : undefined}
+              onClick={() => onPick(it.id)}
+              className={`flex min-h-11 w-full items-center justify-center rounded-lg px-2 text-base font-semibold ${current === it.id ? "bg-surface font-bold text-ink shadow-lift ring-2 ring-accent" : "text-muted hover:text-ink"}`}
+            >
+              {it.label}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </nav>
   );
 }

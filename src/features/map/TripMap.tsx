@@ -37,16 +37,16 @@ function verb(s: Stop): string | null {
   return null;
 }
 
-const titleOf = (s: Stop) => (verb(s) ? `${verb(s)}: ${s.item.title}` : s.item.title);
+export const titleOf = (s: Stop) => (verb(s) ? `${verb(s)}: ${s.item.title}` : s.item.title);
 
-function status(item: Item): { status: "booked" | "todo" | "maybe"; word: string } | null {
+export function status(item: Item): { status: "booked" | "todo" | "maybe"; word: string } | null {
   if (item.maybe) return { status: "maybe", word: "Maybe" };
   if (item.booking?.state === "booked") return { status: "booked", word: "Booked" };
   if (item.booking?.state === "todo") return { status: "todo", word: "To book" };
   return null;
 }
 
-function whenWords(s: Stop, trip: Trip): string {
+export function whenWords(s: Stop, trip: Trip): string {
   if (s.part === "idea") return "Idea, no day yet";
   if (s.part === "night") return "Tonight";
   return whenLabel(s.when, trip);
@@ -59,7 +59,7 @@ function pinLabel(s: Stop, withDay: boolean): string {
   return lead ? `${lead} · ${titleOf(s)}` : titleOf(s);
 }
 
-function toPin(s: Stop, n: number | undefined, trip: Trip, withDay: boolean): MapPin {
+export function toPin(s: Stop, n: number | undefined, trip: Trip, withDay: boolean): MapPin {
   const st = status(s.item);
   return {
     id: s.item.id,
@@ -140,7 +140,7 @@ function useBackfill(trip: Trip, tripId: string, online: boolean, refresh: () =>
 // ---------------------------------------------------------------------------
 // The map module, loaded on first sight.
 
-function useLazyCanvas(box: React.RefObject<HTMLElement | null>, want: boolean) {
+export function useLazyCanvas(box: React.RefObject<HTMLElement | null>, want: boolean) {
   const [Canvas, setCanvas] = useState<ComponentType<MapCanvasProps> | null>(null);
   const [failed, setFailed] = useState<"load" | "draw" | null>(null);
   useEffect(() => {
@@ -177,10 +177,12 @@ export interface TripMapProps {
   onClose?: () => void;
   /** Start by placing this item's pin by hand. */
   pickId?: string;
+  /** Plan's Map section: the map is the page, so it gets most of the screen. */
+  tall?: boolean;
   className?: string;
 }
 
-export function TripMap({ variant, go, day, itemId, fullScreen = false, onClose, pickId, className = "" }: TripMapProps) {
+export function TripMap({ variant, go, day, itemId, fullScreen = false, onClose, pickId, tall = false, className = "" }: TripMapProps) {
   const { trip, tripId, apply, online, refresh } = useTrip();
   const backfill = useBackfill(trip, tripId, online, refresh);
   const headingId = useId();
@@ -290,13 +292,13 @@ export function TripMap({ variant, go, day, itemId, fullScreen = false, onClose,
   const googleRoute = activeDay ? routeUrl(stops.map((s) => s.item), trip) : null;
   const google = googleRoute ?? mapsSearchUrl(variant === "item" && selectedStop ? selectedStop.item.title : trip.destination);
   const title = variant === "day" && activeDay ? `${weekday(activeDay, true)}'s map` : variant === "item" ? "On the map" : "Trip map";
-  const heightCls = fullScreen ? "min-h-0 flex-1" : variant === "item" ? "h-48" : "h-72 sm:h-80";
+  const heightCls = fullScreen ? "min-h-0 flex-1" : variant === "item" ? "h-48" : tall ? "h-112 sm:h-128" : "h-72 sm:h-80";
 
   return (
     <section aria-labelledby={headingId} className={`flex min-w-0 flex-col gap-3 ${fullScreen ? "h-full" : ""} ${className}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <h2 id={headingId} className={variant === "item" ? "sr-only" : "text-base font-extrabold sm:text-lg"}>
+          <h2 id={headingId} className={variant === "item" ? "sr-only" : "text-lg font-bold"}>
             {title}
           </h2>
           {variant !== "item" && (
@@ -467,7 +469,7 @@ export function TripMap({ variant, go, day, itemId, fullScreen = false, onClose,
   );
 }
 
-function DayChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+export function DayChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
   return (
     <button
       type="button"
@@ -480,7 +482,7 @@ function DayChip({ active, onClick, children }: { active: boolean; onClick: () =
   );
 }
 
-function MapPlaceholder({ children }: { children: ReactNode }) {
+export function MapPlaceholder({ children }: { children: ReactNode }) {
   return (
     <div className="flex size-full flex-col items-center justify-center gap-2 p-6 text-center text-sm text-muted">
       <Icon name="map" className="size-8" />
@@ -505,7 +507,8 @@ function CardShell({ title, onClose, children }: { title: ReactNode; onClose: ()
   );
 }
 
-function PinCard({ stop, trip, onClose, onOpen }: { stop: Stop; trip: Trip; onClose: () => void; onOpen: () => void }) {
+/** A pin's card. `photo` rewrites the picture's address (the viewing link adds its token). */
+export function PinCard({ stop, trip, onClose, onOpen, photo = (src) => src }: { stop: Stop; trip: Trip; onClose: () => void; onOpen: () => void; photo?: (src: string) => string }) {
   const item = stop.item;
   const st = status(item);
   const dir = directionsUrl(item.place, trip);
@@ -513,7 +516,7 @@ function PinCard({ stop, trip, onClose, onOpen }: { stop: Stop; trip: Trip; onCl
     <CardShell title={titleOf(stop)} onClose={onClose}>
       <div className="flex gap-3">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={itemPhotoUrl(item, trip)} alt="" loading="lazy" className="cover-photo size-20 shrink-0 rounded-xl bg-sunken object-cover" />
+        <img src={photo(itemPhotoUrl(item, trip))} alt="" loading="lazy" className="cover-photo size-20 shrink-0 rounded-xl bg-sunken object-cover" />
         <div className="flex min-w-0 flex-col gap-1.5">
           <p className="text-sm text-muted">{whenWords(stop, trip)}</p>
           {(item.place?.name || item.place?.address) && <p className="truncate text-sm">{item.place.address || item.place.name}</p>}
@@ -540,7 +543,7 @@ function PinCard({ stop, trip, onClose, onOpen }: { stop: Stop; trip: Trip; onCl
   );
 }
 
-function GroupCard({ stops, trip, onClose, onChoose }: { stops: Stop[]; trip: Trip; onClose: () => void; onChoose: (id: string) => void }) {
+export function GroupCard({ stops, trip, onClose, onChoose }: { stops: Stop[]; trip: Trip; onClose: () => void; onChoose: (id: string) => void }) {
   return (
     <CardShell title={`${stops.length} places here`} onClose={onClose}>
       <ul className="flex max-h-48 flex-col gap-1 overflow-y-auto">
@@ -550,7 +553,7 @@ function GroupCard({ stops, trip, onClose, onChoose }: { stops: Stop[]; trip: Tr
               <KindChip kind={s.item.kind} size="sm" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-semibold">{titleOf(s)}</span>
-                <span className="block truncate text-xs text-muted">{whenWords(s, trip)}</span>
+                <span className="block truncate text-sm text-muted">{whenWords(s, trip)}</span>
               </span>
             </button>
           </li>
@@ -571,7 +574,7 @@ function MissingRow({ stop, notFound, busy, onAddress, onPin, onOpen }: { stop: 
         <KindChip kind={stop.item.kind} size="sm" />
         <span className="min-w-0">
           <span className="block truncate text-sm font-semibold">{titleOf(stop)}</span>
-          <span className="block truncate text-xs text-muted">
+          <span className="block truncate text-sm text-muted">
             {whenWords(stop, trip)}. {why}
           </span>
         </span>

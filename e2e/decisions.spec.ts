@@ -111,7 +111,7 @@ test("vote on an idea, talk it over, see what's new, and keep it off the public 
   await anaComments.getByRole("button", { name: "Edit your comment" }).click();
   await anaComments.getByRole("textbox", { name: "Edit your comment" }).fill("Worth the 4:30 AM alarm?");
   await anaComments.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(anaComments).toContainText("· edited");
+  await expect(anaComments).toContainText("(edited)");
   await saved(ana, "Comment edited");
   const forged = await ben.request.post("/api/t/guatemala/ops", { data: { ops: [{ op: "reaction.set", itemId: "i_sunrise_boat", by: "Ana", vote: "out" }] } });
   expect(forged.status()).toBe(403);

@@ -14,6 +14,7 @@ import { Avatar } from "@/ui/badges";
 import { Icon } from "@/ui/Icon";
 import { btn, SectionTitle } from "@/ui/kit";
 import { SyncLine } from "../SyncLine";
+import { TodoNav } from "../todo/Todo";
 import { ExpenseSheet } from "./ExpenseForm";
 
 /*
@@ -44,11 +45,12 @@ export function Expenses({ go }: { go: (v: View) => void }) {
   const plan = current ? settleUp(current.people, current.currency) : [];
 
   return (
-    <div className="flex flex-col gap-6 px-3 pt-3 sm:px-4 md:px-0">
-      <header className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-line bg-surface p-5 shadow-lift">
+    <div className="flex flex-col gap-6 px-4 pt-4 md:px-0">
+      <TodoNav current="expenses" go={go} />
+      <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-2xl font-extrabold tracking-tight">Expenses</h1>
-          <p className="text-sm text-muted">Who paid what, and who owes whom.</p>
+          <h1 className="sr-only">Expenses</h1>
+          <p className="text-base text-muted">Who paid what, and who owes whom.</p>
         </div>
         <button type="button" onClick={() => setEditing({})} className={btn.primary}>
           <Icon name="plus" />
@@ -57,20 +59,20 @@ export function Expenses({ go }: { go: (v: View) => void }) {
       </header>
 
       {list.length === 0 ? (
-        <section aria-labelledby="none-yet" className="flex flex-col gap-3 rounded-3xl border border-line bg-surface p-5 shadow-lift">
+        <section aria-labelledby="none-yet" className="flex flex-col gap-3">
           <h2 id="none-yet" className="text-lg font-bold">
             Nothing logged yet
           </h2>
           <p className="text-base text-muted">Log a dinner, a taxi or the park fees as you go, and this works out who owes whom, in any currency.</p>
           <p className="text-base text-muted">
-            Or type it in the + box: <span className="font-semibold text-ink">“dinner 420 {trip.currency} paid by {names[1] ?? me} split all”</span>.
+            Or type it in Add or ask: <span className="font-semibold text-ink">“dinner 420 {trip.currency} paid by {names[1] ?? me} split all”</span>.
           </p>
         </section>
       ) : (
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
-          <div className="flex flex-col gap-6">
+        <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-2">
+          <div className="flex flex-col gap-8">
             {views.length > 1 && (
-              <div role="radiogroup" aria-label="Show balances in" className="flex flex-wrap gap-1 rounded-2xl border border-line bg-surface p-1 shadow-lift">
+              <div role="radiogroup" aria-label="Show balances in" className="flex flex-wrap gap-1 rounded-xl bg-sunken p-1">
                 {views.map((v) => (
                   <button
                     key={v}
@@ -78,7 +80,7 @@ export function Expenses({ go }: { go: (v: View) => void }) {
                     role="radio"
                     aria-checked={shown === v}
                     onClick={() => setPicked(v)}
-                    className={`min-h-11 flex-1 rounded-xl px-3 text-sm font-semibold whitespace-nowrap ${shown === v ? "bg-accent-soft text-accent" : "text-muted hover:bg-sunken"}`}
+                    className={`min-h-11 flex-1 rounded-lg px-3 text-base font-semibold whitespace-nowrap ${shown === v ? "bg-surface font-bold text-ink shadow-lift ring-2 ring-accent" : "text-muted hover:text-ink"}`}
                   >
                     {v === "all" ? `All in ${home}` : `In ${v}`}
                   </button>
@@ -127,7 +129,7 @@ export function StandingWords({ net, currency, you }: { net: number; currency: s
 function Standing({ balances, me }: { balances: Balances; me: string }) {
   const you = balances.people.find((p) => p.name === me);
   return (
-    <section aria-labelledby="balances" className="rounded-3xl border border-line bg-surface p-5 shadow-lift">
+    <section aria-labelledby="balances">
       <SectionTitle>
         <span id="balances">Balances</span>
       </SectionTitle>
@@ -162,7 +164,7 @@ function SettleUp({ plan, trip }: { plan: Transfer[]; trip: Trip }) {
   const saved = useRates(tripId);
   const [error, setError] = useState<string | null>(null);
   return (
-    <section aria-labelledby="settle-up" className="rounded-3xl border border-line bg-surface p-5 shadow-lift">
+    <section aria-labelledby="settle-up">
       <SectionTitle>
         <span id="settle-up">Settle up</span>
       </SectionTitle>
@@ -232,7 +234,7 @@ function ExpenseList({ expenses, me, trip, onOpen, go }: { expenses: Expense[]; 
   const sorted = byDate(expenses);
   const days = [...new Set(sorted.map((e) => e.date))];
   return (
-    <section aria-labelledby="expense-list" className="rounded-3xl border border-line bg-surface p-5 shadow-lift">
+    <section aria-labelledby="expense-list">
       <SectionTitle>
         <span id="expense-list">Logged</span>
       </SectionTitle>
@@ -281,7 +283,7 @@ function ExpenseRow({ expense: e, me, trip, onOpen, go }: { expense: Expense; me
         </span>
         <span className="shrink-0 text-right">
           <span className="tnum block text-base font-bold">{formatMoney(e.amount, e.currency)}</span>
-          {!e.settlement && <span className="tnum block text-xs text-muted">{mine ? `Your share ${formatMinor(mine, e.currency)}` : "Not in it"}</span>}
+          {!e.settlement && <span className="tnum block text-sm text-muted">{mine ? `Your share ${formatMinor(mine, e.currency)}` : "Not in it"}</span>}
         </span>
       </button>
       {item && (
@@ -297,14 +299,14 @@ function Totals({ trip, perCurrency, combined }: { trip: Trip; perCurrency: Bala
   const planned = costs(trip);
   if (!perCurrency.length && !planned.length) return null;
   return (
-    <section aria-labelledby="totals" className="rounded-3xl border border-line bg-surface p-5 shadow-lift">
+    <section aria-labelledby="totals">
       <SectionTitle>
         <span id="totals">Totals</span>
       </SectionTitle>
       <dl className="flex flex-col gap-2 text-base">
         {perCurrency.length > 0 && (
-          <div className="flex flex-wrap justify-between gap-x-3 rounded-xl bg-sunken/60 px-3.5 py-2.5">
-            <dt className="font-bold text-muted">Spent so far</dt>
+          <div className="flex flex-wrap justify-between gap-x-3 py-1">
+            <dt className="font-semibold text-muted">Spent so far</dt>
             <dd className="tnum text-right font-semibold">
               {perCurrency.map((b) => formatMinor(b.spent, b.currency)).join(" + ")}
               {combined && perCurrency.length > 1 && combined.left.length === 0 && <span className="text-muted"> = about {formatMinor(combined.spent, combined.currency)}</span>}
@@ -312,8 +314,8 @@ function Totals({ trip, perCurrency, combined }: { trip: Trip; perCurrency: Bala
           </div>
         )}
         {planned.map((t) => (
-          <div key={t.currency} className="flex flex-wrap justify-between gap-x-3 rounded-xl bg-sunken/60 px-3.5 py-2.5">
-            <dt className="font-bold text-muted">Reservations ({t.currency})</dt>
+          <div key={t.currency} className="flex flex-wrap justify-between gap-x-3 py-1">
+            <dt className="font-semibold text-muted">Reservations ({t.currency})</dt>
             <dd className="tnum text-right font-semibold">
               {formatMoney(t.booked, t.currency)} booked
               {t.toBook > 0 && <span className="text-muted">, {formatMoney(t.toBook, t.currency)} still to book</span>}
@@ -322,38 +324,6 @@ function Totals({ trip, perCurrency, combined }: { trip: Trip; perCurrency: Bala
         ))}
       </dl>
       {planned.length > 0 && <p className="mt-2 text-sm text-muted">Reservation prices are what&apos;s planned. Log what&apos;s actually paid, and by whom, to split it.</p>}
-    </section>
-  );
-}
-
-/** A short summary for To-do and Trip: where you stand, and the way in. */
-export function MoneyCard({ go }: { go: (v: View) => void }) {
-  const { trip, me } = useTrip();
-  const list = (trip.expenses ?? []).filter((e) => !e.settlement);
-  const mine = balancesByCurrency(trip.expenses ?? [], [me]).map((b) => ({ currency: b.currency, net: b.people.find((p) => p.name === me)?.net ?? 0 }));
-  return (
-    <section aria-labelledby="money" className="rounded-3xl border border-line bg-surface p-5 shadow-lift">
-      <SectionTitle>
-        <span id="money">Expenses</span>
-      </SectionTitle>
-      {list.length === 0 ? (
-        <p className="text-base text-muted">Log what the group pays for and see who owes whom.</p>
-      ) : (
-        <ul className="flex flex-col gap-1 text-base">
-          {mine.map((m) => (
-            <li key={m.currency}>
-              <StandingWords net={m.net} currency={m.currency} you />
-            </li>
-          ))}
-          <li className="text-sm text-muted">
-            {list.length} {list.length === 1 ? "expense" : "expenses"} logged
-          </li>
-        </ul>
-      )}
-      <button type="button" onClick={() => go({ tab: "expenses" })} className={`${btn.secondary} mt-3`}>
-        <Icon name="wallet" />
-        Open expenses
-      </button>
     </section>
   );
 }

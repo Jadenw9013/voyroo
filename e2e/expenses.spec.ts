@@ -44,9 +44,9 @@ test("log a dinner in one line, see who owes whom, settle up and undo", async ({
   await reset(page);
   await page.reload();
 
-  // To-do leads to Expenses, at its own address.
+  // Expenses is named at the top of the To-do tab, next to To-do and Packing, at its own address.
   await tab(page, "To-do").click();
-  await page.getByRole("button", { name: "Open expenses" }).click();
+  await page.getByRole("navigation", { name: "Lists" }).getByRole("button", { name: "Expenses", exact: true }).click();
   await expect(page).toHaveURL(/\/t\/guatemala\/expenses$/);
   await expect(page.getByRole("heading", { name: "Expenses", level: 1 })).toBeVisible();
   await expect(page.getByText("Nothing logged yet")).toBeVisible();
@@ -153,10 +153,11 @@ test("the assistant logs what someone paid, with Undo", async ({ page }) => {
   await join(page);
   await reset(page);
   await page.reload();
-  await page.getByRole("button", { name: "Ask Voyroo" }).click();
-  const box = page.getByLabel("Message the assistant");
-  await box.fill("log 80 for the taxi");
-  await box.press("Enter");
+  // The assistant is the "ask" half of the +: type the line and hand it over.
+  await page.getByRole("button", { name: "Add or ask", exact: true }).click();
+  const sheet = page.getByRole("dialog", { name: "Add or ask", exact: true });
+  await sheet.getByRole("textbox", { name: "Add or ask", exact: true }).fill("log 80 for the taxi");
+  await sheet.getByRole("button", { name: /^Ask (the assistant|instead)$/ }).click();
   await expect(page.getByText("Logged “Test taxi”, Q80 paid by Sam")).toBeVisible({ timeout: 20_000 });
   await page.getByRole("button", { name: "See who owes whom" }).click();
   await expect(page).toHaveURL(/\/expenses$/);

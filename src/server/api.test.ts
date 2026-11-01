@@ -94,19 +94,28 @@ describe("view-only presentation links", () => {
     expect(replacement.path).not.toBe(path);
   });
 
-  it("shows where and when, and none of the group's private details", async () => {
+  it("shows what a traveller needs on the road, and none of the group's private details", async () => {
     await join();
     const { trip } = await (await tripRoute.GET(get(), ctx())).json();
-    const [first, second] = trip.items;
+    const [first] = trip.items;
+    const stay = trip.items.find((i: { kind: string }) => i.kind === "stay");
+    const other = trip.items.find((i: { id: string; kind: string }) => i.id !== first.id && i.id !== stay.id);
     const changed = await opsRoute.POST(post({ confirmed: true, ops: [
       { op: "trip.update", set: { notes: "PRIVATE-TRIP-NOTE" } },
       { op: "item.update", id: first.id, set: {
         notes: "Door code PRIVATE-DOOR-CODE",
         who: "Privwho",
         contact: { phone: "+502 5555 0199", email: "private-host@example.com", whatsapp: "+502 5555 0198" },
-        booking: { state: "booked", confirmation: "PRIVATE-CONFIRMATION", by: "Privbooker", price: { amount: 987, currency: "USD" }, note: "PRIVATE-BOOKING-NOTE", url: "https://example.com/manage/PRIVATE-MANAGE" },
+        // The manage link carries the confirmation: whoever has it can change the booking.
+        booking: { state: "booked", confirmation: "PRIVATE-CONFIRMATION", by: "Privbooker", price: { amount: 987, currency: "USD" }, note: "PRIVATE-BOOKING-NOTE", url: "https://example.com/manage/PRIVATE-CONFIRMATION" },
       } },
-      { op: "link.add", itemId: second.id, link: { id: "l1", url: "https://example.com/PRIVATE-LINK", kind: "booking", title: "PRIVATE-LINK-TITLE", addedBy: "Privlinker", addedAt: 1 } },
+      { op: "item.update", id: stay.id, set: {
+        notes: "PRIVATE-STAY-NOTE",
+        contact: { phone: "+502 4444 0101", whatsapp: "+502 4444 0102", email: "host-private@example.com", website: "https://example.com/casa" },
+        booking: { state: "booked", confirmation: "PRIVATE-STAY-CODE", by: "Privbooker", price: { amount: 987, currency: "USD" }, url: "https://example.com/casa/stay" },
+      } },
+      { op: "link.add", itemId: other.id, link: { id: "l1", url: "https://example.com/PRIVATE-LINK", kind: "booking", title: "PRIVATE-LINK-TITLE", addedBy: "Privlinker", addedAt: 1 } },
+      { op: "link.add", itemId: stay.id, link: { id: "l2", url: "https://www.tiktok.com/@lake/video/7300000000000000001", kind: "tiktok", title: "Sunset from the dock", addedBy: "Privlinker", addedAt: 1 } },
       { op: "check.add", itemId: first.id, check: { id: "c1", text: "PRIVATE-CHECKLIST", done: false } },
       { op: "todo.add", todo: { id: "t1", text: "PRIVATE-TODO", done: false, who: "Privtodo" } },
     ] }), ctx());
@@ -115,14 +124,22 @@ describe("view-only presentation links", () => {
     jar.clear();
     const shown = await previewTrip("guatemala", path.split("/").at(-1));
     const text = JSON.stringify(shown);
-    for (const secret of ["PRIVATE-", "Privwho", "Privbooker", "Privlinker", "Privtodo", "Sam", "5555", "private-host", "987"]) expect(text).not.toContain(secret);
+    for (const secret of ["PRIVATE-", "Privwho", "Privbooker", "Privlinker", "Privtodo", "Sam", "private-host", "host-private", "987"]) expect(text).not.toContain(secret);
     expect(shown!.trip.people).toEqual([]);
     expect(shown!.trip.todos).toEqual([]);
     expect(shown!.travelers).toBe(1);
     const item = shown!.trip.items.find((i) => i.id === first.id)!;
     expect(item.title).toBe(first.title);
-    expect(item.booking).toEqual({ state: "booked" });
     expect(item.start).toEqual(first.start);
+    // A flight's contact is the group's own, not a business's; its manage link carries the confirmation.
+    expect(item.contact).toBeUndefined();
+    expect(item.booking).toEqual({ state: "booked" });
+    // A stay's host: phone, WhatsApp and website to tap, never the email; its booking page; its saved TikTok.
+    const shownStay = shown!.trip.items.find((i) => i.id === stay.id)!;
+    expect(shownStay.contact).toEqual({ phone: "+502 4444 0101", whatsapp: "+502 4444 0102", website: "https://example.com/casa" });
+    expect(shownStay.booking).toEqual({ state: "booked", url: "https://example.com/casa/stay" });
+    expect(shownStay.links).toEqual([{ id: "l2", url: "https://www.tiktok.com/@lake/video/7300000000000000001", kind: "tiktok", title: "Sunset from the dock", addedAt: 0 }]);
+    expect(shown!.trip.items.find((i) => i.id === other.id)!.links).toBeUndefined();
     expect(Object.keys(item).sort()).toEqual(Object.keys(publicTrip({ ...trip, items: [first] }).items[0]).sort());
   });
 

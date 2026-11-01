@@ -8,7 +8,7 @@ Professional UI comes from constraint applied everywhere, not decoration. The 20
 
 Tokens live in `src/app/globals.css` as `light-dark()` pairs with a Sunlight override (`:root[data-sunlight]`): `canvas`, `surface`, `sunken`, `ink`, `muted`, `line`, `accent`(+`-soft`, `on-accent`), `ticket`/`on-ticket`, `ok`/`todo`/`maybe` (+`-soft`), `danger`, `k-*` kind colors (+`-soft`), `shadow`. That structure is right: keep it and fix the values.
 
-Problems to fix in the redesign:
+Problems to fix in the redesign (the first two, and the raw hex in trip screens, were fixed in November 2026; see `docs/design/audit-2026-11.md`):
 - `--accent` is Tailwind violet (`#5b21b6` / `#a78bfa`) and `--maybe` uses the same violet, so "primary action" and "maybe" share a color. `docs/DESIGN.md` still says forest green.
 - `color-scheme: dark` is the default. Research says follow the phone's setting (`prefers-color-scheme`); dark is a night mode, not the brand.
 - Components bypass the tokens with raw hex and arbitrary sizes (see [anti-slop.md](anti-slop.md)).

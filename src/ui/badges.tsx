@@ -47,7 +47,7 @@ const STATUS: Record<Status, { cls: string; label: string }> = {
 
 function StatusMark({ status }: { status: Status }) {
   if (status === "booked") return <Icon name="check" className="size-3.5" />;
-  if (status === "maybe") return <span aria-hidden="true" className="text-[0.8em] leading-none font-black">?</span>;
+  if (status === "maybe") return <span aria-hidden="true" className="leading-none font-bold">?</span>;
   return <span aria-hidden="true" className="size-2.5 rounded-full border-2 border-current" />;
 }
 

@@ -55,9 +55,11 @@ test("create a vacation with separate destination and home settings, then add a 
   const snapshot = await (await page.request.get(`/api${tripPath}`)).json();
   expect(snapshot.trip).toMatchObject({ destination: "Oaxaca, Mexico", homeCurrency: "GBP", currency: "MXN" });
   expect(snapshot.trip.items.find((item: { title: string }) => item.title === "Casa Oaxaca")).toMatchObject({ start: { date: "2027-03-01", time: "15:00" }, end: { date: "2027-03-04", time: "11:00" }, booking: { state: "booked", confirmation: "CASA-123" } });
-  await page.getByRole("link", { name: "New trip", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Let's make a trip happen.", exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: /Birthday getaway/ })).toBeVisible();
+  // On a phone, new trips start from the home page behind the logo; the trip's own + only adds to this trip.
+  await page.getByRole("link", { name: "Voyroo home", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "Tell the planner about your trip" })).toBeVisible();
+  // The home page lists the trip in its phone strip and in the library.
+  await expect(page.getByRole("link", { name: /Birthday getaway/ }).first()).toBeVisible();
   const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
   expect(accessibility.violations.filter((v) => v.impact === "serious" || v.impact === "critical").map((v) => v.id)).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
@@ -73,7 +75,8 @@ test("a dated plan can be saved as an undated idea", async ({ page }) => {
   await sheet.getByLabel("Title", { exact: true }).fill("Dinner idea for later");
   await sheet.getByRole("button", { name: "Add", exact: true }).click();
   await tab(page, "Plan").click();
-  await page.getByRole("button", { name: /^\d+ Saved$/ }).click();
+  await page.getByRole("navigation", { name: "Plan" }).getByRole("button", { name: "Ideas", exact: true }).click();
+  await expect(page).toHaveURL(/\/plan\/ideas$/);
   await expect(page.getByRole("button", { name: /Dinner idea for later/ })).toBeVisible();
 });
 
@@ -204,7 +207,7 @@ test("an item page holds the reservation, contact and links", async ({ page }) =
   await expect(page).toHaveURL(/\/item\/activity-zipline$/);
   await expect(page.getByRole("button", { name: "ZIP-4421" }).first()).toBeVisible();
 
-  await page.getByRole("button", { name: "Edit" }).nth(3).click();
+  await page.getByRole("button", { name: "Edit", exact: true }).nth(3).click();
   await page.getByLabel("WhatsApp").fill("+502 5555 1234");
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("link", { name: "WhatsApp" }).first()).toHaveAttribute("href", "https://wa.me/50255551234");
@@ -333,6 +336,8 @@ test("the trip map pins every placed item, filters by day, and places the rest",
   await page.setViewportSize({ width: 1280, height: 900 });
   await join(page);
   await tab(page, "Plan").click();
+  await page.getByRole("navigation", { name: "Plan" }).getByRole("button", { name: "Map", exact: true }).click();
+  await expect(page).toHaveURL(/\/plan\/map$/);
   const map = page.getByRole("region", { name: "Trip map", exact: true });
   await map.scrollIntoViewIfNeeded();
   // The backfill places the seed trip's items (and anything earlier tests added); undecided places are left over.
@@ -395,6 +400,7 @@ test("the trip map pins every placed item, filters by day, and places the rest",
   await context.setOffline(true);
   await tab(page, "Today").click();
   await tab(page, "Plan").click();
+  await page.getByRole("navigation", { name: "Plan" }).getByRole("button", { name: "Map", exact: true }).click();
   await map.scrollIntoViewIfNeeded();
   await expect(map.locator(".map-pin").first()).toBeVisible({ timeout: 15_000 });
   await expect(map.getByText(/^\d+ places on the map/)).toBeVisible();

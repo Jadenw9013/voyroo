@@ -16,6 +16,11 @@ test("home logo and new trip work at phone, tablet and desktop widths", async ({
     if (width === 390 || width === 1440) await page.screenshot({ path: testInfo.outputPath(`navigation-${width}.png`) });
     await page.getByRole("link", { name: "Voyroo home", exact: true }).click();
     await expect(page).toHaveURL(/\/\?all=1$/);
+    if (width < 768) {
+      // Phones start a new trip from the home page, one tap from any trip.
+      await expect(page.getByRole("textbox", { name: "Tell the planner about your trip" })).toBeVisible();
+      continue;
+    }
     await page.goto("/t/guatemala/plan");
     await page.getByRole("link", { name: "New trip", exact: true }).click();
     await expect(page).toHaveURL(/\/\?new=1$/);
@@ -34,7 +39,8 @@ test("share a view-only itinerary without sign-up, then revoke it", async ({ pag
   const update = await page.request.post("/api/t/guatemala/ops", { data: { ops: [{ op: "trip.update", set: { notes: "PRIVATE-NOTE-NOT-FOR-PRESENTATION" } }] } });
   expect(update.ok()).toBe(true);
   const { trip } = await (await page.request.get("/api/t/guatemala")).json();
-  const reservation = await page.request.post("/api/t/guatemala/ops", { data: { confirmed: true, ops: [{ op: "item.update", id: trip.items[0].id, set: { booking: { state: "booked", confirmation: "PRIVATE-CONFIRMATION-NOT-FOR-PRESENTATION", by: "Privbooker" } } }] } });
+  // The manage link carries the confirmation, so it never reaches the viewing link; nor does the price.
+  const reservation = await page.request.post("/api/t/guatemala/ops", { data: { confirmed: true, ops: [{ op: "item.update", id: trip.items[0].id, set: { booking: { state: "booked", confirmation: "PRIVATE-CONFIRMATION-NOT-FOR-PRESENTATION", by: "Privbooker", price: { amount: 4321, currency: "USD" }, url: "https://example.com/manage/PRIVATE-CONFIRMATION-NOT-FOR-PRESENTATION" } } }] } });
   expect(reservation.ok()).toBe(true);
   // Item notes are where door codes and wifi passwords go; contacts are phone numbers.
   const itemPrivate = await page.request.post("/api/t/guatemala/ops", { data: { confirmed: true, ops: trip.items.slice(0, 3).map((item: { id: string }) => ({ op: "item.update", id: item.id, set: { notes: "Door code PRIVATE-ITEM-NOTE-NOT-FOR-PRESENTATION", contact: { phone: "+502 5555 0199" } } })) } });
@@ -62,8 +68,12 @@ test("share a view-only itinerary without sign-up, then revoke it", async ({ pag
     expect(html).not.toContain("PRIVATE-CONFIRMATION-NOT-FOR-PRESENTATION");
     expect(html).not.toContain("PRIVATE-ITEM-NOTE-NOT-FOR-PRESENTATION");
     expect(html).not.toContain("Privbooker");
-    expect(html).not.toContain("5555 0199");
-    await expect(viewer.getByText("Shared Travel Guide", { exact: true })).toBeVisible();
+    expect(html).not.toContain("example.com/manage");
+    expect(html).not.toContain("4,321");
+    expect(html).not.toContain("4321");
+    // A stay's or a tour's phone is there to tap (the flight's isn't a business's).
+    expect(html).toContain('href="tel:+50255550199"');
+    await expect(viewer.getByText(/Shared travel guide/)).toBeVisible();
     await expect(viewer.getByRole("heading", { level: 1 })).toBeVisible();
     await expect(viewer.getByRole("button", { name: "Print itinerary", exact: true })).toBeVisible();
     await viewer.screenshot({ path: testInfo.outputPath("presentation-mobile.png") });
@@ -74,7 +84,7 @@ test("share a view-only itinerary without sign-up, then revoke it", async ({ pag
     expect(changed.ok()).toBe(true);
     // The existing preview updates through the real timer, without a page reload.
     await expect(viewer.getByRole("heading", { name: "Updated shared journey", exact: true })).toBeVisible({ timeout: 20_000 });
-    await expect(viewer.getByRole("heading", { name: "Updated public booking", exact: true })).toBeVisible();
+    await expect(viewer.getByText("Updated public booking", { exact: true }).first()).toBeVisible();
     await expect(viewer.getByRole("textbox")).toHaveCount(0);
     await expect(viewer.getByText("PRIVATE-NOTE-NOT-FOR-PRESENTATION")).toHaveCount(0);
     await expect(viewer.getByText(/PRIVATE-ITEM-NOTE-NOT-FOR-PRESENTATION/)).toHaveCount(0);
