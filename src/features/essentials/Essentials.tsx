@@ -1,15 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { driverStays, emergencyLines, ESSENTIAL_FIELDS, guessNationality, hasEssentials, type EssentialField } from "@/domain/essentials";
+import { emergencyLines, ESSENTIAL_FIELDS, guessNationality, hasEssentials, type EssentialField } from "@/domain/essentials";
 import { telUrl } from "@/domain/links";
 import { monthDay, todayIn } from "@/domain/time";
-import type { Essentials as EssentialsT, Item, Source } from "@/domain/types";
+import type { Essentials as EssentialsT, Source } from "@/domain/types";
 import { useTrip } from "@/client/store";
 import { Icon } from "@/ui/Icon";
 import { btn, field, label } from "@/ui/kit";
 import { Sheet } from "@/ui/Sheet";
-import { DriverSheet } from "./Driver";
 
 /*
  * Essentials: emergency numbers, the embassy, entry rules, money, plugs and
@@ -26,7 +25,6 @@ export function Essentials({ focus = false }: { focus?: boolean }) {
   const ref = useRef<HTMLElement>(null);
   const [editing, setEditing] = useState(false);
   const [redo, setRedo] = useState(false);
-  const [driver, setDriver] = useState<Item | null>(null);
   const e = trip.essentials;
   const has = hasEssentials(e);
 
@@ -35,7 +33,7 @@ export function Essentials({ focus = false }: { focus?: boolean }) {
   }, [focus]);
 
   return (
-    <section ref={ref} id="essentials" aria-labelledby="essentials-title" className="scroll-mt-20 rounded-3xl border border-line bg-surface p-5 shadow-lift">
+    <section ref={ref} id="essentials" aria-labelledby="essentials-title" className="scroll-mt-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 id="essentials-title" className="text-lg font-bold">
           Essentials
@@ -67,10 +65,7 @@ export function Essentials({ focus = false }: { focus?: boolean }) {
         </>
       )}
 
-      <DriverList onPick={setDriver} />
-
       {editing && <EditSheet onClose={() => setEditing(false)} />}
-      {driver && <DriverSheet item={driver} onClose={() => setDriver(null)} />}
     </section>
   );
 }
@@ -155,7 +150,7 @@ function Sources({ sources }: { sources: Source[] }) {
       <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
         {sources.map((s) => (
           <li key={s.url}>
-            <a href={s.url} target="_blank" rel="noreferrer" className="inline-flex min-h-9 items-center gap-1 text-sm font-semibold text-accent underline underline-offset-2">
+            <a href={s.url} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-accent underline underline-offset-2">
               {s.title || hostOf(s.url)}
               <Icon name="external" className="size-3.5" />
             </a>
@@ -188,7 +183,7 @@ function Actions({ e, onRedo, redo }: { e: EssentialsT; onRedo: () => void; redo
         </button>
       )}
       <button type="button" onClick={onRedo} aria-expanded={redo} className={btn.quiet}>
-        <Icon name="sparkles" />
+        <Icon name="search" />
         New draft
       </button>
     </div>
@@ -240,7 +235,7 @@ function DraftForm({ replacing = false, onDone }: { replacing?: boolean; onDone:
       </p>
       {error && <p className="font-semibold text-danger">{error}</p>}
       <button type="submit" disabled={busy || !online || nationality.trim().length < 2} className={`${btn.primary} self-start`}>
-        <Icon name="sparkles" />
+        <Icon name="search" />
         {busy ? "Searching…" : online ? "Draft with a web search" : "Drafting needs a connection"}
       </button>
     </form>
@@ -298,31 +293,3 @@ function EditSheet({ onClose }: { onClose: () => void }) {
   );
 }
 
-function DriverList({ onPick }: { onPick: (i: Item) => void }) {
-  const { trip } = useTrip();
-  const stays = driverStays(trip);
-  return (
-    <div className="mt-4 border-t border-line pt-3">
-      <h3 className="text-base font-bold">Show to driver</h3>
-      {stays.length === 0 ? (
-        <p className="mt-1 text-sm text-muted">Add an address to a stay and it shows up here, in big type for a taxi driver.</p>
-      ) : (
-        <ul className="mt-1 flex flex-col">
-          {stays.map((s) => (
-            <li key={s.id}>
-              <button type="button" onClick={() => onPick(s)} className="flex min-h-12 w-full items-center gap-3 rounded-xl px-1 py-1.5 text-left hover:bg-sunken">
-                <Icon name="bed" className="size-5 shrink-0 text-k-stay" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-semibold">{s.title}</span>
-                  <span className="block truncate text-sm text-muted">{s.place?.address || s.place?.name}</span>
-                </span>
-                <span className="sr-only">Show to driver</span>
-                <Icon name="chevronRight" className="size-4 text-muted" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}

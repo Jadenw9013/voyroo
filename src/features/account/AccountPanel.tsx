@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { btn } from "@/ui/kit";
 import { Icon } from "@/ui/Icon";
 import type { Account } from "@/server/auth";
 
 interface AccountState { account: { name: string; email: string } | null; googleEnabled: boolean }
 
-export function AccountPanel({ initialAccount = null }: { initialAccount?: Account | null }) {
+/** Google sign-in, or who you're signed in as. `title` shows above it only when there's something to show. */
+export function AccountPanel({ initialAccount = null, title }: { initialAccount?: Account | null; title?: ReactNode }) {
   const [state, setState] = useState<AccountState | null>(initialAccount ? { account: initialAccount, googleEnabled: true } : null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -43,8 +44,10 @@ export function AccountPanel({ initialAccount = null }: { initialAccount?: Accou
   }
 
   if (!state && !error) return null;
+  if (!error && !state?.account && !state?.googleEnabled) return null;
   const returnTo = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/?all=1";
   return <section aria-label="Your account" className="account-control">
+    {title}
     {state?.account ? <>
       <details className="account-menu"><summary aria-label={`Your account, ${state.account.name}`}><span className="account-avatar">{state.account.name.slice(0, 1).toUpperCase()}</span><span className="account-name">{state.account.name}</span><Icon name="chevronDown" className="size-3.5" /></summary><div className="account-popover"><p className="font-semibold">{state.account.name}</p><p className="break-words text-sm text-muted">{state.account.email}</p><p className="my-3 text-sm text-muted">Your trips and planning conversation follow you across devices.</p><button type="button" disabled={busy} onClick={() => void logout()} className={btn.secondary}>{busy ? "Signing out…" : "Sign out"}</button></div></details>
     </> : state?.googleEnabled ? <>

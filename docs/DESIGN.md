@@ -10,18 +10,19 @@ The app is read on a phone in a shuttle, on a boat, in bright sun and with patch
 
 ## Color
 
-Each token is written once as `light-dark(light, dark)`. The phone's theme decides unless Trip, Display forces one. Every text color passes WCAG AA (4.5:1) on its own tint, on the surface and on the page, in both themes; the weakest pair is 5.3:1.
+Each token is written once as `light-dark(light, dark)`. The phone's theme decides unless Trip, Display forces one. Every text color passes WCAG AA (4.5:1) on its own tint, on the surface and on the page, in both themes, and the status colors reach 7:1 on their tints (they're read outdoors).
 
 | Token | Light | Dark | Job |
 |---|---|---|---|
 | canvas | `#f4f6fa` | `#101b2b` | Page background, a pale blue in daylight. |
 | surface | `#ffffff` | `#18263a` | Raised rows, sheets. |
-| ink / muted | `#192f4d` / `#596a7e` | `#ecf2fa` / `#afbed0` | Text and secondary text. |
+| ink / muted | `#192f4d` / `#4c5c70` | `#ecf2fa` / `#afbed0` | Text and secondary text. |
+| line / line-strong | `#dce3ed` / `#7a8a9e` | `#354861` / `#7186a3` | Hairlines between rows / the edge of a field or control (3:1). |
 | accent | `#176b59` | `#7ad9bd` | Forest green: links, primary actions, the active tab. |
 | ticket | `#ffc21a` | `#ffc21a` | The "Next" ticket on Today. |
-| ok | `#11693c` | `#6fd69a` | Booked. |
-| todo | `#8a4b00` | `#ffb95c` | To book, and nights with nowhere to stay. |
-| maybe | `#5b3ea8` | `#c2b0ff` | Maybe. |
+| ok | `#0c5530` | `#6fd69a` | Booked. |
+| todo | `#6e3b00` | `#ffb95c` | To book, and nights with nowhere to stay. |
+| maybe | `#4a2f90` | `#c2b0ff` | Maybe. |
 | danger | `#b3261e` | `#ff8a80` | Delete. |
 
 **Kinds of things**, each with its icon on a tint of its color:
@@ -51,11 +52,13 @@ Today's **Next** card is a ticket stub: marigold, a big tabular time, the title,
 
 ## Deciding together
 
-Every item, ideas most of all, takes one tap per person: **I'm in** (thumbs up), **Maybe** (question mark), **Not for me** (thumbs down), and a heart. On the item page each answer has its word; in the Ideas list phones show the icon and count, with the word in the button's name. Your own answer is a filled button (pressed), never color alone, and tapping it again takes it back. Tallies name people for screen readers: "3 people are in: Ana, Ben, Cara". Ideas sort by **Most wanted** (most people in, then hearts, then maybes). A comment that's new on this phone carries a dot and the word "New". Only you change your vote or edit and delete your comments; the assistant reads the tallies and posts a comment when you ask, but never votes. None of it is on the view-only link.
+Every item, ideas most of all, takes one tap per person: **I'm in** (thumbs up), **Maybe** (question mark), **Not for me** (thumbs down), and a heart. Each answer shows its icon and its word, on the item page and in the Ideas list, with the count beside it. Your own answer is a filled button (pressed), never color alone, and tapping it again takes it back. Tallies name people for screen readers: "3 people are in: Ana, Ben, Cara". Ideas sort by **Most wanted** (most people in, then hearts, then maybes). A comment that's new on this phone carries a dot and the word "New". Only you change your vote or edit and delete your comments; the assistant reads the tallies and posts a comment when you ask, but never votes. None of it is on the view-only link.
 
 ## Layout
 
-- A single column up to 42rem, left-aligned. Phones get a bottom bar (Today, Plan, **+**, To-do, Trip) in thumb reach; tablets and laptops get the same tabs along the top.
+- A single column up to 42rem, left-aligned. Phones get a bottom bar (Today, Plan, **+ Add or ask**, To-do, Trip) in thumb reach; tablets and laptops get the same tabs in a sidebar.
+- Each feature has one named place. Plan has four parts named at the top: **Days · Map · Ideas · Posts**. To-do has three: **To-do · Packing · Expenses**. Trip opens on **Essentials**. Things you do at a place (Directions, Call, Show to driver, the confirmation code) sit on that place: the Next ticket, Tonight, the item page. The + sheet names what you can type: a plan, an expense, a packing line, a link, or a question.
+- Today opens on the Next ticket: nothing above it but the trip's name and the row of days. No hero, no shortcut circles.
 - Touch targets are at least 44px.
 - Sheets rise from the bottom on phones and sit centered on wider screens. Only one is open at a time, and its main field is focused when it opens so the keyboard comes up.
 - Status is never shown by color alone: "Booked" has a check and the word, "To book" a ring and the words, "Maybe" a label.

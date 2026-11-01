@@ -25,7 +25,7 @@ export function ShareLanding({ shared, title, trips }: { shared: string; title: 
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-4 py-10">
       <div className="flex flex-col gap-5 rounded-3xl border border-line bg-surface p-6 shadow-lift sm:p-8">
-        <h1 className="text-2xl font-extrabold tracking-tight">Save to which trip?</h1>
+        <h1 className="text-2xl font-bold">Save to which trip?</h1>
         <p className="truncate text-base text-muted">{urls[0] ?? shared}</p>
         <ul className="flex flex-col gap-2.5">
           {trips.map((t) => (

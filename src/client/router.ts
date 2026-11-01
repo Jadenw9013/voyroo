@@ -11,6 +11,7 @@ import { useCallback } from "react";
  *   /t/{id}                 Today
  *   /t/{id}/day/{date}      Today, on that day
  *   /t/{id}/plan            Plan (days)
+ *   /t/{id}/plan/map        Plan, the trip map (/plan/map/{date}: that day's stops)
  *   /t/{id}/plan/ideas      Plan, ideas with no day
  *   /t/{id}/plan/posts      Plan, every saved post as a grid
  *   /t/{id}/todo            To-do
@@ -21,12 +22,12 @@ import { useCallback } from "react";
  *   /t/{id}/item/{itemId}   An item's page
  */
 
-export type PlanSection = "days" | "ideas" | "posts";
+export type PlanSection = "days" | "map" | "ideas" | "posts";
 export type TodoSection = "list" | "packing";
 
 export type View =
   | { tab: "today"; day?: string }
-  | { tab: "plan"; section?: PlanSection }
+  | { tab: "plan"; section?: PlanSection; day?: string }
   | { tab: "todo"; section?: TodoSection }
   | { tab: "expenses" }
   | { tab: "trip"; section?: "essentials" }
@@ -36,6 +37,7 @@ export function parseView(pathname: string): View {
   const parts = pathname.split("/").filter(Boolean).slice(2);
   const [a, b] = parts;
   if (a === "day" && b && /^\d{4}-\d{2}-\d{2}$/.test(b)) return { tab: "today", day: b };
+  if (a === "plan" && b === "map") return parts[2] && /^\d{4}-\d{2}-\d{2}$/.test(parts[2]) ? { tab: "plan", section: "map", day: parts[2] } : { tab: "plan", section: "map" };
   if (a === "plan") return { tab: "plan", section: b === "ideas" || b === "posts" ? b : "days" };
   if (a === "todo") return b === "packing" ? { tab: "todo", section: "packing" } : { tab: "todo" };
   if (a === "expenses") return { tab: "expenses" };
@@ -52,6 +54,7 @@ export function viewPath(tripId: string, v: View): string {
     case "item":
       return `${base}/item/${encodeURIComponent(v.itemId)}`;
     case "plan":
+      if (v.section === "map" && v.day) return `${base}/plan/map/${v.day}`;
       return v.section && v.section !== "days" ? `${base}/plan/${v.section}` : `${base}/plan`;
     case "todo":
       return v.section === "packing" ? `${base}/todo/packing` : `${base}/todo`;

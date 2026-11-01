@@ -41,7 +41,7 @@ export function PinButton({ pin, selected, onClick }: { pin: MapPin; selected: b
           selected ? "scale-110 border-accent bg-accent text-on-accent" : pin.idea ? "border-dashed border-line bg-surface text-ink" : "border-line bg-surface text-ink"
         }`}
       >
-        <span className={`chip tnum flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-extrabold ${KIND_CHIP[pin.kind]}`}>
+        <span className={`chip tnum flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${KIND_CHIP[pin.kind]}`}>
           {pin.n ?? <Icon name={KIND_ICON[pin.kind]} className="size-3.5" />}
         </span>
         <span className="truncate">{pin.label}</span>
@@ -57,7 +57,7 @@ export function GroupButton({ pins, selected, onClick }: { pins: MapPin[]; selec
   return (
     <button type="button" data-pins={pins.map((p) => p.id).join(" ")} onClick={onClick} aria-label={`${pins.length} places here: ${names}. Show them.`} className="flex min-h-11 flex-col items-center justify-end rounded-full pt-1">
       <span
-        className={`relative z-[1] flex items-center gap-1.5 rounded-full border py-1 pr-3 pl-1 text-sm leading-tight font-extrabold whitespace-nowrap shadow-lift ${
+        className={`relative z-1 flex items-center gap-1.5 rounded-full border py-1 pr-3 pl-1 text-sm leading-tight font-bold whitespace-nowrap shadow-lift ${
           selected ? "border-accent bg-accent text-on-accent" : "border-line bg-surface text-ink"
         }`}
       >

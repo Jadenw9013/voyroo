@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { seedTrip } from "@/server/seed";
 import { prepareChange } from "./change";
-import { driverPhrase, driverStays, driverText, emergencyLines, guessNationality, hasEssentials } from "./essentials";
+import { drivable, driverPhrase, driverStays, driverText, emergencyLines, guessNationality, hasEssentials } from "./essentials";
 import type { Op } from "./ops";
 import type { TripState } from "./types";
 
@@ -76,5 +76,14 @@ describe("essentials helpers", () => {
     expect(stays.every((s) => s.kind === "stay" && (s.place?.name || s.place?.address))).toBe(true);
     expect(driverText({ id: "x", kind: "stay", title: "Casa", place: { name: "Casa Santo Domingo", address: "3a Calle Oriente 28, Antigua Guatemala" } })).toBe("Casa Santo Domingo\n3a Calle Oriente 28, Antigua Guatemala");
     expect(driverText({ id: "x", kind: "stay", title: "Casa", place: { address: "3a Calle Oriente 28" } })).toBe("Casa\n3a Calle Oriente 28");
+    // A place "name" that's only the area: the stay's own name leads, so the driver knows which door.
+    expect(driverText({ id: "x", kind: "stay", title: "Lumina, AMATE Atitlán", place: { name: "San Marcos La Laguna" } })).toBe("Lumina, AMATE Atitlán\nSan Marcos La Laguna");
+  });
+
+  it("offers a driver card only where a driver can go", () => {
+    expect(drivable({ kind: "stay", place: { name: "San Marcos La Laguna" } })).toBe(true);
+    expect(drivable({ kind: "activity", place: { name: "Lake Atitlán" } })).toBe(false);
+    expect(drivable({ kind: "food", place: { address: "4a Avenida Norte 14, Antigua" } })).toBe(true);
+    expect(drivable({ kind: "flight", place: { address: "La Aurora International Airport" } })).toBe(false);
   });
 });

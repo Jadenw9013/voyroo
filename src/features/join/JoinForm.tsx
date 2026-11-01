@@ -73,7 +73,7 @@ export function JoinForm({
       <div className="flex flex-col gap-6 rounded-3xl border border-line bg-surface p-6 shadow-lift sm:p-8">
         <Brand />
         <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-extrabold tracking-tight">{tripName}</h1>
+          <h1 className="text-3xl font-bold">{tripName}</h1>
           <p className="text-base text-muted">
             {hasPasscode
               ? "Enter your first name and the passcode the group shared with you."

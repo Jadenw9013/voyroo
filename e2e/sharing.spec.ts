@@ -16,6 +16,11 @@ test("home logo and new trip work at phone, tablet and desktop widths", async ({
     if (width === 390 || width === 1440) await page.screenshot({ path: testInfo.outputPath(`navigation-${width}.png`) });
     await page.getByRole("link", { name: "Voyroo home", exact: true }).click();
     await expect(page).toHaveURL(/\/\?all=1$/);
+    if (width < 768) {
+      // Phones start a new trip from the home page, one tap from any trip.
+      await expect(page.getByRole("textbox", { name: "Tell the planner about your trip" })).toBeVisible();
+      continue;
+    }
     await page.goto("/t/guatemala/plan");
     await page.getByRole("link", { name: "New trip", exact: true }).click();
     await expect(page).toHaveURL(/\/\?new=1$/);

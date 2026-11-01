@@ -11,7 +11,7 @@ import type { Item, ItemKind, Link } from "@/domain/types";
 import { useClock } from "@/client/hooks";
 import { useTrip } from "@/client/store";
 import { KindChip } from "@/ui/badges";
-import { Icon, LINK_ICON } from "@/ui/Icon";
+import { Icon, LINK_ICON, type IconName } from "@/ui/Icon";
 import { btn, field } from "@/ui/kit";
 import { Sheet } from "@/ui/Sheet";
 import { Assistant } from "../assistant/Assistant";
@@ -148,7 +148,7 @@ function ComposerBody({ req, serverNow, onDone }: { req: ComposeRequest; serverN
       {parsed.type === "ask" && (
         <div className="flex flex-col gap-2">
           <button id="composer-primary" type="button" onClick={() => setAsking(text.trim())} className={`${btn.primary} self-start`}>
-            <Icon name="sparkles" />
+            <Icon name="message" />
             Ask the assistant
           </button>
           <p className="text-sm text-muted">It can find places, check hours, plan a day, or add things for you.</p>
@@ -169,21 +169,45 @@ function Hints({ day, onPick, onAsk }: { day: string | null; onPick: (t: string)
     `Where should we eat near our place in ${trip.destination}?`,
     "What should we pack?",
   ];
+  // Each kind of line names what it becomes, so the + is also the way in to expenses and packing.
+  const examples: { what: string; icon: IconName; line: string; fill: string }[] = [
+    { what: "A plan", icon: "today", line: "Sunrise hike sat 5am", fill: "Sunrise hike sat 5am" },
+    { what: "An expense", icon: "receipt", line: `Taxi 80 ${trip.currency} split all`, fill: `Taxi 80 ${trip.currency} split all` },
+    { what: "Packing", icon: "backpack", line: "bring speaker - Ben", fill: "bring speaker - " },
+  ];
   return (
-    <div className="flex flex-col gap-3">
-      <p className="text-sm text-muted">
-        Try <button type="button" className="font-semibold text-accent underline-offset-2 hover:underline" onClick={() => onPick("Sunrise hike sat 5am")}>“Sunrise hike sat 5am”</button>, <button type="button" className="font-semibold text-accent underline-offset-2 hover:underline" onClick={() => onPick(`Taxi 80 ${trip.currency} split all`)}>“Taxi 80 {trip.currency} split all”</button> or <button type="button" className="font-semibold text-accent underline-offset-2 hover:underline" onClick={() => onPick("bring speaker - ")}>“bring speaker - Ben”</button>, paste a link from TikTok, Instagram or a booking site, or ask:
-      </p>
-      <ul className="flex flex-col gap-2">
-        {asks.map((a) => (
-          <li key={a}>
-            <button type="button" onClick={() => onAsk(a)} className="flex min-h-11 w-full items-center gap-3 rounded-xl border border-line px-3 text-left text-base hover:bg-sunken">
-              <Icon name="sparkles" className="size-4 text-accent" />
-              {a}
-            </button>
-          </li>
-        ))}
-      </ul>
+    <div className="flex flex-col gap-4">
+      <section aria-labelledby="composer-examples" className="flex flex-col gap-1">
+        <h3 id="composer-examples" className="text-sm font-semibold text-muted">
+          Type a line, or paste a link from TikTok, Instagram or a booking site
+        </h3>
+        <ul className="flex flex-col">
+          {examples.map((e) => (
+            <li key={e.what}>
+              <button type="button" onClick={() => onPick(e.fill)} className="-mx-2 flex min-h-11 w-full items-center gap-3 rounded-xl px-2 text-left text-base hover:bg-sunken">
+                <Icon name={e.icon} className="size-5 shrink-0 text-muted" />
+                <span className="w-24 shrink-0 font-semibold">{e.what}</span>
+                <span className="min-w-0 text-accent">“{e.line}”</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </section>
+      <section aria-labelledby="composer-asks" className="flex flex-col gap-1">
+        <h3 id="composer-asks" className="text-sm font-semibold text-muted">
+          Or ask the assistant
+        </h3>
+        <ul className="flex flex-col gap-2">
+          {asks.map((a) => (
+            <li key={a}>
+              <button type="button" onClick={() => onAsk(a)} className="flex min-h-11 w-full items-center gap-3 rounded-xl border border-line px-3 text-left text-base hover:bg-sunken">
+                <Icon name="message" className="size-4 shrink-0 text-muted" />
+                {a}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </section>
     </div>
   );
 }
@@ -311,7 +335,7 @@ function ItemPreview({ draft, kindHint, onDone, onAsk }: { draft: Draft; kindHin
           Add
         </button>
         <button type="button" onClick={onAsk} className={btn.quiet}>
-          <Icon name="sparkles" />
+          <Icon name="message" />
           Ask instead
         </button>
       </div>
@@ -334,7 +358,7 @@ function ExpensePreview({ draft, onDone, onAsk }: { draft: ExpenseDraft; onDone:
       )}
       <ExpenseForm start={draft} onDone={onDone} primaryId="composer-primary" autoFocus={false} />
       <button type="button" onClick={onAsk} className={`${btn.quiet} self-start`}>
-        <Icon name="sparkles" />
+        <Icon name="message" />
         Ask instead
       </button>
     </div>

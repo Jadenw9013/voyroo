@@ -74,9 +74,11 @@ test("essentials: one tap from Today, a draft that says verify, sources, correct
   await clearEssentials(page);
   await page.reload();
 
-  await page.getByRole("button", { name: /Trip essentials/ }).click();
-  await expect(page).toHaveURL(/\/t\/guatemala\/trip\/essentials$/);
+  await tab(page, "Trip").click();
+  await expect(page).toHaveURL(/\/t\/guatemala\/trip$/);
   const card = page.getByRole("region", { name: "Essentials" });
+  // First on the Trip tab: on screen without scrolling.
+  await expect(card.getByRole("heading", { name: "Essentials" })).toBeInViewport();
   await expect(card.getByLabel("Passports from")).toHaveValue("United States");
   await card.getByRole("button", { name: "Draft with a web search" }).click();
 
@@ -99,7 +101,9 @@ test("essentials: one tap from Today, a draft that says verify, sources, correct
   await expect(card).toContainText("verify before you go");
   await expect(card.locator('a[href="tel:110"]')).toBeVisible();
 
-  await card.getByRole("button", { name: /Lumina, AMATE Atitlán/ }).click();
+  // The driver card is on the place you're going to.
+  await page.goto("/t/guatemala/item/lodging-atitlan");
+  await page.getByRole("button", { name: "Show to driver" }).click();
   const driver = page.getByRole("dialog", { name: "Show to driver" });
   await expect(driver.locator('[lang="es"]')).toContainText("Por favor, lléveme a esta dirección:");
   await expect(driver).toContainText("San Marcos La Laguna");
@@ -143,7 +147,8 @@ for (const scheme of ["light", "dark"] as const) {
     await page.getByRole("status").getByRole("button", { name: "Dismiss" }).click();
     await noSeriousProblems(page, `Trip with checked essentials (${scheme})`);
 
-    await card.getByRole("button", { name: /Lumina, AMATE Atitlán/ }).click();
+    await page.goto("/t/guatemala/item/lodging-atitlan");
+    await page.getByRole("button", { name: "Show to driver" }).click();
     await expect(page.getByRole("dialog", { name: "Show to driver" })).toBeVisible();
     await noSeriousProblems(page, `Show to driver (${scheme})`);
     await page.keyboard.press("Escape");

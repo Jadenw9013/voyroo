@@ -188,7 +188,7 @@ export function ReceiptsToggle() {
             // Storage blocked: it still applies until the app closes.
           }
         }}
-        className="size-6 shrink-0 accent-[var(--accent)]"
+        className="size-6 shrink-0 accent-accent"
       />
       Also log paid receipts as expenses, split with the group
     </label>
@@ -226,7 +226,7 @@ export function ImportProgress() {
                 {j.preview && <img src={j.preview} alt={`Screenshot ${n + 1}`} className="size-full object-cover" />}
                 {(j.status === "waiting" || j.status === "reading") && (
                   <span className="absolute inset-0 flex items-center justify-center bg-black/40 text-white">
-                    <Icon name={j.status === "reading" ? "sparkles" : "clock"} className={`size-5 ${j.status === "reading" ? "animate-pulse" : ""}`} />
+                    <Icon name="clock" className="size-5" />
                   </span>
                 )}
               </span>

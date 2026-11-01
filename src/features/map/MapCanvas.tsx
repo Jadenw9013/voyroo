@@ -292,13 +292,13 @@ export default function MapCanvas(props: MapCanvasProps) {
           return createPortal(<GroupButton pins={group} selected={!!selected && c.ids.includes(selected)} onClick={() => openGroup(c)} />, el, c.key);
         })}
 
-      <div className="absolute top-3 right-3 z-10 flex flex-col gap-2">
+      <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-2">
+        {/* In words: the expand arrows were easy to mistake for "show all pins" just below. */}
         {onFullScreen && (
-          <div className={group}>
-            <button type="button" onClick={onFullScreen} aria-label="Open the map full screen" className={control}>
-              <Icon name="expand" className="size-5" />
-            </button>
-          </div>
+          <button type="button" onClick={onFullScreen} aria-label="Open the map full screen" className="flex min-h-11 items-center gap-2 self-end rounded-full border border-line bg-surface px-4 text-sm font-semibold text-ink shadow-lift hover:bg-sunken">
+            <Icon name="expand" className="size-4" />
+            Full screen
+          </button>
         )}
         {/* Fingers pinch; a mouse gets buttons (inline, the wheel needs Ctrl so the page still scrolls). */}
         <div className={`${group} pointer-coarse:hidden`}>
@@ -309,10 +309,14 @@ export default function MapCanvas(props: MapCanvasProps) {
             <Icon name="minus" className="size-5" />
           </button>
         </div>
-        <div className={group}>
-          <button type="button" onClick={() => fit()} aria-label="Show all pins" className={control} disabled={!ready || !frame.length}>
-            <Icon name="fit" className="size-5" />
+        {/* With one pin there's nothing to fit, and the button would cover it. */}
+        {frame.length > 1 && (
+          <button type="button" onClick={() => fit()} aria-label="Show all pins" className="flex min-h-11 items-center gap-2 rounded-full border border-line bg-surface px-4 text-sm font-semibold text-ink shadow-lift hover:bg-sunken disabled:opacity-60" disabled={!ready}>
+            <Icon name="fit" className="size-4" />
+            Show all
           </button>
+        )}
+        <div className={group}>
           <button type="button" onClick={locate} aria-label="Show where I am" className={control} disabled={!ready || locating}>
             <Icon name="locate" className="size-5" />
           </button>
@@ -346,7 +350,7 @@ export default function MapCanvas(props: MapCanvasProps) {
         </>
       )}
 
-      <p className="absolute right-0 bottom-0 z-10 rounded-tl-lg bg-surface px-2 py-0.5 text-[11px] leading-5 text-muted">
+      <p className="absolute right-0 bottom-0 z-10 rounded-tl-lg bg-surface px-2 py-0.5 text-xs leading-5 text-muted">
         <a href="https://openfreemap.org" target="_blank" rel="noreferrer" className="underline">
           OpenFreeMap
         </a>{" "}

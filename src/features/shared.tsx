@@ -31,32 +31,34 @@ export function rowTitle(row: Row): string {
   return verb ? `${verb}: ${row.item.title}` : row.item.title;
 }
 
-/** Status pills after a title: booked, to book, maybe; and how many links and comments it has. */
+/** Status pills after a title: booked, to book, maybe; and how many posts, links and comments it has. */
 export function Marks({ item }: { item: Item }) {
   const links = (item.links ?? []).filter((l) => !isPost(l.kind)).length;
   const posts = (item.links ?? []).length - links;
   const comments = liveComments(item).length;
   if (!item.booking && !item.maybe && !links && !posts && !comments) return null;
   return (
-    <span className="flex flex-wrap items-center gap-1.5">
+    <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
       {item.booking?.state === "booked" && <StatusPill status="booked" />}
       {item.booking?.state === "todo" && <StatusPill status="todo" />}
       {item.maybe && <StatusPill status="maybe" />}
       {posts > 0 && (
-        <span className="inline-flex items-center gap-1 text-xs text-muted sm:text-sm">
-          <Icon name="image" className="size-3.5" />
+        <span className="inline-flex items-center gap-1 text-sm text-muted">
+          <Icon name="image" className="size-4" />
           {posts}
+          <span className="sr-only">{posts === 1 ? "post" : "posts"}</span>
         </span>
       )}
       {links > 0 && (
-        <span className="inline-flex items-center gap-1 text-xs text-muted sm:text-sm">
-          <Icon name="link" className="size-3.5" />
+        <span className="inline-flex items-center gap-1 text-sm text-muted">
+          <Icon name="link" className="size-4" />
           {links}
+          <span className="sr-only">{links === 1 ? "link" : "links"}</span>
         </span>
       )}
       {comments > 0 && (
-        <span className="inline-flex items-center gap-1 text-xs text-muted sm:text-sm">
-          <Icon name="message" className="size-3.5" />
+        <span className="inline-flex items-center gap-1 text-sm text-muted">
+          <Icon name="message" className="size-4" />
           {comments}
           <span className="sr-only">{comments === 1 ? "comment" : "comments"}</span>
         </span>
@@ -65,92 +67,53 @@ export function Marks({ item }: { item: Item }) {
   );
 }
 
-/** One line in a day or a list: time, kind, title, where, status, and contextual photo/post thumbnail. Taps through to the item. `footer` sits under it, outside the tap target. */
-export function ItemRow({ row, item, onOpen, showDate, footer }: { row?: Row; item: Item; onOpen: () => void; showDate?: boolean; footer?: ReactNode }) {
-  const { trip, tripId, justChanged, apply } = useTrip();
+/**
+ * One line in a day or a list, read like a departure board: the time in its
+ * own column, the kind, the title, where, and its status. The whole row opens
+ * the item; deleting lives on the item's page, away from the thumb's path.
+ * A picture shows only when the group saved one (a post or a link's image).
+ * `footer` sits under it, outside the tap target.
+ */
+export function ItemRow({ row, item, onOpen, footer }: { row?: Row; item: Item; onOpen: () => void; footer?: ReactNode }) {
+  const { trip, tripId, justChanged } = useTrip();
   const when = row ? row.when : item.start;
   const zone = when?.time && when.tz && when.tz !== trip.tz ? zoneName(when.tz).replace(/ Time$/, "") : null;
   const title = row ? rowTitle(row) : item.title;
   const place = item.place?.name || item.place?.address;
   const ending = row?.part === "end";
   const post = ending ? undefined : item.links?.find((l) => isPost(l.kind));
-  const photoUrl = ending ? undefined : itemPhotoUrl(item, trip);
-
-  const handleDelete = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    const isBooked = item.booking?.state === "booked";
-    if (isBooked) {
-      const ok = window.confirm(`"${item.title}" is marked as booked. Delete it anyway?`);
-      if (!ok) return;
-    }
-    await apply([{ op: "item.remove", id: item.id }], {
-      confirmed: isBooked,
-      message: `Deleted "${item.title}"`,
-    });
-  };
+  const picture = ending || post || !item.links?.some((l) => l.image) ? undefined : itemPhotoUrl(item, trip);
 
   return (
-    <li className={`group/item relative ${justChanged.has(item.id) ? "just-changed rounded-2xl" : ""}`}>
-      <div className="relative flex items-center">
-        <button
-          type="button"
-          onClick={onOpen}
-          className="flex w-full items-center gap-2.5 rounded-2xl border border-line/50 bg-sunken/40 p-2.5 pr-11 text-left transition-colors hover:border-line hover:bg-sunken sm:items-start sm:gap-3 sm:px-3 sm:py-3 sm:pr-12"
-        >
-          <span className="hidden w-[4.5rem] shrink-0 pt-1 text-right whitespace-nowrap sm:block">
-            {showDate && when && <span className="block text-xs font-semibold text-muted">{formatDay(when.date)}</span>}
-            {when?.time ? (
-              <time className="block text-sm leading-tight font-bold">{formatTime(when.time)}</time>
-            ) : (
-              !showDate && <span className="block text-xs text-muted">Anytime</span>
-            )}
-            {zone && <span className="block text-[11px] text-muted">{zone}</span>}
+    <li className={`relative ${justChanged.has(item.id) ? "just-changed rounded-xl" : ""}`}>
+      <button type="button" onClick={onOpen} className="flex min-h-14 w-full items-start gap-3 rounded-xl px-2 py-2.5 text-left hover:bg-sunken">
+        {row && (
+          <span className="w-18 shrink-0 pt-1.5 text-sm leading-snug">
+            {when?.time ? <time className="block font-bold text-ink">{formatTime(when.time)}</time> : <span className="block text-muted">Anytime</span>}
+            {zone && <span className="block text-muted">{zone}</span>}
           </span>
-          <span className={ending ? "opacity-60" : ""}>
-            <KindChip kind={item.kind} />
+        )}
+        <span className={ending ? "opacity-60" : ""}>
+          <KindChip kind={item.kind} />
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col gap-1 pt-1">
+          <span className={`text-base leading-snug font-semibold ${ending ? "text-muted" : ""}`}>{title}</span>
+          {place && !ending && <span className="truncate text-sm text-muted">{place}</span>}
+          {!ending && <Marks item={item} />}
+        </span>
+        {post ? (
+          <span className="relative h-14 w-12 shrink-0 overflow-hidden rounded-lg bg-sunken" aria-hidden="true">
+            <PostImage tripId={tripId} entry={{ link: post, item }} />
           </span>
-          <span className="flex min-w-0 flex-1 flex-col gap-0.5 sm:gap-1 sm:pt-0.5">
-            <span className="flex flex-wrap items-center gap-1.5 sm:hidden">
-              {showDate && when && <span className="text-[11px] font-bold text-accent">{formatDay(when.date)}</span>}
-              {when?.time ? (
-                <time className="tnum text-xs font-extrabold text-accent">
-                  {formatTime(when.time)}
-                  {zone ? ` ${zone}` : ""}
-                </time>
-              ) : (
-                !showDate && <span className="text-[11px] font-medium text-muted">Flexible time</span>
-              )}
-            </span>
-            <span className={`text-sm leading-snug font-bold sm:text-base ${ending ? "text-muted" : ""}`}>{title}</span>
-            {place && !ending && <span className="truncate text-xs text-muted sm:text-sm">{place}</span>}
-            {!ending && <Marks item={item} />}
+        ) : picture ? (
+          <span className="relative size-12 shrink-0 overflow-hidden rounded-lg bg-sunken" aria-hidden="true">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={picture} alt="" loading="lazy" className="size-full object-cover object-center" />
           </span>
-          {post ? (
-            <span className="relative h-14 w-12 shrink-0 overflow-hidden rounded-xl border border-line bg-sunken" aria-hidden="true">
-              <PostImage tripId={tripId} entry={{ link: post, item }} />
-            </span>
-          ) : photoUrl ? (
-            <span className="relative size-12 shrink-0 overflow-hidden rounded-xl border border-line bg-sunken" aria-hidden="true">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={photoUrl} alt="" loading="lazy" className="size-full object-cover object-center" />
-            </span>
-          ) : (
-            <Icon name="chevronRight" className="size-4 shrink-0 text-muted" />
-          )}
-        </button>
-
-        {/* Quick Delete button directly accessible on every item card */}
-        <button
-          type="button"
-          onClick={handleDelete}
-          title="Delete item"
-          aria-label="Delete item"
-          className="absolute right-2 top-1/2 -translate-y-1/2 flex size-8 items-center justify-center rounded-xl bg-canvas/80 text-muted opacity-80 backdrop-blur-md transition-all hover:bg-danger/15 hover:text-danger hover:opacity-100 sm:opacity-0 sm:group-hover/item:opacity-100"
-        >
-          <Icon name="trash" className="size-3.5" />
-        </button>
-      </div>
+        ) : (
+          <Icon name="chevronRight" className="mt-2.5 size-4 shrink-0 text-muted" />
+        )}
+      </button>
       {footer}
     </li>
   );

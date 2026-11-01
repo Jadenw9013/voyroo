@@ -91,9 +91,27 @@ export function driverStays(trip: Trip): Item[] {
     .sort((a, b) => (a.start?.date ?? "9999").localeCompare(b.start?.date ?? "9999"));
 }
 
-/** What to copy for a driver or a messaging app: the place's name and address, one per line. */
+/**
+ * What a driver needs, in order: the place's name, then where it is. The place's
+ * own name wins when it's the fuller version of the title ("Casa" → "Casa Santo
+ * Domingo"); when it's only the area ("San Marcos La Laguna"), the title leads.
+ */
+export function driverLines(item: Pick<Item, "title" | "place">): { name: string; rest: string[] } {
+  const placeName = item.place?.name?.trim();
+  const ownName = !!placeName && placeName.toLowerCase().includes(item.title.trim().toLowerCase());
+  const name = ownName ? placeName! : item.title;
+  const rest = [ownName ? null : placeName, item.place?.address?.trim()].filter((l): l is string => !!l && l !== name);
+  return { name, rest: [...new Set(rest)] };
+}
+
+/** What to copy for a driver or a messaging app: the place's name and where it is, one per line. */
 export function driverText(item: Item): string {
-  const name = item.place?.name || item.title;
-  const address = item.place?.address;
-  return [name, address && address !== name ? address : null].filter(Boolean).join("\n");
+  const { name, rest } = driverLines(item);
+  return [name, ...rest].join("\n");
+}
+
+/** Worth a driver card: somewhere a driver can find, a street address or a stay. */
+export function drivable(item: Pick<Item, "kind" | "place">): boolean {
+  if (item.kind === "flight") return false;
+  return !!item.place?.address || (item.kind === "stay" && !!item.place?.name);
 }

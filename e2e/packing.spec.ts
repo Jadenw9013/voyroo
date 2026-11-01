@@ -45,7 +45,7 @@ test("who brings what: quick add, claim and pack, and your own list stays yours"
 
   // The packing list has its own address, under To-do.
   await tab(page, "To-do").click();
-  await page.getByRole("tab", { name: /^Packing/ }).click();
+  await page.getByRole("navigation", { name: "Lists" }).getByRole("button", { name: "Packing", exact: true }).click();
   await expect(page).toHaveURL(/\/todo\/packing$/);
   const panel = page.getByRole("tabpanel");
   await expect(panel.getByRole("listitem").filter({ hasText: "Speaker" }).getByText("Ben is bringing it")).toBeVisible();

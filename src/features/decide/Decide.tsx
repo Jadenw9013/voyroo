@@ -98,7 +98,7 @@ export function useUnread(item: Item): Comment[] {
 // ---------------------------------------------------------------------------
 // Votes
 
-function VoteButton({ item, vote, icon, count, pressed, compact }: { item: Item; vote: Vote; icon: IconName; count: number; pressed: boolean; compact: boolean }) {
+function VoteButton({ item, vote, icon, count, pressed }: { item: Item; vote: Vote; icon: IconName; count: number; pressed: boolean }) {
   const { me, apply } = useTrip();
   const label = VOTE_LABEL[vote];
   return (
@@ -114,7 +114,8 @@ function VoteButton({ item, vote, icon, count, pressed, compact }: { item: Item;
       className={`inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-full border px-3 text-sm font-semibold ${pressed ? "border-ink bg-ink text-canvas" : "border-line bg-surface text-ink hover:bg-sunken"}`}
     >
       <Icon name={icon} className="size-4" />
-      <span className={compact ? "hidden sm:inline" : ""}>{label}</span>
+      {/* Always in words: a thumb and a question mark alone don't say "I'm in" or "Maybe". */}
+      <span>{label}</span>
       {count > 0 && <span className="tnum">{count}</span>}
     </button>
   );
@@ -147,7 +148,7 @@ function Faces({ names }: { names: string[] }) {
           <Avatar name={n} size="sm" />
         </span>
       ))}
-      {names.length > 4 && <span className="pl-2.5 text-xs font-semibold text-muted">+{names.length - 4}</span>}
+      {names.length > 4 && <span className="pl-2.5 text-sm font-semibold text-muted">+{names.length - 4}</span>}
     </span>
   );
 }
@@ -160,7 +161,7 @@ export function Reactions({ item, compact = false }: { item: Item; compact?: boo
   return (
     <div role="group" aria-label={`Votes on ${item.title}`} className="flex flex-wrap items-center gap-1.5">
       {VOTES.map((v) => (
-        <VoteButton key={v.vote} item={item} vote={v.vote} icon={v.icon} count={t[v.vote].length} pressed={mine?.vote === v.vote} compact={compact} />
+        <VoteButton key={v.vote} item={item} vote={v.vote} icon={v.icon} count={t[v.vote].length} pressed={mine?.vote === v.vote} />
       ))}
       <HeartButton item={item} count={t.hearts.length} pressed={!!mine?.heart} />
       {compact && <Faces names={t.in} />}
@@ -172,16 +173,15 @@ export function Reactions({ item, compact = false }: { item: Item; compact?: boo
 /** Under an idea in the list: the answers, and comments new to you (the row already says how many there are). */
 export function IdeaFooter({ item, onOpen }: { item: Item; onOpen: () => void }) {
   const fresh = useUnread(item).length;
+  const count = liveComments(item).length;
   return (
-    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-1 pt-1.5 pb-1">
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-1 pt-1.5 pb-2">
       <Reactions item={item} compact />
-      {fresh > 0 && (
-        <button type="button" onClick={onOpen} className="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-2 text-sm font-semibold text-accent hover:bg-sunken">
-          <Icon name="message" className="size-4" />
-          <NewPill label={`${fresh} new`} />
-          <span className="sr-only">{fresh === 1 ? "comment" : "comments"}</span>
-        </button>
-      )}
+      <button type="button" onClick={onOpen} className="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-2 text-sm font-semibold text-accent hover:bg-sunken">
+        <Icon name="message" className="size-4" />
+        {count ? `${count} ${count === 1 ? "comment" : "comments"}` : "Comment"}
+        {fresh > 0 && <NewPill label={`${fresh} new`} />}
+      </button>
     </div>
   );
 }
@@ -203,7 +203,7 @@ export function IdeaSort({ value, onChange }: { value: IdeaOrder; onChange: (v: 
           role="radio"
           aria-checked={value === v}
           onClick={() => onChange(v)}
-          className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-semibold ${value === v ? "bg-surface text-ink shadow-lift" : "text-muted"}`}
+          className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-semibold ${value === v ? "bg-surface font-bold text-ink shadow-lift ring-2 ring-accent" : "text-muted"}`}
         >
           {value === v && <Icon name="check" className="size-4" />}
           {l}
@@ -215,7 +215,7 @@ export function IdeaSort({ value, onChange }: { value: IdeaOrder; onChange: (v: 
 
 function NewPill({ label = "New" }: { label?: string }) {
   return (
-    <span className="chip inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-xs font-bold text-accent">
+    <span className="chip inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-sm font-bold text-accent">
       <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />
       {label}
     </span>
@@ -267,8 +267,8 @@ export function GroupVotes({ item }: { item: Item }) {
   const t = tally(item, trip.people);
   const people = [...new Set([...trip.people, me])];
   return (
-    <section aria-labelledby="votes-title" className="rounded-3xl border border-line bg-surface p-5 shadow-lift">
-      <h2 id="votes-title" className="mb-3 text-sm font-bold text-muted">
+    <section aria-labelledby="votes-title">
+      <h2 id="votes-title" className="mb-3 scroll-mt-20 text-lg font-bold">
         What everyone thinks
       </h2>
       <Reactions item={item} />
@@ -323,16 +323,11 @@ function CommentRow({ item, c, fresh, now }: { item: Item; c: Comment; fresh: bo
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
           <span className="font-bold text-ink">{mine ? `${c.by} (you)` : c.by}</span>
-          {c.viaAssistant && (
-            <span className="inline-flex items-center gap-1 text-muted">
-              <Icon name="sparkles" className="size-3.5" />
-              via assistant
-            </span>
-          )}
+          {c.viaAssistant && <span className="text-muted">via assistant</span>}
           <time dateTime={new Date(c.at).toISOString()} className="text-muted">
             {ago(c.at, now)}
           </time>
-          {c.editedAt !== undefined && <span className="text-muted">· edited</span>}
+          {c.editedAt !== undefined && <span className="text-muted">(edited)</span>}
           {fresh && <NewPill />}
         </p>
         {editing ? (
@@ -461,8 +456,8 @@ export function Comments({ item }: { item: Item }) {
   const count = marks.length;
 
   return (
-    <section aria-labelledby="comments-title" className="rounded-3xl border border-line bg-surface p-5 shadow-lift">
-      <h2 id="comments-title" className="flex items-center gap-2 text-sm font-bold text-muted">
+    <section aria-labelledby="comments-title">
+      <h2 id="comments-title" className="flex flex-wrap items-center gap-2 text-lg font-bold">
         Comments {count > 0 && <span className="tnum">{count}</span>}
         {fresh > 0 && <NewPill label={`${fresh} new since you last looked`} />}
       </h2>

@@ -74,9 +74,10 @@ export function LegRow({ shown }: { shown?: Shown }) {
   if (!shown) return null;
   const { leg, info } = shown;
   return (
-    <li className="ml-[1.75rem] border-l-2 border-dotted border-line py-1 pl-3.5 text-xs text-muted sm:ml-[7.2rem] sm:text-sm">
+    // Lines up under the kind icons of the rows it joins (time column + gap), a dotted path between two stops.
+    <li className="ml-27 border-l-2 border-dotted border-line py-1.5 pl-4 text-sm text-muted">
       <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-        <Icon name={info.mode === "walk" ? "walk" : "car"} className="size-4" />
+        <Icon name={info.mode === "walk" ? "walk" : "car"} className="size-4 shrink-0" />
         <span>
           {leg.fromKey === null && <>From {leg.from.title}: </>}
           {info.summary}
@@ -105,10 +106,10 @@ function legDirections(leg: Leg): string {
 function Attribution({ provider, estimate, online }: { provider: string | null; estimate: boolean; online: boolean }): ReactNode {
   if (estimate) {
     const why = !online ? "no road times saved on this phone yet" : provider ? "road times aren't in yet" : "road times aren't set up";
-    return <p className="mt-1 text-xs text-muted">Rough estimate from the straight-line distance: {why}.</p>;
+    return <p className="mt-1 text-sm text-muted">Rough estimate from the straight-line distance: {why}.</p>;
   }
   if (provider !== "openrouteservice") return null;
-  return <p className="mt-1 text-xs text-muted">Road times by openrouteservice.org, map data © OpenStreetMap contributors.</p>;
+  return <p className="mt-1 text-sm text-muted">Road times by openrouteservice.org, map data © OpenStreetMap contributors.</p>;
 }
 
 /** "From previous stop" on an item's page: how to get here from the thing before it. */

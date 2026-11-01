@@ -42,6 +42,8 @@ One pattern alone proves nothing. Each item below is fine when chosen on purpose
 
 ## Found in Voyroo on 31 Oct 2026 (snapshot, `main` at 8922517)
 
+Re-checked in November 2026 after the mobile pass: see `docs/design/audit-2026-11.md` ("Earlier generic-UI findings, re-checked") for what's fixed and what's left.
+
 From report 04. Line numbers will drift; re-check before acting.
 
 - **Violet everywhere.** `--accent` is `light-dark(#5b21b6, #a78bfa)` (Tailwind violet-800/400) in `src/app/globals.css:26`, and `--k-stay` is indigo (`:40`). That contradicts `docs/DESIGN.md`, which says forest green. About 60 lines in `src/features` hard-code hex, most of them in `plan/Plan.tsx` (`#a78bfa`, `#5b21b6`, `#8b5cf6`) and `today/Today.tsx`.

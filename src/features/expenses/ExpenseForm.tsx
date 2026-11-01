@@ -234,7 +234,7 @@ export function ExpenseForm({ expense, start = {}, onDone, primaryId, autoFocus 
                       type="checkbox"
                       checked={chosen.includes(p)}
                       onChange={(e) => setAmong(e.target.checked ? [...chosen, p] : chosen.filter((x) => x !== p))}
-                      className="size-6 shrink-0 accent-[var(--accent)]"
+                      className="size-6 shrink-0 accent-accent"
                     />
                     <Avatar name={p} size="sm" />
                     <span className="min-w-0 flex-1 truncate font-semibold">{p === me ? `${p} (you)` : p}</span>

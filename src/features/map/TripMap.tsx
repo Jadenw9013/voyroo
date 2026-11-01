@@ -177,10 +177,12 @@ export interface TripMapProps {
   onClose?: () => void;
   /** Start by placing this item's pin by hand. */
   pickId?: string;
+  /** Plan's Map section: the map is the page, so it gets most of the screen. */
+  tall?: boolean;
   className?: string;
 }
 
-export function TripMap({ variant, go, day, itemId, fullScreen = false, onClose, pickId, className = "" }: TripMapProps) {
+export function TripMap({ variant, go, day, itemId, fullScreen = false, onClose, pickId, tall = false, className = "" }: TripMapProps) {
   const { trip, tripId, apply, online, refresh } = useTrip();
   const backfill = useBackfill(trip, tripId, online, refresh);
   const headingId = useId();
@@ -290,13 +292,13 @@ export function TripMap({ variant, go, day, itemId, fullScreen = false, onClose,
   const googleRoute = activeDay ? routeUrl(stops.map((s) => s.item), trip) : null;
   const google = googleRoute ?? mapsSearchUrl(variant === "item" && selectedStop ? selectedStop.item.title : trip.destination);
   const title = variant === "day" && activeDay ? `${weekday(activeDay, true)}'s map` : variant === "item" ? "On the map" : "Trip map";
-  const heightCls = fullScreen ? "min-h-0 flex-1" : variant === "item" ? "h-48" : "h-72 sm:h-80";
+  const heightCls = fullScreen ? "min-h-0 flex-1" : variant === "item" ? "h-48" : tall ? "h-112 sm:h-128" : "h-72 sm:h-80";
 
   return (
     <section aria-labelledby={headingId} className={`flex min-w-0 flex-col gap-3 ${fullScreen ? "h-full" : ""} ${className}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <h2 id={headingId} className={variant === "item" ? "sr-only" : "text-base font-extrabold sm:text-lg"}>
+          <h2 id={headingId} className={variant === "item" ? "sr-only" : "text-lg font-bold"}>
             {title}
           </h2>
           {variant !== "item" && (
@@ -550,7 +552,7 @@ function GroupCard({ stops, trip, onClose, onChoose }: { stops: Stop[]; trip: Tr
               <KindChip kind={s.item.kind} size="sm" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-semibold">{titleOf(s)}</span>
-                <span className="block truncate text-xs text-muted">{whenWords(s, trip)}</span>
+                <span className="block truncate text-sm text-muted">{whenWords(s, trip)}</span>
               </span>
             </button>
           </li>
@@ -571,7 +573,7 @@ function MissingRow({ stop, notFound, busy, onAddress, onPin, onOpen }: { stop: 
         <KindChip kind={stop.item.kind} size="sm" />
         <span className="min-w-0">
           <span className="block truncate text-sm font-semibold">{titleOf(stop)}</span>
-          <span className="block truncate text-xs text-muted">
+          <span className="block truncate text-sm text-muted">
             {whenWords(stop, trip)}. {why}
           </span>
         </span>

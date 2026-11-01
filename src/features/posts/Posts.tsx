@@ -41,10 +41,10 @@ const subscribeHydration = () => () => {};
 
 /** Shown when there's no picture to be had: the platform's colors, its mark and the caption. */
 const PLATFORM_FILL: Record<Platform | "other", string> = {
-  tiktok: "bg-[linear-gradient(160deg,#111_40%,#25f4ee33,#fe2c5544)]",
-  instagram: "bg-[linear-gradient(45deg,#feda75,#fa7e1e,#d62976,#962fbf,#4f5bd5)]",
-  youtube: "bg-[linear-gradient(160deg,#c4302b,#7a1512)]",
-  other: "bg-[linear-gradient(160deg,#3c4a52,#1d2428)]",
+  tiktok: "post-fill-tiktok",
+  instagram: "post-fill-instagram",
+  youtube: "post-fill-youtube",
+  other: "post-fill-other",
 };
 
 /**
@@ -142,8 +142,8 @@ export function PostTile({ entry, onOpen, showItem }: { entry: PostEntry; onOpen
         </span>
       )}
       <span className="absolute inset-x-0 bottom-0 flex flex-col gap-0.5 p-2">
-        {showItem && <span className="truncate text-xs font-bold text-white/85">{entry.item.title}</span>}
-        <span className="line-clamp-2 text-[0.8rem] leading-snug font-semibold drop-shadow">{caption ?? entry.link.site ?? name}</span>
+        {showItem && <span className="truncate text-sm font-bold text-white/85">{entry.item.title}</span>}
+        <span className="line-clamp-2 text-sm leading-snug font-semibold drop-shadow">{caption ?? entry.link.site ?? name}</span>
       </span>
     </button>
   );

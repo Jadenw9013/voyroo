@@ -4,23 +4,43 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { missing, toBook } from "@/domain/derive";
 import { newId } from "@/domain/ids";
-import { isPacked, visiblePacking } from "@/domain/packing";
 import { addDays, formatDay } from "@/domain/time";
 import type { Item, Todo as TodoT } from "@/domain/types";
 import { parseView, type TodoSection, type View } from "@/client/router";
 import { useTrip } from "@/client/store";
 import { Avatar, KindChip, StatusPill } from "@/ui/badges";
 import { Icon } from "@/ui/Icon";
-import { btn, field, label as labelCls, SectionTitle } from "@/ui/kit";
+import { btn, field, label as labelCls, SectionNav, SectionTitle } from "@/ui/kit";
 import { Sheet } from "@/ui/Sheet";
 import { useCompose } from "../composer/Composer";
-import { MoneyCard } from "../expenses/Expenses";
 import { SyncLine } from "../SyncLine";
 import { Packing, PeoplePicker } from "./Packing";
 
+type Part = TodoSection | "expenses";
+const PARTS: { id: Part; label: string }[] = [
+  { id: "list", label: "To-do" },
+  { id: "packing", label: "Packing" },
+  { id: "expenses", label: "Expenses" },
+];
+
+/**
+ * The three lists the group keeps together, named at the top of the To-do tab:
+ * what's left to do, what to pack, and who paid what. One place to look for each.
+ */
+export function TodoNav({ current, go }: { current: Part; go: (v: View) => void }) {
+  return (
+    <SectionNav
+      label="Lists"
+      items={PARTS}
+      current={current}
+      onPick={(id) => go(id === "expenses" ? { tab: "expenses" } : id === "packing" ? { tab: "todo", section: "packing" } : { tab: "todo" })}
+    />
+  );
+}
+
 /** To-do: what still needs booking, what's missing, and the group's list; and the packing list, at /todo/packing. */
 export function Todo({ go }: { go: (v: View) => void }) {
-  const { trip, me } = useTrip();
+  const { trip } = useTrip();
   const pathname = usePathname();
   const view = parseView(pathname);
   const section: TodoSection = view.tab === "todo" && view.section === "packing" ? "packing" : "list";
@@ -29,52 +49,22 @@ export function Todo({ go }: { go: (v: View) => void }) {
   const gaps = missing(trip);
   const open = trip.todos.filter((t) => !t.done);
   const done = trip.todos.filter((t) => t.done);
-  const { shared, mine } = visiblePacking(trip, me);
-  const toPack = [...shared, ...mine].filter((p) => !isPacked(p)).length;
   const [marking, setMarking] = useState<Item | null>(null);
-  const tabs: { id: TodoSection; label: string; count: number }[] = [
-    { id: "list", label: "To-do", count: open.length + book.length },
-    { id: "packing", label: "Packing", count: toPack },
-  ];
 
   return (
-    <div className="flex flex-col gap-6 px-3 pt-3 sm:px-4 md:px-0">
-      <header className="flex items-center justify-between gap-3 rounded-3xl border border-line bg-surface p-5 shadow-lift">
-        <div>
-          <h1 className="text-2xl font-extrabold tracking-tight">{section === "packing" ? "Packing" : "Bookings & To-do"}</h1>
-          <p className="text-sm text-muted">{section === "packing" ? "Who brings what for the group, and your own list." : "Reservations to confirm, missing logistics, and your group checklist."}</p>
-        </div>
-        <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-k-activity-soft text-k-activity">
-          <Icon name={section === "packing" ? "backpack" : "ticket"} className="size-6" />
-        </span>
-      </header>
-
-      <div role="tablist" aria-label="To-do" className="-mt-2 flex gap-2 border-b border-line px-1">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            aria-selected={section === t.id}
-            onClick={() => go(t.id === "packing" ? { tab: "todo", section: "packing" } : { tab: "todo" })}
-            className={`-mb-px flex min-h-11 items-center gap-2 border-b-2 px-3 text-base font-bold ${section === t.id ? "border-accent text-accent" : "border-transparent text-muted hover:text-ink"}`}
-          >
-            <Icon name={t.id === "packing" ? "backpack" : "todo"} className="size-4" />
-            {t.label}
-            {t.count > 0 && <span className="tnum rounded-full bg-sunken px-2 py-0.5 text-sm text-muted">{t.count}</span>}
-          </button>
-        ))}
-      </div>
+    <div className="flex flex-col gap-6 px-4 pt-4 md:px-0">
+      <h1 className="sr-only">{section === "packing" ? "Packing" : "To-do"}</h1>
+      <TodoNav current={section} go={go} />
 
       {section === "packing" ? (
         <div className="lg:max-w-3xl">
           <Packing go={go} />
         </div>
       ) : (
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
-          <div className="flex flex-col gap-6">
+        <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-2">
+          <div className="flex flex-col gap-8">
             {gaps.length > 0 && (
-              <section aria-labelledby="missing" className="rounded-3xl border border-line bg-surface p-5 shadow-lift">
+              <section aria-labelledby="missing">
                 <SectionTitle>
                   <span id="missing">Missing</span>
                 </SectionTitle>
@@ -88,19 +78,19 @@ export function Todo({ go }: { go: (v: View) => void }) {
                           : `Nowhere to stay ${formatDay(g.from)} to ${formatDay(addDays(g.to, 1))} (${g.count} nights)`;
                     const ask = g.kind === "flight-home" ? "Help us pick a flight home" : `Find us a place to stay the night of ${formatDay(g.from)}`;
                     return (
-                      <li key={label} className="flex flex-col gap-2.5 rounded-2xl border border-dashed border-todo bg-todo-soft p-4">
+                      <li key={label} className="flex flex-col gap-2.5 rounded-2xl border-2 border-dashed border-todo bg-todo-soft p-4">
                         <p className="flex items-center gap-2 text-base font-bold text-todo">
                           <Icon name={g.kind === "flight-home" ? "plane" : "bed"} />
                           {label}
                         </p>
                         <div className="flex flex-wrap gap-2">
-                          <button type="button" onClick={() => compose({ ask: true, text: ask, day: g.kind === "nights" ? g.from : null })} className={btn.secondary}>
-                            <Icon name="sparkles" />
-                            Find options
-                          </button>
-                          <button type="button" onClick={() => compose({ day: g.kind === "nights" ? g.from : trip.endDate, kind: g.kind === "nights" ? "stay" : "flight" })} className={btn.quiet}>
+                          <button type="button" onClick={() => compose({ day: g.kind === "nights" ? g.from : trip.endDate, kind: g.kind === "nights" ? "stay" : "flight" })} className={btn.secondary}>
                             <Icon name="plus" />
-                            Add it
+                            {g.kind === "nights" ? "Add a stay" : "Add the flight"}
+                          </button>
+                          <button type="button" onClick={() => compose({ ask: true, text: ask, day: g.kind === "nights" ? g.from : null })} className={btn.quiet}>
+                            <Icon name="search" />
+                            Find options
                           </button>
                         </div>
                       </li>
@@ -110,7 +100,7 @@ export function Todo({ go }: { go: (v: View) => void }) {
               </section>
             )}
 
-            <section aria-labelledby="to-book" className="rounded-3xl border border-line bg-surface p-5 shadow-lift">
+            <section aria-labelledby="to-book">
               <SectionTitle>
                 <span id="to-book">To book</span>
               </SectionTitle>
@@ -133,13 +123,13 @@ export function Todo({ go }: { go: (v: View) => void }) {
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           <StatusPill status="todo" />
                           {i.booking?.url && (
-                            <a href={i.booking.url} target="_blank" rel="noreferrer" className={`${btn.quiet} min-h-10 text-sm`}>
+                            <a href={i.booking.url} target="_blank" rel="noreferrer" className={btn.quiet}>
                               <Icon name="external" className="size-4" />
                               Book online
                             </a>
                           )}
-                          <button type="button" onClick={() => setMarking(i)} className={`${btn.secondary} min-h-10 text-sm`}>
-                            <Icon name="check" className="size-4" />
+                          <button type="button" onClick={() => setMarking(i)} className="inline-flex min-h-14 items-center gap-2 rounded-full border border-line bg-surface px-5 text-base font-semibold text-ink hover:bg-sunken">
+                            <Icon name="check" className="size-5" />
                             Mark as booked
                           </button>
                         </div>
@@ -151,7 +141,7 @@ export function Todo({ go }: { go: (v: View) => void }) {
             </section>
           </div>
 
-          <section aria-labelledby="list" className="rounded-3xl border border-line bg-surface p-5 shadow-lift">
+          <section aria-labelledby="list">
             <SectionTitle>
               <span id="list">List</span>
             </SectionTitle>
@@ -172,8 +162,6 @@ export function Todo({ go }: { go: (v: View) => void }) {
               </details>
             )}
           </section>
-
-          <MoneyCard go={go} />
         </div>
       )}
 
@@ -188,15 +176,17 @@ function TodoRow({ todo, onItem }: { todo: TodoT; onItem: (id: string) => void }
   const [editing, setEditing] = useState(false);
   const item = todo.itemId ? trip.items.find((i) => i.id === todo.itemId) : null;
   return (
-    <li className="flex items-start gap-3 py-2">
-      <input
-        type="checkbox"
-        checked={todo.done}
-        onChange={(e) => void apply([{ op: "todo.update", id: todo.id, set: { done: e.target.checked } }])}
-        aria-label={todo.text}
-        className="mt-1 size-6 shrink-0 accent-[var(--accent)]"
-      />
-      <div className="min-w-0 flex-1">
+    <li className="flex items-start gap-2 py-1">
+      <label className="flex size-11 shrink-0 items-center justify-center">
+        <input
+          type="checkbox"
+          checked={todo.done}
+          onChange={(e) => void apply([{ op: "todo.update", id: todo.id, set: { done: e.target.checked } }])}
+          aria-label={todo.text}
+          className="size-6 accent-accent"
+        />
+      </label>
+      <div className="min-w-0 flex-1 py-2">
         <p className={`text-base ${todo.done ? "text-muted line-through" : ""}`}>{todo.text}</p>
         {todo.note && <p className="text-sm text-muted">{todo.note}</p>}
         {(todo.who || item) && (
@@ -215,7 +205,7 @@ function TodoRow({ todo, onItem }: { todo: TodoT; onItem: (id: string) => void }
           </div>
         )}
       </div>
-      <button type="button" onClick={() => setEditing(true)} aria-label={`Edit ${todo.text}`} className="flex size-10 shrink-0 items-center justify-center rounded-xl text-muted hover:bg-sunken">
+      <button type="button" onClick={() => setEditing(true)} aria-label={`Edit ${todo.text}`} className="flex size-11 shrink-0 items-center justify-center rounded-xl text-muted hover:bg-sunken">
         <Icon name="pencil" className="size-4" />
       </button>
       {editing && <EditTodo todo={todo} onClose={() => setEditing(false)} />}
@@ -223,7 +213,7 @@ function TodoRow({ todo, onItem }: { todo: TodoT; onItem: (id: string) => void }
         type="button"
         onClick={() => void apply([{ op: "todo.remove", id: todo.id }])}
         aria-label={`Remove ${todo.text}`}
-        className="flex size-10 shrink-0 items-center justify-center rounded-xl text-muted hover:bg-sunken"
+        className="flex size-11 shrink-0 items-center justify-center rounded-xl text-muted hover:bg-sunken"
       >
         <Icon name="close" className="size-4" />
       </button>

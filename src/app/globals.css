@@ -1,58 +1,63 @@
 @import "tailwindcss";
 
 /*
- * Tokens. Each is written once as light-dark(light, dark): dark is the default
- * Voyroo experience unless Trip, Display forces Light or Sunlight. Sunlight
- * replaces them all with black on white. Components use only these names,
- * never raw colors. Every text color passes WCAG AA (4.5:1) on its soft fill,
- * the surface and the page.
+ * Tokens. Each is written once as light-dark(light, dark): the phone's theme
+ * decides unless Trip, Display forces one. Sunlight replaces them all with
+ * black on white. Components use only these names, never raw colors. Every
+ * text color passes WCAG AA (4.5:1) on its soft fill, the surface and the page.
+ * The values are the brand palette in docs/BRAND.md and docs/DESIGN.md: journey
+ * navy ink, forest green actions (the route in the logo), marigold for the ticket.
  *
  *   canvas / surface / sunken   page, raised rows and sheets, wells
  *   ink / muted / line          text, secondary text, rules
- *   accent                      links and primary actions (Voyroo violet)
+ *   accent                      links and primary actions (forest green)
  *   ticket / on-ticket          the "Next" stub on Today: the one loud thing
  *   ok / todo / maybe           status: booked, to book, maybe (always with an icon and a word)
  *   k-*                         one color per kind of item (always with its icon)
  *   danger                      delete
  */
 :root {
-  color-scheme: dark;
-  --canvas: light-dark(#f4f4fb, #0b0d17);
-  --surface: light-dark(#ffffff, #131728);
-  --sunken: light-dark(#eaeaf5, #1b2138);
-  --ink: light-dark(#141628, #f2f4fc);
-  --muted: light-dark(#525874, #9ca6c7);
-  --line: light-dark(#dcddef, #232a45);
-  --accent: light-dark(#5b21b6, #a78bfa);
-  --accent-soft: light-dark(#ede9fe, #211a44);
-  --on-accent: light-dark(#ffffff, #0b0d17);
+  color-scheme: light dark;
+  --canvas: light-dark(#f4f6fa, #101b2b);
+  --surface: light-dark(#ffffff, #18263a);
+  --sunken: light-dark(#e9eef4, #22334a);
+  --ink: light-dark(#192f4d, #ecf2fa);
+  --muted: light-dark(#4c5c70, #afbed0);
+  --line: light-dark(#dce3ed, #354861);
+  /* The edge of something you type in or press: 3:1 against the surface (WCAG 1.4.11). */
+  --line-strong: light-dark(#7a8a9e, #7186a3);
+  --accent: light-dark(#176b59, #7ad9bd);
+  --accent-soft: light-dark(#e5f2ed, #173e39);
+  --on-accent: light-dark(#ffffff, #0f1214);
   --ticket: #ffc21a;
   --on-ticket: #15191d;
   --danger: light-dark(#b3261e, #ff8a80);
 
-  --ok: light-dark(#0f683b, #6ee7b7);
-  --ok-soft: light-dark(#dcf2e3, #112e25);
-  --todo: light-dark(#8a4b00, #fbbf24);
-  --todo-soft: light-dark(#fbecd6, #352510);
-  --maybe: light-dark(#5b21b6, #c4b5fd);
-  --maybe-soft: light-dark(#ebe5fb, #251c47);
+  --ok: light-dark(#0c5530, #6fd69a);
+  --ok-soft: light-dark(#dcf2e3, #133524);
+  --todo: light-dark(#6e3b00, #ffb95c);
+  --todo-soft: light-dark(#fbecd6, #3a2a12);
+  --maybe: light-dark(#4a2f90, #c2b0ff);
+  --maybe-soft: light-dark(#ebe5fb, #2a2146);
 
-  --k-stay: light-dark(#4338ca, #a5b4fc);
-  --k-stay-soft: light-dark(#e5e4fb, #1e2146);
-  --k-flight: light-dark(#0a5f96, #7dd3fc);
-  --k-flight-soft: light-dark(#dcecf8, #122b45);
-  --k-transport: light-dark(#0b6476, #67e8f9);
-  --k-transport-soft: light-dark(#d9eef1, #12333f);
-  --k-activity: light-dark(#156d3b, #6ee7b7);
-  --k-activity-soft: light-dark(#dcf2e4, #113025);
-  --k-food: light-dark(#9a3412, #fda4af);
-  --k-food-soft: light-dark(#fce4e6, #381924);
-  --k-other: light-dark(#4b5563, #cbd5e1);
-  --k-other-soft: light-dark(#e5e7eb, #1e2538);
+  --k-stay: light-dark(#4338ca, #aca7ff);
+  --k-stay-soft: light-dark(#e5e4fb, #25234a);
+  --k-flight: light-dark(#0a5f96, #7cc4f2);
+  --k-flight-soft: light-dark(#dcecf8, #132f47);
+  --k-transport: light-dark(#0b6476, #5cc6d8);
+  --k-transport-soft: light-dark(#d9eef1, #123a42);
+  --k-activity: light-dark(#2e6e1f, #8fd47a);
+  --k-activity-soft: light-dark(#e2f1dc, #1b3417);
+  --k-food: light-dark(#a33a12, #ff9e78);
+  --k-food-soft: light-dark(#fbe4da, #3d2117);
+  --k-other: light-dark(#535d64, #a3aeb5);
+  --k-other-soft: light-dark(#e6eae9, #21272c);
 
   /* light-dark() takes colors only, so the shadow's color switches, not the shadow. */
-  --shadow-color: light-dark(rgb(20 22 40 / 0.08), rgb(0 0 0 / 0.45));
-  --shadow: 0 1px 2px var(--shadow-color), 0 10px 30px var(--shadow-color);
+  --shadow-color: light-dark(rgb(21 25 29 / 0.08), rgb(0 0 0 / 0.4));
+  --shadow: 0 1px 2px var(--shadow-color), 0 8px 24px var(--shadow-color);
+  /* Behind a sheet: dims the page without blurring it (blur costs frames and hides where you were). */
+  --scrim: light-dark(rgb(25 47 77 / 0.45), rgb(0 0 0 / 0.6));
 }
 :root[data-theme="light"] {
   color-scheme: light;
@@ -70,7 +75,8 @@
   --ink: #000000;
   --muted: #1f2328;
   --line: #000000;
-  --accent: #3b0764;
+  --line-strong: #000000;
+  --accent: #00404d;
   --accent-soft: #ffffff;
   --on-accent: #ffffff;
   --ticket: #ffd23f;
@@ -94,7 +100,9 @@
   --k-food-soft: #ffffff;
   --k-other: #000000;
   --k-other-soft: #ffffff;
-  --shadow: none;
+  /* "No shadow" as a shadow that draws nothing: Tailwind lists rings and shadows in one box-shadow, where "none" would drop the ring too. */
+  --shadow: 0 0 #0000;
+  --scrim: rgb(0 0 0 / 0.6);
 }
 :root[data-sunlight] body {
   font-weight: 500;
@@ -103,10 +111,21 @@
 :root[data-sunlight] .font-medium {
   font-weight: 700;
 }
-:root[data-sunlight] .border,
-:root[data-sunlight] .border-b,
-:root[data-sunlight] .border-t {
+/* Heavier rules, each on the side it was drawn on (a bottom rule stays a bottom rule, not a box). */
+:root[data-sunlight] .border {
   border-width: 2px;
+}
+:root[data-sunlight] .border-b {
+  border-bottom-width: 2px;
+}
+:root[data-sunlight] .border-t {
+  border-top-width: 2px;
+}
+:root[data-sunlight] .border-y {
+  border-block-width: 2px;
+}
+:root[data-sunlight] ::placeholder {
+  color: #595959;
 }
 :root[data-sunlight] .cover-photo {
   display: none;
@@ -128,6 +147,7 @@
   --color-ink: var(--ink);
   --color-muted: var(--muted);
   --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
   --color-on-accent: var(--on-accent);
@@ -217,8 +237,7 @@
     overscroll-behavior: contain;
   }
   dialog::backdrop {
-    background: rgb(5 7 15 / 0.72);
-    backdrop-filter: blur(4px);
+    background: var(--scrim);
   }
 }
 
@@ -268,6 +287,24 @@
   }
 }
 
+/*
+ * A saved post with no picture yet: the platform's own colors, so the tile still
+ * says TikTok, Instagram or YouTube at a glance. Third-party brand colors, kept
+ * here so components stay free of raw values.
+ */
+.post-fill-tiktok {
+  background: linear-gradient(160deg, #111 40%, #25f4ee33, #fe2c5544);
+}
+.post-fill-instagram {
+  background: linear-gradient(45deg, #feda75, #fa7e1e, #d62976, #962fbf, #4f5bd5);
+}
+.post-fill-youtube {
+  background: linear-gradient(160deg, #c4302b, #7a1512);
+}
+.post-fill-other {
+  background: linear-gradient(160deg, #3c4a52, #1d2428);
+}
+
 /* Scroll rows without a visible bar (the day chips). */
 .no-scrollbar {
   scrollbar-width: none;
@@ -275,29 +312,6 @@
 }
 .no-scrollbar::-webkit-scrollbar {
   display: none;
-}
-
-/* Itinerary day timeline indicator */
-.itinerary-day {
-  padding-left: 20px;
-  border-left: 2px solid var(--line);
-  position: relative;
-}
-@media (max-width: 639px) {
-  .itinerary-day {
-    padding-left: 14px;
-  }
-}
-.itinerary-day::before {
-  content: "";
-  position: absolute;
-  top: 6px;
-  left: -5px;
-  width: 8px;
-  height: 8px;
-  border-radius: 100%;
-  background: var(--accent);
-  box-shadow: 0 0 0 4px var(--accent-soft);
 }
 
 .trip-app-shell {
@@ -583,7 +597,7 @@
   border-radius: 999px;
   color: var(--ink);
   text-align: left;
-  transition: all 0.15s;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
 }
 .planner-suggestions button:hover {
   background: var(--accent-soft);
@@ -1705,14 +1719,14 @@
   color: var(--muted);
 }
 .presentation-meta-booked {
-  background: rgba(16, 185, 129, 0.14);
-  border-color: rgba(16, 185, 129, 0.35);
-  color: #34d399;
+  background: var(--ok-soft);
+  border-color: var(--ok);
+  color: var(--ok);
 }
 .presentation-meta-todo {
-  background: rgba(245, 158, 11, 0.14);
-  border-color: rgba(245, 158, 11, 0.35);
-  color: #fbbf24;
+  background: var(--todo-soft);
+  border-color: var(--todo);
+  color: var(--todo);
 }
 .presentation-action-pill {
   display: inline-flex;

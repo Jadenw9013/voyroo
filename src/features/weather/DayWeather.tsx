@@ -70,7 +70,7 @@ export function WeatherCredit({ className = "" }: { className?: string }) {
   );
 }
 
-/** Today: the selected day's weather, where it's for, and how fresh it is. */
+/** Today: the day's weather in a few words under its heading, where it's for, and how fresh it is. */
 export function DayWeatherCard({ date }: { date: string }) {
   const { w, report, unit, trip } = useDay(date);
   if (!w || !report) return null;
@@ -78,20 +78,18 @@ export function DayWeatherCard({ date }: { date: string }) {
   const rain = rainWords(w);
   const typical = w.kind === "typical";
   const season = seasonWords(w);
+  const detail = sentence([season, rain]);
+  const source = typical ? `Typical for ${w.place ?? "these dates"}, ${report.years ?? "past years"}` : `Forecast for ${w.place ?? "here"} ${asOfWords(report.asOf, trip.tz)}`;
   return (
-    <section aria-label="Weather" className="flex items-start gap-3 rounded-2xl bg-sunken/60 px-3.5 py-3">
-      <WeatherIcon sky={sky} className="mt-0.5 size-8 text-accent" />
+    <section aria-label="Weather" className="flex items-start gap-3">
+      <WeatherIcon sky={sky} className="mt-0.5 size-6 text-ink" />
       <div className="min-w-0 flex-1">
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-base font-bold">
-          {typical && <span className="rounded-full border border-line bg-surface px-2 py-0.5 text-xs font-bold text-muted">Typical</span>}
-          <span>{typical ? "Usually" : words}</span>
-          <HighLow w={w} unit={unit} />
+        <p className="text-base">
+          <span className="font-semibold">{typical ? "Usually" : words}</span> <HighLow w={w} unit={unit} />
+          {detail && <span>. {detail}</span>}
         </p>
-        <p className="text-sm text-muted">{[sentence([season, rain]), w.place].filter(Boolean).join(" · ")}</p>
-        <p className="mt-0.5 text-xs text-muted">
-          {typical ? `Typical for these dates, from ${report.years ?? "past years"}` : `Forecast ${asOfWords(report.asOf, trip.tz)}`}
-          {" · "}
-          <WeatherCredit />
+        <p className="text-sm text-muted">
+          {source}. <WeatherCredit />
         </p>
       </div>
     </section>
@@ -107,7 +105,7 @@ export function DayWeatherLine({ date }: { date: string }) {
   const season = seasonWords(w);
   return (
     <p className="mt-1 flex items-start gap-1.5 text-sm text-muted">
-      <WeatherIcon sky={sky} className="mt-px size-4 text-accent" />
+      <WeatherIcon sky={sky} className="mt-0.5 size-4 shrink-0" />
       <span className="min-w-0">
         {w.kind === "typical" ? (
           <>
@@ -133,9 +131,9 @@ export function WeatherFootnote() {
   const hasForecast = Object.values(report.days).some((d) => d.kind === "forecast");
   const hasTypical = Object.values(report.days).some((d) => d.kind === "typical");
   return (
-    <p className="text-xs text-muted">
-      {[hasForecast ? `Forecast ${asOfWords(report.asOf, trip.tz)}` : null, hasTypical ? `typical weather from ${report.years ?? "past years"}` : null].filter(Boolean).join("; ")}
-      {" · "}
+    <p className="text-sm text-muted">
+      {[hasForecast ? `Forecast ${asOfWords(report.asOf, trip.tz)}` : null, hasTypical ? `${hasForecast ? "typical" : "Typical"} weather from ${report.years ?? "past years"}` : null].filter(Boolean).join("; ")}
+      {". "}
       <WeatherCredit />
     </p>
   );
