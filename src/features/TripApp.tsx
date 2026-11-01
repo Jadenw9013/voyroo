@@ -47,6 +47,11 @@ function Screens({ tripId, serverNow }: { tripId: string; serverNow: number }) {
   const compose = useCompose();
   const [sharing, setSharing] = useState(false);
 
+  // Taps work from here on. Browser tests wait for this before tapping what the server drew.
+  useEffect(() => {
+    document.documentElement.dataset.hydrated = "true";
+  }, []);
+
   // Arrived from the share sheet (/share): open the composer with what was shared.
   useEffect(() => {
     const shared = new URLSearchParams(window.location.hash.slice(1)).get("compose");

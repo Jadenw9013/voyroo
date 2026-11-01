@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 function accountCookie(id: string) {
   const payload = Buffer.from(JSON.stringify({ purpose: "account", value: { id, name: "Ana", email: "ana@example.com" }, expires: Date.now() + 3_600_000 })).toString("base64url");

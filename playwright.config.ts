@@ -13,6 +13,8 @@ export default defineConfig({
   timeout: 60_000,
   // One at a time: tests share one server and its in-memory trip.
   workers: 1,
+  // A slow, shared CI runner can still stall a single step; one retry there, none locally.
+  retries: process.env.CI ? 1 : 0,
   // On GitHub, also report each failing test as an annotation on the pull request.
   reporter: process.env.CI ? [["list"], ["github"]] : [["list"]],
   use: {

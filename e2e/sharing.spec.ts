@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 
 test("home logo and new trip work at phone, tablet and desktop widths", async ({ page }, testInfo) => {
   await page.goto("/t/guatemala/join");
