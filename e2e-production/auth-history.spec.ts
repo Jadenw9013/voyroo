@@ -71,7 +71,7 @@ test("the production worker never caches a viewing link, so revocation takes eff
     const viewer = await context.newPage();
     await openControlledPage(viewer);
     await viewer.goto(path);
-    await expect(viewer.getByText("Shared Travel Guide", { exact: true })).toBeVisible();
+    await expect(viewer.getByText(/^Shared travel guide: view only/)).toBeVisible();
     const cachedPreview = await viewer.evaluate(async () => {
       for (const name of await caches.keys()) for (const request of await (await caches.open(name)).keys()) if (/^\/(api\/)?p\//.test(new URL(request.url).pathname)) return true;
       return false;
