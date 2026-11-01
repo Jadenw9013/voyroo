@@ -236,6 +236,8 @@ describe("the assistant", () => {
 describe("which geocoder", () => {
   it("is off in unit tests unless chosen, and can be switched off in production", () => {
     const store = new TripStore(new MemoryBackend());
+    // CI's isolated runner sets GEOCODER=stub for every step; this case is about the default.
+    vi.stubEnv("GEOCODER", "");
     expect(geoDeps(store).geocoder).toBeNull();
     vi.stubEnv("GEOCODER", "off");
     vi.stubEnv("NODE_ENV", "production");

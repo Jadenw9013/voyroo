@@ -13,8 +13,14 @@ export default defineConfig({
   timeout: 60_000,
   // One at a time: tests share one server and its in-memory trip.
   workers: 1,
-  reporter: [["list"]],
-  use: { baseURL: "http://localhost:3200" },
+  // On GitHub, also report each failing test as an annotation on the pull request.
+  reporter: process.env.CI ? [["list"], ["github"]] : [["list"]],
+  use: {
+    baseURL: "http://localhost:3200",
+    // The trip map draws with WebGL. CI machines have no GPU, and Chrome only falls back to its
+    // software renderer when asked; without it the map shows its no-WebGL fallback instead.
+    launchOptions: { args: ["--enable-unsafe-swiftshader"] },
+  },
   webServer: {
     command: "npx next dev -p 3200",
     url: "http://localhost:3200",
