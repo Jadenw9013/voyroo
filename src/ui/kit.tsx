@@ -2,6 +2,7 @@
 
 import { useEffect, type ReactNode } from "react";
 import { useTrip } from "@/client/store";
+import { actionClass } from "./action";
 import { Icon, type IconName } from "./Icon";
 
 /* Shared class strings, so every button and field looks and behaves the same. */
@@ -35,9 +36,7 @@ export function ActionChip({
   onClick?: () => void;
   tone?: "default" | "ticket";
 }) {
-  const cls = `inline-flex min-h-14 shrink-0 items-center gap-2 rounded-full px-5 text-base font-semibold ${
-    tone === "ticket" ? "bg-on-ticket text-ticket" : "border border-line bg-surface text-ink hover:bg-sunken"
-  }`;
+  const cls = actionClass(tone);
   if (href) {
     const external = /^https?:/.test(href);
     return (

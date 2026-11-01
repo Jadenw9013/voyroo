@@ -115,13 +115,15 @@ test("essentials: one tap from Today, a draft that says verify, sources, correct
   // It's in the trip on this phone, so it opens with no signal.
   expect(await page.evaluate(() => localStorage.getItem("trip:guatemala:snapshot"))).toContain("Bottled only, even for brushing teeth.");
 
-  // The view-only link leaves essentials out.
+  // The view-only link shows the essentials for people coming along, and when they were checked, not who checked them.
   const { path } = await (await page.request.post("/api/t/guatemala/preview")).json();
   const guest = await browser.newContext();
   try {
     const html = await (await (await guest.newPage()).goto(new URL(path, page.url()).toString()))!.text();
-    expect(html).toContain("Shared Travel Guide");
-    for (const secret of ["Bottled only", "PROATUR", "Avenida Reforma", "Por favor", "travel.state.gov"]) expect(html).not.toContain(secret);
+    expect(html).toContain("Shared travel guide");
+    for (const shown of ["Bottled only, even for brushing teeth.", "travel.state.gov", 'href="tel:110"']) expect(html).toContain(shown);
+    expect(html).toContain("Checked by the group on");
+    expect(html).not.toContain("Checked by Sam");
   } finally {
     await guest.close();
     await page.request.delete("/api/t/guatemala/preview");
