@@ -4,14 +4,24 @@ import { getStore, requester } from "@/server/http";
 import { getContextualPhoto } from "@/server/photos";
 import { previewAllowed } from "@/server/preview";
 
+/** Stock pictures that fit any trip. */
 const FALLBACK_BY_KIND: Record<string, string> = {
   stay: "/hotel-room-night.jpg",
   flight: "/flight-sunset-wing.jpg",
   transport: "/flight-sunset-wing.jpg",
+};
+/** These show Guatemala, so only a Guatemala trip gets them; anywhere else gets a plain placeholder rather than the wrong country. */
+const GUATEMALA_BY_KIND: Record<string, string> = {
   food: "/antigua-hotel.jpg",
   activity: "/lake-atitlan-hero.jpg",
   destination: "/guatemala-hero-sunset.jpg",
 };
+const PLACEHOLDER = "/photo-placeholder.jpg";
+const isGuatemala = (dest: string) => /guatemala|atitl[aá]n|antigua|panajachel|pacaya|flores|tikal/i.test(dest);
+
+function stockFor(kind: string, dest: string): string {
+  return FALLBACK_BY_KIND[kind] ?? (isGuatemala(dest) ? GUATEMALA_BY_KIND[kind] ?? GUATEMALA_BY_KIND.activity : PLACEHOLDER);
+}
 
 /** New lookups (model + image search) per person or address per hour; cached pictures don't count. */
 const LOOKUPS_PER_HOUR = 200;
@@ -33,7 +43,7 @@ export async function GET(request: Request) {
   const idx = Math.max(0, Math.min(10, Number(sp.get("idx") || "0") || 0));
 
   const fallback = (cacheControl: string) => {
-    const res = NextResponse.redirect(new URL(FALLBACK_BY_KIND[kind] || "/lake-atitlan-hero.jpg", request.url), 307);
+    const res = NextResponse.redirect(new URL(stockFor(kind, dest), request.url), 307);
     res.headers.set("Cache-Control", cacheControl);
     return res;
   };
