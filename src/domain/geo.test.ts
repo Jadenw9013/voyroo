@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { seedTrip } from "@/server/seed";
-import { boundsOf, clusterPoints, coordsFromMapsUrl, geocodeQueries, isShortMapsLink, locatable, stopsFor, unplaced } from "./geo";
+import { boundsOf, clusterPoints, coordsFromMapsUrl, geocodeQueries, isShortMapsLink, localityOf, localityWords, locatable, stopsFor, unplaced } from "./geo";
 import type { Item } from "./types";
 
 describe("coordinates in Maps links", () => {
@@ -55,13 +55,36 @@ describe("what to ask the geocoder", () => {
     ]);
   });
 
-  it("adds the destination so short names land in the right country, and drops asides", () => {
+  it("adds the destination only to a name that names no town, and drops asides", () => {
+    // "San Marcos La Laguna, Lake Atitlán" already says where: the destination isn't added.
     expect(geocodeQueries({ name: "San Marcos La Laguna, Lake Atitlán (Barrio 2)" }, "Guatemala")).toEqual([
-      "San Marcos La Laguna, Lake Atitlán, Guatemala",
+      "San Marcos La Laguna, Lake Atitlán",
       "San Marcos La Laguna, Guatemala",
     ]);
     expect(geocodeQueries({ name: "Antigua" }, "Guatemala")).toEqual(["Antigua, Guatemala"]);
     expect(geocodeQueries({ name: "Guatemala City" }, "Guatemala")).toEqual(["Guatemala City"]);
+    expect(geocodeQueries({ name: "Krabi International Airport (KBV)" }, "Krabi")).toEqual(["Krabi International Airport"]);
+  });
+
+  it("keeps a place in another town in that town: multi-city trips are normal", () => {
+    // A Krabi trip's Muay Thai class in Phuket: never "…, Phuket, Krabi", which lands on Krabi Road in Phuket City.
+    expect(geocodeQueries({ name: "Tiger Muay Thai", address: "7/35 Soi Tad-ied, Chalong, Phuket" }, "Krabi")).toEqual([
+      "7/35 Soi Tad-ied, Chalong, Phuket",
+      "Soi Tad-ied, Chalong, Phuket",
+      "Tiger Muay Thai, Chalong, Phuket",
+      "Chalong, Phuket",
+    ]);
+    expect(localityOf({ address: "7/35 Soi Tad-ied, Chalong, Phuket" })).toBe("Chalong, Phuket");
+    expect(localityWords({ address: "7/35 Soi Tad-ied, Chalong, Phuket 83130" })).toEqual(["chalong", "phuket"]);
+    expect(localityOf({ name: "Tiger Muay Thai" })).toBeNull();
+  });
+
+  it("drops a house number but not a numbered street, and postcodes", () => {
+    expect(geocodeQueries({ address: "3a Calle Oriente 28, Antigua Guatemala, 03001" }, "Guatemala")).toEqual([
+      "3a Calle Oriente 28, Antigua Guatemala",
+      "Antigua Guatemala",
+    ]);
+    expect(geocodeQueries({ address: "123 Main Street, Springfield, Illinois" })).toEqual(["123 Main Street, Springfield, Illinois", "Main Street, Springfield, Illinois", "Springfield, Illinois"]);
   });
 
   it("asks nothing for places nobody has decided", () => {

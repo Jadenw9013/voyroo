@@ -1,6 +1,9 @@
 import "server-only";
-import { coordsFromMapsUrl, geocodeQueries, hasCoords, isShortMapsLink, locatable, roundCoord, validLatLng, type LatLng } from "@/domain/geo";
+import { createHash } from "node:crypto";
+import { generateText } from "ai";
+import { coordsFromMapsUrl, geocodeQueries, hasCoords, isShortMapsLink, locatable, localityWords, roundCoord, validLatLng, type LatLng } from "@/domain/geo";
 import type { Item, Place, Trip } from "@/domain/types";
+import { assistantModel, googleProvider, isMock } from "./ai/models";
 import type { TripStore } from "./store";
 import { safeFetch } from "./unfurl";
 
@@ -20,13 +23,43 @@ import { safeFetch } from "./unfurl";
  *   - OpenStreetMap credited on the map;
  *   - switchable off without a code change: GEOCODER=off.
  * GEOCODER=stub answers from a fixed table, for tests that must not reach it.
+ *
+ * A hit has to be in the town the address names: Nominatim's best match for
+ * a street it doesn't know can be a namesake in another town ("Phuket, Krabi"
+ * once landed on Krabi Road in Phuket City). When nothing matches, the map's
+ * backfill asks Gemini, grounded in Google Maps, for the place's real name and
+ * street address, and looks those up the same way: the coordinates always come
+ * from the geocoder, never from the model.
  */
 
 export type Lookup = { ok: true; at: LatLng | null } | { ok: false };
 
 export interface Geocoder {
-  /** One free-text search. `ok: false` means it couldn't ask (busy, offline), so don't remember the answer. */
-  lookup(query: string, deadline: number): Promise<Lookup>;
+  /**
+   * One free-text search. `near`: town and region words the match must mention
+   * (from the address); a match elsewhere counts as not found. `ok: false` means
+   * it couldn't ask (busy, offline), so don't remember the answer.
+   */
+  lookup(query: string, deadline: number, near?: string[]): Promise<Lookup>;
+}
+
+/** A match's coordinates and Nominatim's name for it ("Chalong, Mueang Phuket, Phuket, Thailand"). */
+interface Candidate extends LatLng {
+  name?: string;
+}
+
+const foldName = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+
+/** Where a match is: its name without its own first part, so "Krabi Road, …, Phuket City, Phuket" is in Phuket, not Krabi. */
+function areaOf(name: string): string {
+  const parts = foldName(name).split(",");
+  return parts.length > 1 ? parts.slice(1).join(",") : parts[0];
+}
+
+/** The first candidate in the town or region the address names (any, when it names none). */
+function pick(candidates: Candidate[], near: string[] | undefined): LatLng | null {
+  const ok = candidates.find((c) => !near?.length || !c.name || near.some((w) => areaOf(c.name!).includes(w)));
+  return ok ? { lat: ok.lat, lng: ok.lng } : null;
 }
 
 type Cache = Pick<TripStore, "getCache" | "setCache" | "hit">;
@@ -45,14 +78,15 @@ export class NominatimGeocoder implements Geocoder {
     private fetcher: typeof fetch = (...args) => fetch(...args),
   ) {}
 
-  async lookup(query: string, deadline: number): Promise<Lookup> {
-    const key = `geo:v1:${norm(query)}`;
+  async lookup(query: string, deadline: number, near?: string[]): Promise<Lookup> {
+    // v2: a few candidates with their names, so the town check can choose; v1 kept only the first.
+    const key = `geo:v2:${norm(query)}`;
     const hit = await this.cache.getCache(key);
     if (hit === "none") return { ok: true, at: null };
     if (hit) {
       try {
-        const at = JSON.parse(hit) as LatLng;
-        if (validLatLng(at.lat, at.lng)) return { ok: true, at };
+        const kept = (JSON.parse(hit) as Candidate[]).filter((c) => validLatLng(c.lat, c.lng));
+        if (kept.length) return { ok: true, at: pick(kept, near) };
       } catch {
         // Ask again.
       }
@@ -65,8 +99,8 @@ export class NominatimGeocoder implements Geocoder {
       await sleep(1000 - (Date.now() % 1000) + 25);
     }
     const url = new URL(this.endpoint);
-    url.search = new URLSearchParams({ q: query, format: "jsonv2", limit: "1", "accept-language": "en" }).toString();
-    let rows: { lat?: string; lon?: string }[];
+    url.search = new URLSearchParams({ q: query, format: "jsonv2", limit: "5", "accept-language": "en" }).toString();
+    let rows: { lat?: string; lon?: string; display_name?: string }[];
     try {
       const res = await this.fetcher(url, {
         headers: { "user-agent": USER_AGENT, accept: "application/json" },
@@ -77,12 +111,13 @@ export class NominatimGeocoder implements Geocoder {
     } catch {
       return { ok: false };
     }
-    const first = Array.isArray(rows) ? rows[0] : undefined;
-    const lat = Number(first?.lat);
-    const lng = Number(first?.lon);
-    const at = first && validLatLng(lat, lng) ? { lat: roundCoord(lat), lng: roundCoord(lng) } : null;
-    await this.cache.setCache(key, at ? JSON.stringify(at) : "none", at ? FOUND_TTL : MISSING_TTL);
-    return { ok: true, at };
+    const candidates: Candidate[] = (Array.isArray(rows) ? rows : []).flatMap((r) => {
+      const lat = Number(r?.lat);
+      const lng = Number(r?.lon);
+      return validLatLng(lat, lng) ? [{ lat: roundCoord(lat), lng: roundCoord(lng), ...(r.display_name ? { name: String(r.display_name).slice(0, 300) } : {}) }] : [];
+    });
+    await this.cache.setCache(key, candidates.length ? JSON.stringify(candidates) : "none", candidates.length ? FOUND_TTL : MISSING_TTL);
+    return { ok: true, at: candidates.length ? pick(candidates, near) : null };
   }
 }
 
@@ -110,8 +145,30 @@ export class StubGeocoder implements Geocoder {
 
 // ---------------------------------------------------------------------------
 
+/**
+ * A place's real name and street address, as Google Maps knows it. `grounded`
+ * false: the model answered without looking at Maps, so only a respelling of
+ * the name the group typed is kept ("Aonang" → "Ao Nang"), never an address.
+ */
+export interface Canonical {
+  name?: string;
+  address?: string;
+  grounded?: boolean;
+}
+
+/** Letters and digits only: "Ao Nang Elephant Sanctuary" and "Aonang elephant sanctuary" squash the same. */
+const squash = (s: string) => foldName(s).replace(/\([^)]*\)/g, "").replace(/[^a-z0-9]/g, "");
+
+/** Words a match must mention to be inside the trip's destination ("krabi"). */
+const destinationWords = (destination: string | undefined) => (destination ? foldName(destination).split(/[\s,]+/).filter((w) => w.length >= 4) : []);
+
+/** Looks a place up by what the group typed; null when it can't say. Never gives coordinates. */
+export type FindCanonical = (place: Place, destination: string | undefined, deadline: number) => Promise<Canonical | null>;
+
 export interface LocateDeps {
   geocoder: Geocoder | null;
+  /** The last resort when no search matched: the map's backfill only (it costs a model call). */
+  canonical?: FindCanonical | null;
   /** Follows a Maps short link to where it goes; null when links aren't followed (tests, stub). */
   expand: ((url: string) => Promise<string | null>) | null;
   /** Read coordinates out of Maps links. Off for the assistant's changes: it doesn't get to say where things are. */
@@ -143,9 +200,71 @@ export function geoDeps(store: Cache, opts: Partial<LocateDeps> = {}): LocateDep
     expand: mode === "nominatim" ? expandMapsLink : null,
     trustLinks: true,
     budgetMs: 3500,
-    maxLookups: 2,
+    maxLookups: 3,
+    canonical: null,
   };
   return { ...base, ...opts, ...override?.deps };
+}
+
+const CANONICAL_TTL = 30 * 24 * 3600;
+
+/**
+ * Gemini, grounded in Google Maps, names the place and its street address.
+ * A grounded answer gives both; an answer without grounding (the model could
+ * make one up) gives only a respelling of the name the group typed, and must
+ * then land inside the trip's destination. Never coordinates: those come from
+ * looking the answer up. Answers, and "doesn't know", are cached a month.
+ */
+export function mapsCanonical(cache: Cache): FindCanonical | null {
+  if (isMock() || !process.env.GEMINI_API_KEY) return null;
+  return async (place, destination, deadline) => {
+    const what = [place.name, place.address].filter(Boolean).join(" | ");
+    if (!what) return null;
+    const key = `geo:canon:v1:${createHash("sha256").update(`${norm(what)}|${norm(destination ?? "")}`).digest("hex")}`;
+    const hit = await cache.getCache(key);
+    if (hit === "none") return null;
+    if (hit) {
+      try {
+        return JSON.parse(hit) as Canonical;
+      } catch {
+        // Ask again.
+      }
+    }
+    const model = assistantModel();
+    const left = deadline - Date.now();
+    if (!model || left < 2500) return null;
+    try {
+      const res = await generateText({
+        model,
+        tools: { google_maps: googleProvider().tools.googleMaps({}) },
+        prompt:
+          `Use Google Maps to look up this place: ${what}${destination ? ` (on a trip to ${destination}; it may be in another town)` : ""}. ` +
+          "Don't answer from memory; search Google Maps for it.\n" +
+          'Then reply with one line of JSON: {"name": "its name on Google Maps", "address": "its street address on Google Maps, with town and region"}. ' +
+          "If Google Maps doesn't have it, reply NONE.",
+        maxOutputTokens: 400,
+        abortSignal: AbortSignal.timeout(Math.min(12_000, left - 300)),
+      });
+      const grounded = !!(res.providerMetadata?.google as { groundingMetadata?: unknown } | undefined)?.groundingMetadata;
+      if (process.env.DEBUG_GEO === "1") console.log("[geo] maps answer,", grounded ? "grounded:" : "NOT grounded:", JSON.stringify(res.text.slice(0, 300)), "metadata:", JSON.stringify(res.providerMetadata ?? null).slice(0, 600), "sources:", res.sources?.length ?? 0);
+      const json = /\{[^{}]*\}/.exec(res.text)?.[0];
+      let found: Canonical | null = null;
+      if (json) {
+        const raw = JSON.parse(json) as Record<string, unknown>;
+        const name = typeof raw.name === "string" ? raw.name.trim().slice(0, 200) : "";
+        const address = typeof raw.address === "string" ? raw.address.trim().slice(0, 300) : "";
+        if (grounded && (name || address)) found = { ...(name ? { name } : {}), ...(address ? { address } : {}), grounded: true };
+        // Without Maps: only the name, and only when it's the same name re-spaced or re-cased (perhaps with its town added).
+        else if (!grounded && name && place.name && squash(place.name).length >= 6 && squash(name).includes(squash(place.name)) && squash(name) !== squash(place.name)) found = { name, grounded: false };
+      }
+      // An ungrounded answer that wasn't a respelling isn't remembered: next time Maps may be available.
+      if (found || grounded) await cache.setCache(key, found ? JSON.stringify(found) : "none", CANONICAL_TTL);
+      return found;
+    } catch (e) {
+      if (process.env.DEBUG_GEO === "1") console.log("[geo] maps lookup failed:", (e as Error).message);
+      return null;
+    }
+  };
 }
 
 interface Run {
@@ -173,9 +292,26 @@ async function placeAt(place: Place | undefined, links: string[], destination: s
   const queries = geocodeQueries(place, destination);
   if (!queries.length) return null;
   if (!run.deps.geocoder) return undefined;
+  const near = localityWords(place);
+  const found = await search(queries, near, run);
+  if (found !== null || !run.deps.canonical || !place) return found;
+  // Nothing matched what the group typed: ask Google Maps what the place is really called and where, then look that up.
+  if (Date.now() >= run.deadline) return undefined;
+  const real = await run.deps.canonical(place, destination, run.deadline);
+  if (!real) return null;
+  // Its name first: an address can be vague ("272 Ao Nang" is a subdistrict that takes in Ko Phi Phi), a place's name isn't.
+  const fromMaps = [...geocodeQueries({ name: real.name }, destination), ...(real.grounded !== false && real.address ? geocodeQueries({ address: real.address }, destination) : [])];
+  const again = [...new Set(fromMaps)].filter((q) => !queries.includes(q));
+  // A respelled name must still land inside the trip's destination; a Maps answer in the town its address names.
+  const where = near.length ? near : real.grounded === false ? destinationWords(destination) : localityWords(real);
+  return again.length ? search(again, where, run) : null;
+}
+
+/** The first query that finds something in the right town; undefined when out of time or lookups. */
+async function search(queries: string[], near: string[], run: Run): Promise<LatLng | null | undefined> {
   for (const q of queries) {
     if (run.lookups >= run.deps.maxLookups || Date.now() >= run.deadline) return undefined;
-    const r = await run.deps.geocoder.lookup(q, run.deadline);
+    const r = await run.deps.geocoder!.lookup(q, run.deadline, near);
     if (!r.ok) return undefined;
     run.lookups++;
     if (r.at) return r.at;

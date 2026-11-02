@@ -7,16 +7,16 @@ import { previewTrip } from "@/server/preview";
 import { getRouteCache, lookupRoutes } from "@/server/routing";
 import { dayRows, ideas, nightOf, nowNext, phase, rowVerb, stayOn, tripDays, type Row } from "@/domain/derive";
 import { drivable, emergencyLines, ESSENTIAL_FIELDS } from "@/domain/essentials";
-import { directionsUrl, instagramUrl, itemPhotoUrl, mapsLink, postInfo, telUrl, whatsappUrl } from "@/domain/links";
+import { directionsUrl, instagramUrl, itemPhotoUrl, mapsLink, postInfo, telUrl, tripCoverUrl, whatsappUrl } from "@/domain/links";
 import { dayLegs, describeLeg, routeKeys } from "@/domain/travel";
 import { daysBetween, formatDay, formatDuration, formatRange, formatTime, monthDay, todayIn, weekday, zoneName } from "@/domain/time";
 import type { Essentials, Item, Trip, When } from "@/domain/types";
 import type { TempUnit } from "@/domain/weather";
 import { actionClass } from "@/ui/action";
-import { KindChip, StatusPill } from "@/ui/badges";
+import { KIND_CHIP, KindChip, StatusPill } from "@/ui/badges";
 import { railList, StopMedia } from "@/ui/StopMedia";
 import { Brand } from "@/ui/Brand";
-import { Icon, LINK_ICON } from "@/ui/Icon";
+import { Icon, KIND_ICON, LINK_ICON } from "@/ui/Icon";
 import { ShareDriver } from "@/features/share/ShareDriver";
 import { ShareMap } from "@/features/share/ShareMap";
 import { ShareWeatherCredit, ShareWeatherLine } from "@/features/share/ShareWeather";
@@ -64,7 +64,11 @@ export default async function PreviewPage({ params }: { params: Promise<{ tripId
         </div>
       </header>
 
-      <main id="main" className="mx-auto flex max-w-2xl flex-col gap-10 px-4 pt-6 pb-[calc(4rem+env(safe-area-inset-bottom))]">
+      <main id="main" className="mx-auto flex max-w-2xl flex-col gap-10 px-4 pb-[calc(4rem+env(safe-area-inset-bottom))] sm:pt-6">
+        {/* The destination, first: a picture of where everyone's going, its space kept so the page doesn't jump when it arrives. */}
+        <div className="-mx-4 -mb-4 aspect-video overflow-hidden bg-sunken sm:mx-0 sm:rounded-2xl">
+          <img src={withAccess(tripCoverUrl(trip), access)} alt="" decoding="async" fetchPriority="high" className="size-full object-cover" />
+        </div>
         <section className="flex flex-col gap-2">
           <h1 className="text-3xl font-bold">{trip.name}</h1>
           <p className="text-base">
@@ -345,14 +349,17 @@ function Stop({ trip, item, row, access }: { trip: Trip; item: Item; row?: Row; 
   const posts = item.links ?? [];
   return (
     <li>
-      <details id={`item-${item.id}`} className="group scroll-mt-4 rounded-xl open:bg-surface open:ring-1 open:ring-line">
+      <details id={`item-${item.id}`} className="group relative scroll-mt-4 rounded-xl open:bg-surface open:ring-1 open:ring-line">
         <summary className="flex min-h-14 cursor-pointer list-none items-start gap-3 rounded-xl px-2 py-2.5 hover:bg-sunken [&::-webkit-details-marker]:hidden">
           {summary}
           <Icon name="chevronDown" className="mt-2.5 size-4 shrink-0 text-muted group-open:rotate-180" />
         </summary>
         <div className="flex flex-col gap-4 px-2 pt-1 pb-4">
           {showPhoto && (
-            <img src={withAccess(itemPhotoUrl(item, trip), access)} alt="" loading="lazy" className="cover-photo h-40 w-full rounded-xl bg-sunken object-cover" />
+            <span className={`relative flex h-48 items-center justify-center overflow-hidden rounded-xl ${KIND_CHIP[item.kind]}`}>
+              <Icon name={KIND_ICON[item.kind]} className="size-8" />
+              <img src={withAccess(itemPhotoUrl(item, trip), access)} alt="" loading="lazy" decoding="async" className="absolute inset-0 size-full object-cover" />
+            </span>
           )}
           <Actions trip={trip} item={item} part={row?.part ?? "idea"} />
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-base">

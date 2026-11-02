@@ -127,31 +127,73 @@ function within(s: string, destination: string | undefined): string {
 }
 
 /**
- * Free-text searches to try, best first: the address, then the name, then
- * shorter forms of each. At most three, so one place costs at most three
- * lookups.
+ * A house or unit number at the front of a street: "7/35", "#12", "No. 5", "123".
+ * One digit stays: "2 calle oriente" and "3a Calle" are street names in Antigua.
+ */
+const HOUSE_NUMBER = /^(?:\d+\/\d+\w*|#\s*\d+\w*|no\.?\s*\d+\w*|\d{2,}[a-z]?)\s+(?=\D)/i;
+/** Postcodes and the like, which the geocoder matches badly inside a town's name. */
+const POSTCODE = /\b\d{4,6}\b/g;
+
+/** The comma parts of an address, tidied, with postcodes dropped: ["7/35 Soi Tad-ied", "Chalong", "Phuket"]. */
+function partsOf(s: string): string[] {
+  return tidy(s)
+    .split(",")
+    .map((p) => p.replace(POSTCODE, " ").replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+}
+
+/**
+ * The town an address names, and its region: the last two comma parts
+ * ("Chalong, Phuket"), or the one part after the street when there are only
+ * two. Null when the address doesn't name one (no comma).
+ */
+export function localityOf(place: Place | undefined): string | null {
+  const address = place?.address ? partsOf(place.address) : [];
+  if (address.length >= 3) return address.slice(-2).join(", ");
+  if (address.length === 2) return address[1];
+  return null;
+}
+
+/** The town and region words a match must mention when the address names them ("chalong", "phuket"). */
+export function localityWords(place: Place | undefined): string[] {
+  const loc = localityOf(place);
+  return loc ? loc.split(",").map((w) => fold(w).trim()).filter((w) => w.length >= 3) : [];
+}
+
+/**
+ * Free-text searches to try, best first, at most five: the full address; the
+ * address without its house number; the place's name with the address's town;
+ * then the address with leading parts dropped, down to the town and region.
+ * The trip's destination is added only to something that names no town (one
+ * part, no comma): "Antigua" means Antigua Guatemala on a Guatemala trip, but
+ * "Chalong, Phuket" stays in Phuket on a Krabi trip.
  */
 export function geocodeQueries(place: Place | undefined, destination?: string): string[] {
   if (!place) return [];
   const out: string[] = [];
   const add = (s: string | undefined) => {
     const t = s && tidy(s);
-    if (t && t.length >= 3 && !undecided(t)) out.push(within(t, destination));
+    if (!t || t.length < 3 || undecided(t)) return;
+    out.push(t.includes(",") ? t : within(t, destination));
   };
-  const address = place.address ? tidy(place.address) : "";
+  const addressText = place.address ? tidy(place.address) : "";
   const name = place.name ? tidy(place.name) : "";
-  if (address && !undecided(address)) {
-    add(address);
-    add(address.replace(/#\s*\d+\w*/g, "").replace(/\s+,/g, ","));
+  const parts = addressText && !undecided(addressText) ? partsOf(addressText) : [];
+  const town = localityOf(place);
+  if (parts.length) {
+    add(parts.join(", "));
+    const street = parts[0].replace(/#\s*\d+\w*/g, "").replace(HOUSE_NUMBER, "").replace(/\s+/g, " ").trim();
+    if (street && street !== parts[0]) add([street, ...parts.slice(1)].join(", "));
   }
   if (name && !undecided(name)) {
-    add(name);
+    if (town && !fold(name).includes(fold(town.split(",")[0]))) add(`${name.split(",")[0]}, ${town}`);
+    else add(name);
     if (name.includes(",")) add(name.split(",")[0]);
   }
-  // Last resort for an address nothing matched: its town, the last part.
-  if (address.includes(",") && !undecided(address)) add(address.split(",").at(-1));
+  // The address with its leading parts dropped, down to the town and its region ("Chalong, Phuket"), or the town alone after a street.
+  for (let i = 1; i < parts.length && i <= Math.max(1, parts.length - 2); i++) add(parts.slice(i).join(", "));
   const seen = new Set<string>();
-  return out.filter((q) => !seen.has(fold(q)) && seen.add(fold(q))).slice(0, 3);
+  return out.filter((q) => !seen.has(fold(q)) && seen.add(fold(q))).slice(0, 5);
 }
 
 /** True when there is something to place: a name, an address or a Maps link. */

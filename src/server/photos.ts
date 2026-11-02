@@ -22,10 +22,23 @@ const inFlight = new Map<string, Promise<CachedPhoto | null>>();
 export interface PhotoParams {
   title?: string;
   place?: string;
+  /** The trip's destination. */
   dest?: string;
+  /** The item's own town and region, from its address ("Chalong, Phuket"): where it is, when that isn't the destination. */
+  near?: string;
   kind?: string;
   idx?: number;
+  /** What the activity or kind of place looks like ("sea kayaking"), when searching by that instead of the name. */
+  theme?: string;
 }
+
+/** DEBUG_PHOTOS=1: one line per step of a picture lookup, to see why a picture was or wasn't found. */
+const debug = (...args: unknown[]) => {
+  if (process.env.DEBUG_PHOTOS === "1") console.log("[photos]", ...args);
+};
+
+/** Where the item is: its own town when its address names one, else the trip's destination. */
+const whereOf = (params: PhotoParams) => (params.near || params.dest || "").trim();
 
 const ACTION_PREFIX_RE =
   /^(?:stay at|check[- ]?in:?|check[- ]?out:?|arrive at|arrival at|depart from|departure from|transfer from|transfer to|flight to|fly to|visit|explore|dinner at|lunch at|breakfast at|brunch at|drinks at|coffee at|stop at|day trip to|tour of|excursion to)\s+/i;
@@ -92,7 +105,7 @@ export function cleanPhotoQuery({ title = "", place = "", dest = "", kind = "" }
  */
 async function refineQueryWithGemini(params: PhotoParams, fallbackQuery: string): Promise<string> {
   if (isMock() || !process.env.GEMINI_API_KEY) return fallbackQuery;
-  const key = JSON.stringify([params.title, params.place, params.dest, params.kind]);
+  const key = JSON.stringify([params.title, params.place, whereOf(params), params.kind]);
   const cached = queryCache.get(key);
   if (cached) return cached;
 
@@ -111,7 +124,7 @@ async function refineQueryWithGemini(params: PhotoParams, fallbackQuery: string)
       model,
       system:
         "You generate a concise 4 to 7 word web image search query to find a real, accurate photo for a travel itinerary item. Return ONLY the plain search query words, no quotes or punctuation.",
-      prompt: `Trip destination: ${params.dest || "Unknown"}\nItem kind: ${params.kind || "activity"}\nItem title: ${params.title || ""}\nPlace: ${params.place || ""}\nSearch query:`,
+      prompt: `Where it is: ${whereOf(params) || "Unknown"}\nItem kind: ${params.kind || "activity"}\nItem title: ${params.title || ""}\nPlace: ${params.place || ""}\nSearch query:`,
       maxOutputTokens: 40,
       abortSignal: AbortSignal.timeout(2500),
     });
@@ -149,8 +162,8 @@ const MIN_IMAGE_BYTES = 2500;
 const MAX_IMAGE_BYTES = 6_000_000;
 const FOUND_TTL_SECONDS = 7 * 24 * 60 * 60;
 const NOT_FOUND_TTL_SECONDS = 24 * 60 * 60;
-/** Bumped when the rules for an acceptable picture change, so old picks are found again. */
-const PICK_VERSION = "v3";
+/** Bumped when the rules for an acceptable picture change, so old picks are found again. v4: the item's own town, and the activity's theme. */
+const PICK_VERSION = "v4";
 /** Candidates downloaded, and how many of those the model looks at, per search. */
 const MAX_DOWNLOADS = 6;
 const MAX_CHECKS = 4;
@@ -188,6 +201,7 @@ async function looksRight(img: { bytes: Uint8Array; type: string }, params: Phot
   if (!model) return false;
   const what = KIND_WORDS[params.kind ?? ""] ?? KIND_WORDS.activity;
   const name = [params.title, params.place].filter(Boolean).join(", ");
+  const where = whereOf(params);
   try {
     const res = await generateText({
       model,
@@ -197,11 +211,15 @@ async function looksRight(img: { bytes: Uint8Array; type: string }, params: Phot
           content: [
             {
               type: "text",
-              text:
-                `This picture would illustrate a travel itinerary item: ${what}${name ? `, "${name}"` : ""}${params.dest ? `, in ${params.dest}` : ""}.\n` +
-                "Answer YES only if it is a real photograph a traveller would recognise as this place, or as this kind of place in that destination.\n" +
-                "Answer NO if it is a cartoon, illustration, character, meme, logo, map, screenshot, poster or mostly text; news or disaster imagery (fire, flood, accident, protest, police); a portrait or celebrity; or clearly somewhere else.\n" +
-                "Reply with one word: YES or NO.",
+              // A theme is judged on what the picture shows, not where: a picture of the town isn't a picture of a market.
+              text: params.theme
+                ? `Does this real photograph clearly show ${params.theme} as its main subject?\n` +
+                  "Answer NO if it mostly shows scenery, a coastline, a building or a landmark instead; or if it is a cartoon, illustration, character, meme, logo, map, screenshot, poster or mostly text; news or disaster imagery (fire, flood, accident, protest, police); or a portrait or celebrity.\n" +
+                  "Reply with one word: YES or NO."
+                : `This picture would illustrate a travel itinerary item: ${what}${name ? `, "${name}"` : ""}${where ? `, in ${where}` : ""}.\n` +
+                  "Answer YES only if it is a real photograph a traveller would recognise as this place, or as this kind of place or activity there.\n" +
+                  "Answer NO if it is a cartoon, illustration, character, meme, logo, map, screenshot, poster or mostly text; news or disaster imagery (fire, flood, accident, protest, police); a portrait or celebrity; or clearly somewhere else.\n" +
+                  "Reply with one word: YES or NO.",
             },
             { type: "file", data: img.bytes, mediaType: img.type },
           ],
@@ -226,13 +244,14 @@ async function firstGood(urls: string[], params: PhotoParams): Promise<{ url: st
   const fetched = await Promise.all([...new Set(urls)].slice(0, MAX_DOWNLOADS).map(async (url) => ({ url, img: await downloadImage(url) })));
   const usable = fetched.flatMap(({ url, img }) => (img ? [{ url, ...img }] : [])).slice(0, MAX_CHECKS);
   const passed = await Promise.all(usable.map((c) => looksRight(c, params)));
+  debug(`checked ${usable.length} of ${urls.length} candidates${params.theme ? ` for theme "${params.theme}"` : ""}:`, passed.map((p, i) => `${p ? "YES" : "no"} ${usable[i].url.slice(0, 90)}`));
   return usable[passed.indexOf(true)] ?? null;
 }
 
 /** Short searches, most specific first: these sources match few words well and many words badly. */
 export function photoQueries(params: PhotoParams): string[] {
   const name = (params.place || params.title || "").replace(ACTION_PREFIX_RE, "").replace(/\((?:name\s+)?tbd[^)]*\)/gi, "").replace(/\s+/g, " ").trim();
-  const dest = (params.dest || "").trim();
+  const dest = whereOf(params);
   if (params.kind === "destination" || !name) return dest ? [`${dest} landscape`, `${dest} city`, dest] : [];
   const inDest = dest && !name.toLowerCase().includes(dest.toLowerCase()) ? `${name} ${dest}` : "";
   const title = params.title && params.place && !params.title.includes(params.place) ? params.title.replace(ACTION_PREFIX_RE, "").trim() : "";
@@ -249,9 +268,72 @@ async function findFor(params: PhotoParams, first?: string): Promise<{ url: stri
   return null;
 }
 
-/** A picture of the trip's destination, for an item nothing good was found for. */
+/** A picture of where the item is (its own town, else the destination), for an item nothing better was found for. */
 function destinationParams(params: PhotoParams): PhotoParams | null {
-  return params.dest && params.kind !== "destination" ? { title: params.dest, dest: params.dest, kind: "destination" } : null;
+  const where = whereOf(params);
+  return where && params.kind !== "destination" ? { title: where, dest: where, kind: "destination" } : null;
+}
+
+/** Turns a title into what a photo of it would show ("Sunset kayak tour" → "sea kayaking"). Swapped out in tests. */
+export type ThemeFinder = (params: PhotoParams) => Promise<string | null>;
+let themeOverride: ThemeFinder | null = null;
+export function setThemeForTests(find: ThemeFinder | null) {
+  themeOverride = find;
+}
+
+/**
+ * Asks the model for a short visual search for the activity or kind of place:
+ * not its name or where it is. Nothing is hard-coded: a class, a tour, a
+ * market or a hotel each get their own words. Remembered per item.
+ */
+async function themeFor(params: PhotoParams): Promise<string | null> {
+  if (themeOverride) return themeOverride(params);
+  if (isMock() || !params.title) return null;
+  const key = JSON.stringify(["theme", params.title, params.place, params.kind]);
+  const cached = queryCache.get(key);
+  if (cached !== undefined) return cached || null;
+  const model = assistantModel();
+  if (!model) return null;
+  try {
+    const res = await generateText({
+      model,
+      system:
+        "You write a 2 to 4 word image search for what a photo of a travel itinerary item would show: the activity or the kind of place, never its name, brand or town. " +
+        'Examples: "Cooking class at Baan Ya" -> cooking class; "Sunset kayak tour" -> sea kayaking; "Pool day at the resort" -> hotel pool; "Sunrise hike up Pacaya" -> volcano hiking trail. ' +
+        "Reply with only the words, lowercase, no quotes.",
+      prompt: `Kind: ${params.kind || "activity"}\nTitle: ${params.title}\nPlace: ${params.place || ""}\nSearch:`,
+      // Room for the model's thinking as well as the few words (a 30-token cap came back empty).
+      maxOutputTokens: 200,
+      providerOptions: { google: { thinkingConfig: { thinkingLevel: "low" } } },
+      abortSignal: AbortSignal.timeout(5000),
+    });
+    const theme = res.text.replace(/["'`\n\r.]/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
+    const ok = theme.length >= 3 && theme.length <= 60 && theme.split(" ").length <= 6 ? theme : "";
+    debug("theme", JSON.stringify(params.title), "->", JSON.stringify(res.text), ok ? "used" : "not used");
+    if (queryCache.size >= MAX_CACHE_ENTRIES) {
+      const oldest = queryCache.keys().next().value;
+      if (oldest) queryCache.delete(oldest);
+    }
+    queryCache.set(key, ok);
+    return ok || null;
+  } catch (e) {
+    debug("theme failed:", (e as Error).message);
+    return null;
+  }
+}
+
+/** A confirmed picture of the activity or kind of place: near the item first, then anywhere. */
+async function findTheme(params: PhotoParams): Promise<{ url: string; bytes: Uint8Array; type: string } | null> {
+  if (!canCheck() || params.kind === "destination") return null;
+  const theme = await themeFor(params);
+  if (!theme) return null;
+  const where = whereOf(params);
+  const withTheme = { ...params, theme };
+  for (const query of [...new Set([where ? `${theme} ${where}` : "", theme].filter(Boolean))]) {
+    const found = await firstGood(await searchWebPhotoUrls(query), withTheme);
+    if (found) return found;
+  }
+  return null;
 }
 
 /*
@@ -347,7 +429,7 @@ export async function getContextualPhoto(params: PhotoParams, opts: { mayLookUp?
   if (isMock() || NO_SEARCH_KINDS.has(params.kind ?? "")) return null;
 
   const baseQuery = cleanPhotoQuery(params);
-  const cacheKey = `${PICK_VERSION}::${baseQuery}::${params.idx ?? 0}`;
+  const cacheKey = `${PICK_VERSION}::${baseQuery}::${params.near ?? ""}::${params.idx ?? 0}`;
   const hit = photoCache.get(cacheKey);
   if (hit && Date.now() - hit.at < PHOTO_TTL_MS) {
     return hit;
@@ -374,8 +456,9 @@ export async function getContextualPhoto(params: PhotoParams, opts: { mayLookUp?
       if (opts.mayLookUp && !(await opts.mayLookUp())) return null;
       // A model-written search only for vague titles ("Hotel TBD", "free afternoon"); otherwise the place's own name.
       const refined = await refineQueryWithGemini(params, baseQuery);
+      // In order: the place itself; then what the activity or kind of place looks like; then where it is; then (in the route) stock.
       let found = await findFor(params, refined !== baseQuery ? refined : undefined);
-      // Nothing that really shows the item: a confirmed picture of where the trip is, rather than a wrong one.
+      if (!found) found = await findTheme(params);
       const fallback = found ? null : destinationParams(params);
       if (fallback) found = await findFor(fallback);
 

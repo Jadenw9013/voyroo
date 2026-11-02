@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
-import { geoDeps, locateTrip } from "@/server/geocode";
+import { geoDeps, locateTrip, mapsCanonical } from "@/server/geocode";
 import { getStore, jsonError, requireSession } from "@/server/http";
 
 const NO_STORE = { "Cache-Control": "no-store" };
+
+/** Room for the backfill's budget (15 s) plus saving: asking Google Maps about an unfound place takes seconds. */
+export const maxDuration = 30;
 
 /**
  * The map's backfill: finds coordinates for items that have a place but no
@@ -26,7 +29,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ tri
   if (known) return NextResponse.json({ located: [], notFound: JSON.parse(known), pending: 0, version: state.version }, { headers: NO_STORE });
   if ((await store.hit(`locate:${tripId}`, 60)) > 20) return jsonError(429, "Placing pins is busy. Try again in a minute.");
 
-  const found = await locateTrip(state.trip, geoDeps(store, { budgetMs: 8000, maxLookups: 8 }));
+  // The backfill has time for the last resort that saving a change doesn't: asking Google Maps what an unfound place is called.
+  const found = await locateTrip(state.trip, geoDeps(store, { budgetMs: 15_000, maxLookups: 8, canonical: mapsCanonical(store) }));
   let version = state.version;
   let located: string[] = [];
   if (found.ops.length) {
