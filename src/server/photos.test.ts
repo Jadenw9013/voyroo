@@ -20,7 +20,7 @@ vi.mock("node:dns/promises", () => ({
 import { writeSession } from "./auth";
 import { getStore, setStoreForTests } from "./db";
 import { requester } from "./http";
-import { forgetPhotosForTests, photoQueries, setPhotoCheckForTests } from "./photos";
+import { forgetPhotosForTests, photoQueries, setPhotoCheckForTests, setThemeForTests } from "./photos";
 import { MemoryBackend, TripStore } from "./store";
 import { GET as photo } from "@/app/api/photo/route";
 
@@ -53,6 +53,7 @@ beforeEach(() => {
   vi.stubEnv("GEMINI_API_KEY", "");
   // The model's look at each picture: the cartoon fails, everything else passes.
   setPhotoCheckForTests(async (img) => img.bytes[0] !== 9);
+  setThemeForTests(async () => null);
   fetchMock.mockReset();
   fetchMock.mockImplementation(async (input) => {
     const url = String(input);
@@ -158,6 +159,37 @@ describe("/api/photo", () => {
     const none = await ask("title=Somewhere%20else&dest=Krabi&kind=activity");
     expect(none.status).toBe(307);
     expect(none.headers.get("location")).toMatch(/\/photo-placeholder\.jpg$/);
+  });
+
+  it("pictures an item where it is, not where the trip is", async () => {
+    // A Krabi trip's class in Phuket: its own town in the search, and in the fallback.
+    expect(photoQueries({ title: "Tiger Muay Thai Beginner Class", place: "Tiger Muay Thai", dest: "Krabi", near: "Chalong, Phuket", kind: "activity" })).toEqual([
+      "Tiger Muay Thai Chalong, Phuket",
+      "Tiger Muay Thai",
+    ]);
+    await writeSession({ tripId: "guatemala", name: "Sam" });
+    setPhotoCheckForTests(async (img, params) => params.kind === "destination" && img.bytes[0] === 7);
+    const res = await ask("title=Tiger%20Muay%20Thai%20Beginner%20Class&place=Tiger%20Muay%20Thai&dest=Krabi&near=Chalong%2C%20Phuket&kind=activity");
+    expect(res.status).toBe(200);
+    const searches = fetched().filter(isSearch).map((u) => decodeURIComponent(u));
+    expect(searches.at(-1)).toMatch(/Chalong, Phuket/);
+    expect(searches.some((u) => /Krabi/.test(u))).toBe(false);
+  });
+
+  it("tries what the activity looks like before falling back to the town", async () => {
+    await writeSession({ tripId: "guatemala", name: "Sam" });
+    const themes: string[] = [];
+    setThemeForTests(async (params) => (themes.push(params.title ?? ""), "muay thai training"));
+    // The model turns down every picture of the gym itself, and accepts one of the activity.
+    setPhotoCheckForTests(async (img, params) => params.theme === "muay thai training" && img.bytes[0] === 7);
+    const res = await ask("title=Tiger%20Muay%20Thai%20Beginner%20Class&place=Tiger%20Muay%20Thai&dest=Krabi&near=Chalong%2C%20Phuket&kind=activity");
+    expect(res.status).toBe(200);
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(JPEG);
+    expect(themes).toEqual(["Tiger Muay Thai Beginner Class"]);
+    const searches = fetched().filter(isSearch).map((u) => decodeURIComponent(u));
+    expect(searches.some((u) => u.includes("muay thai training Chalong, Phuket"))).toBe(true);
+    // Found by theme: never got as far as a picture of the town.
+    expect(searches.some((u) => /Chalong, Phuket (landscape|city)/.test(u))).toBe(false);
   });
 
   it("with no model to check pictures, shows stock instead of an unchecked one", async () => {

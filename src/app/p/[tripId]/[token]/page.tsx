@@ -7,15 +7,16 @@ import { previewTrip } from "@/server/preview";
 import { getRouteCache, lookupRoutes } from "@/server/routing";
 import { dayRows, ideas, nightOf, nowNext, phase, rowVerb, stayOn, tripDays, type Row } from "@/domain/derive";
 import { drivable, emergencyLines, ESSENTIAL_FIELDS } from "@/domain/essentials";
-import { directionsUrl, instagramUrl, itemPhotoUrl, mapsLink, postInfo, telUrl, whatsappUrl } from "@/domain/links";
+import { directionsUrl, instagramUrl, itemPhotoUrl, mapsLink, postInfo, telUrl, tripCoverUrl, whatsappUrl } from "@/domain/links";
 import { dayLegs, describeLeg, routeKeys } from "@/domain/travel";
 import { daysBetween, formatDay, formatDuration, formatRange, formatTime, monthDay, todayIn, weekday, zoneName } from "@/domain/time";
 import type { Essentials, Item, Trip, When } from "@/domain/types";
 import type { TempUnit } from "@/domain/weather";
 import { actionClass } from "@/ui/action";
-import { KindChip, StatusPill } from "@/ui/badges";
+import { KIND_CHIP, KindChip, StatusPill } from "@/ui/badges";
+import { railList, StopMedia } from "@/ui/StopMedia";
 import { Brand } from "@/ui/Brand";
-import { Icon, LINK_ICON } from "@/ui/Icon";
+import { Icon, KIND_ICON, LINK_ICON } from "@/ui/Icon";
 import { ShareDriver } from "@/features/share/ShareDriver";
 import { ShareMap } from "@/features/share/ShareMap";
 import { ShareWeatherCredit, ShareWeatherLine } from "@/features/share/ShareWeather";
@@ -63,7 +64,11 @@ export default async function PreviewPage({ params }: { params: Promise<{ tripId
         </div>
       </header>
 
-      <main id="main" className="mx-auto flex max-w-2xl flex-col gap-10 px-4 pt-6 pb-[calc(4rem+env(safe-area-inset-bottom))]">
+      <main id="main" className="mx-auto flex max-w-2xl flex-col gap-10 px-4 pb-[calc(4rem+env(safe-area-inset-bottom))] sm:pt-6">
+        {/* The destination, first: a picture of where everyone's going, its space kept so the page doesn't jump when it arrives. */}
+        <div className="-mx-4 -mb-4 aspect-video overflow-hidden bg-sunken sm:mx-0 sm:rounded-2xl">
+          <img src={withAccess(tripCoverUrl(trip), access)} alt="" decoding="async" fetchPriority="high" className="size-full object-cover" />
+        </div>
         <section className="flex flex-col gap-2">
           <h1 className="text-3xl font-bold">{trip.name}</h1>
           <p className="text-base">
@@ -264,7 +269,7 @@ function Day({ trip, date, today, last, legs, access, unit }: { trip: Trip; date
   const n = stay ? nightOf(stay, date) : null;
   return (
     <section id={`day-${date}`} aria-labelledby={`day-${date}-title`} className="flex scroll-mt-4 flex-col gap-2">
-      <div className="flex flex-col gap-1 border-b border-line pb-3">
+      <div className="flex flex-col gap-1 pb-2">
         <h3 id={`day-${date}-title`} className="text-xl font-bold">
           {weekday(date, true)}, {monthDay(date)}
           {date === today && <span className="ml-2 text-base font-semibold text-muted">Today</span>}
@@ -282,7 +287,7 @@ function Day({ trip, date, today, last, legs, access, unit }: { trip: Trip; date
         <ShareWeatherLine tripId={access.tripId} token={access.token} date={date} unit={unit} />
       </div>
       {rows.length ? (
-        <ol className="-mx-2 flex flex-col">
+        <ol className={railList(false)}>
           {rows.map((r) => (
             <FragmentRow key={r.key} leg={legs.get(`${date}:${r.key}`)}>
               <Stop trip={trip} item={r.item} row={r} access={access} />
@@ -312,15 +317,18 @@ function FragmentRow({ leg, children }: { leg?: Shown; children: ReactNode }) {
  */
 function Stop({ trip, item, row, access }: { trip: Trip; item: Item; row?: Row; access: Access }) {
   const ending = row?.part === "end";
-  const time = row ? timeWords(row.when, trip) : null;
+  const zone = row?.when.time && row.when.tz && row.when.tz !== trip.tz ? zoneName(row.when.tz).replace(/ Time$/, "") : null;
   const place = item.place?.name || item.place?.address;
   const summary = (
     <>
-      {row && <span className="w-18 shrink-0 pt-1.5 text-sm leading-snug">{time ? <time className="block font-bold text-ink">{time}</time> : <span className="block text-muted">Anytime</span>}</span>}
-      <span className={ending ? "opacity-60" : ""}>
-        <KindChip kind={item.kind} />
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-1 pt-1">
+      {row && (
+        <span className="w-18 shrink-0 pt-1.5 text-sm leading-snug">
+          {row.when.time ? <time className="block font-bold whitespace-nowrap text-ink">{formatTime(row.when.time)}</time> : <span className="block text-muted">Anytime</span>}
+          {zone && <span className="block text-muted">{zone}</span>}
+        </span>
+      )}
+      <StopMedia kind={item.kind} src={ending ? null : withAccess(itemPhotoUrl(item, trip), access)} dim={ending} />
+      <span className="flex min-w-0 flex-1 flex-col gap-1 pt-0.5">
         <span className={`text-base leading-snug font-semibold ${ending ? "text-muted" : ""}`}>{row ? rowTitle(row) : item.title}</span>
         {place && !ending && <span className="truncate text-sm text-muted">{place}</span>}
         {!ending && statusOf(item) && <span className="flex flex-wrap gap-1.5">{statusOf(item)}</span>}
@@ -341,14 +349,17 @@ function Stop({ trip, item, row, access }: { trip: Trip; item: Item; row?: Row; 
   const posts = item.links ?? [];
   return (
     <li>
-      <details id={`item-${item.id}`} className="group scroll-mt-4 rounded-xl open:bg-surface open:ring-1 open:ring-line">
+      <details id={`item-${item.id}`} className="group relative scroll-mt-4 rounded-xl open:bg-surface open:ring-1 open:ring-line">
         <summary className="flex min-h-14 cursor-pointer list-none items-start gap-3 rounded-xl px-2 py-2.5 hover:bg-sunken [&::-webkit-details-marker]:hidden">
           {summary}
           <Icon name="chevronDown" className="mt-2.5 size-4 shrink-0 text-muted group-open:rotate-180" />
         </summary>
         <div className="flex flex-col gap-4 px-2 pt-1 pb-4">
           {showPhoto && (
-            <img src={withAccess(itemPhotoUrl(item, trip), access)} alt="" loading="lazy" className="cover-photo h-40 w-full rounded-xl bg-sunken object-cover" />
+            <span className={`relative flex h-48 items-center justify-center overflow-hidden rounded-xl ${KIND_CHIP[item.kind]}`}>
+              <Icon name={KIND_ICON[item.kind]} className="size-8" />
+              <img src={withAccess(itemPhotoUrl(item, trip), access)} alt="" loading="lazy" decoding="async" className="absolute inset-0 size-full object-cover" />
+            </span>
           )}
           <Actions trip={trip} item={item} part={row?.part ?? "idea"} />
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-base">

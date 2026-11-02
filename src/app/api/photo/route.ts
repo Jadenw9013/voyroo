@@ -23,11 +23,15 @@ function stockFor(kind: string, dest: string): string {
   return FALLBACK_BY_KIND[kind] ?? (isGuatemala(dest) ? GUATEMALA_BY_KIND[kind] ?? GUATEMALA_BY_KIND.activity : PLACEHOLDER);
 }
 
+/** A first lookup can try the place, its theme and its town, each picture checked by the model: up to about a minute. */
+export const maxDuration = 60;
+
 /** New lookups (model + image search) per person or address per hour; cached pictures don't count. */
 const LOOKUPS_PER_HOUR = 200;
 
 /**
- * GET /api/photo?title=...&place=...&dest=...&kind=...&idx=...[&trip=...&token=...]
+ * GET /api/photo?title=...&place=...&dest=...&near=...&kind=...&idx=...[&trip=...&token=...]
+ * `near` is the item's own town and region ("Chalong, Phuket"), when its address names one.
  * Returns a contextually accurate real-world photo for an itinerary item or destination.
  *
  * Only for people with a trip (a trip session or a Google sign-in) or a
@@ -39,6 +43,7 @@ export async function GET(request: Request) {
   const title = (sp.get("title") || "").slice(0, 200);
   const place = (sp.get("place") || "").slice(0, 200);
   const dest = (sp.get("dest") || "").slice(0, 200);
+  const near = (sp.get("near") || "").slice(0, 200);
   const kind = (sp.get("kind") || "activity").slice(0, 40);
   const idx = Math.max(0, Math.min(10, Number(sp.get("idx") || "0") || 0));
 
@@ -54,7 +59,7 @@ export async function GET(request: Request) {
   const who = await requester(request);
   let limited = false;
   const photo = await getContextualPhoto(
-    { title, place, dest, kind, idx },
+    { title, place, dest, near, kind, idx },
     {
       mayLookUp: async () => {
         limited = (await getStore().hit(`photo:${who}`, 3600)) > LOOKUPS_PER_HOUR;

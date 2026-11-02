@@ -104,7 +104,7 @@ export function DayWeatherLine({ date }: { date: string }) {
   const rain = rainWords(w);
   const season = seasonWords(w);
   return (
-    <p className="mt-1 flex items-start gap-1.5 text-sm text-muted">
+    <span className="inline-flex items-start gap-1.5 text-sm text-muted">
       <WeatherIcon sky={sky} className="mt-0.5 size-4 shrink-0" />
       <span className="min-w-0">
         {w.kind === "typical" ? (
@@ -119,7 +119,7 @@ export function DayWeatherLine({ date }: { date: string }) {
           </>
         )}
       </span>
-    </p>
+    </span>
   );
 }
 

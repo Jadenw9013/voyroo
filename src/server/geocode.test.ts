@@ -69,7 +69,7 @@ describe("Nominatim", () => {
     expect(await geo.lookup("Nowhere at all", deadline)).toEqual({ ok: true, at: null });
     expect(fetcher).toHaveBeenCalledTimes(2);
     const [url, init] = fetcher.mock.calls[0] as unknown as [URL, RequestInit];
-    expect(Object.fromEntries(url.searchParams)).toMatchObject({ q: "Lake Atitlán, Guatemala", format: "jsonv2", limit: "1" });
+    expect(Object.fromEntries(url.searchParams)).toMatchObject({ q: "Lake Atitlán, Guatemala", format: "jsonv2", limit: "5" });
     expect((init.headers as Record<string, string>)["user-agent"]).toMatch(/^Voyroo\/1\.0 \(\+https:\/\/www\.voyroo\.com/);
   });
 
@@ -93,9 +93,76 @@ describe("Nominatim", () => {
     const fetcher = vi.fn(async () => new Response("busy", { status: 503 }));
     const geo = new NominatimGeocoder(store, "https://nominatim.test/search", fetcher as unknown as typeof fetch);
     expect(await geo.lookup("Antigua", Date.now() + 5000)).toEqual({ ok: false });
-    expect(await store.getCache("geo:v1:antigua")).toBeNull();
+    expect(await store.getCache("geo:v2:antigua")).toBeNull();
     expect(await geo.lookup("Antigua", Date.now())).toEqual({ ok: false });
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the right town", () => {
+  it("passes over a namesake in another town, and remembers every candidate", async () => {
+    const store = new TripStore(new MemoryBackend());
+    const fetcher = vi.fn(async () =>
+      Response.json([
+        { lat: "8.0583", lon: "98.9145", display_name: "Krabi Road, Talat Nuea, Phuket City, Phuket, Thailand" },
+        { lat: "7.8434", lon: "98.3367", display_name: "Soi Ta-iad, Chalong, Mueang Phuket, Phuket, Thailand" },
+      ]),
+    );
+    const geo = new NominatimGeocoder(store, "https://nominatim.test/search", fetcher as unknown as typeof fetch);
+    const deadline = Date.now() + 10_000;
+    // Asked for Chalong: the first candidate is in Phuket but the second names Chalong too; both mention the region, so the first wins.
+    expect(await geo.lookup("Soi Tad-ied, Chalong, Phuket", deadline, ["chalong", "phuket"])).toEqual({ ok: true, at: { lat: 8.0583, lng: 98.9145 } });
+    // Asked for somewhere in Krabi: "Krabi Road" in Phuket City is a street's name, not the town, so it's not found (and nothing is asked again).
+    expect(await geo.lookup("Soi Tad-ied, Chalong, Phuket", deadline, ["ao nang", "krabi"])).toEqual({ ok: true, at: null });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks Google Maps for the real name only when nothing matched, and takes coordinates from the geocoder", async () => {
+    const geocoder = table({ "Ao Nang Elephant Sanctuary, Krabi": { lat: 8.0712, lng: 98.8601 } });
+    const canonical = vi.fn(async () => ({ name: "Ao Nang Elephant Sanctuary" }));
+    const t = { ...trip, destination: "Krabi", items: [{ id: "elephants", kind: "activity", title: "Elephants", place: { name: "Aonang Elephant Sanctuary" } } as Item] };
+    const out = await locateTrip(t, deps({ geocoder, canonical, maxLookups: 8 }));
+    expect(geocoder.asked).toEqual(["Aonang Elephant Sanctuary, Krabi", "Ao Nang Elephant Sanctuary, Krabi"]);
+    expect(canonical).toHaveBeenCalledTimes(1);
+    expect(out.ops).toEqual([{ op: "item.update", id: "elephants", set: { place: { lat: 8.0712, lng: 98.8601 } } }]);
+    // Found the first time: no model call.
+    const again = await locateTrip({ ...t, items: [{ id: "x", kind: "activity", title: "X", place: { name: "Ao Nang Elephant Sanctuary" } } as Item] }, deps({ geocoder, canonical }));
+    expect(again.ops).toHaveLength(1);
+    expect(canonical).toHaveBeenCalledTimes(1);
+  });
+
+  it("takes a respelling the model gave without Maps only inside the trip's destination, and never its address", async () => {
+    const asked: [string, string[] | undefined][] = [];
+    const geocoder = { lookup: async (q: string, _d: number, near?: string[]) => (asked.push([q, near]), { ok: true as const, at: q.startsWith("Ao Nang") ? { lat: 8.0713, lng: 98.7999 } : null }) };
+    const canonical = vi.fn(async () => ({ name: "Ao Nang Elephant Sanctuary Krabi (Booking is needed)", address: "272 Somewhere Made Up, Krabi", grounded: false }));
+    const t = { ...trip, destination: "Krabi", items: [{ id: "elephants", kind: "activity", title: "Elephants", place: { name: "Aonang Elephant Sanctuary" } } as Item] };
+    const out = await locateTrip(t, deps({ geocoder, canonical, maxLookups: 8 }));
+    expect(out.ops).toHaveLength(1);
+    // The model's address was never looked up, and the respelled name had to land in Krabi.
+    expect(asked.map(([q]) => q)).toEqual(["Aonang Elephant Sanctuary, Krabi", "Ao Nang Elephant Sanctuary Krabi"]);
+    expect(asked[1][1]).toEqual(["krabi"]);
+  });
+
+  it("looks up the name Maps gives before its address, which can be vague", async () => {
+    const asked: string[] = [];
+    const geocoder = {
+      lookup: async (q: string) => (asked.push(q), { ok: true as const, at: q.startsWith("Ao Nang Elephant") ? { lat: 8.0713, lng: 98.7999 } : q.startsWith("272") ? { lat: 7.7212, lng: 98.7655 } : null }),
+    };
+    const canonical = vi.fn(async () => ({ name: "Ao Nang Elephant Sanctuary Krabi (Booking is needed)", address: "272 Ao Nang, Mueang Krabi 81180, Thailand", grounded: true }));
+    const t = { ...trip, destination: "Krabi", items: [{ id: "elephants", kind: "activity", title: "Elephants", place: { name: "Aonang Elephant Sanctuary" } } as Item] };
+    const out = await locateTrip(t, deps({ geocoder, canonical, maxLookups: 8 }));
+    // "272 Ao Nang" would have matched a house on Ko Phi Phi, which is in the Ao Nang subdistrict.
+    expect(asked).toEqual(["Aonang Elephant Sanctuary, Krabi", "Ao Nang Elephant Sanctuary Krabi"]);
+    expect(out.ops).toEqual([{ op: "item.update", id: "elephants", set: { place: { lat: 8.0713, lng: 98.7999 } } }]);
+  });
+
+  it("never asks the model when saving a change, only in the map's backfill", async () => {
+    const geocoder = table({});
+    const canonical = vi.fn(async () => ({ name: "Somewhere real" }));
+    const d = geoDeps(new TripStore(new MemoryBackend()), { geocoder });
+    expect(d.canonical).toBeNull();
+    await locateOps(trip, [{ op: "item.add", item: { id: "n", kind: "food", title: "Lunch", place: { name: "Nowhere Café" } } }], { ...d, canonical: null });
+    expect(canonical).not.toHaveBeenCalled();
   });
 });
 

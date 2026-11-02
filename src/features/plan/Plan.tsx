@@ -10,11 +10,12 @@ import { useTrip } from "@/client/store";
 import { StatusPill } from "@/ui/badges";
 import { Icon } from "@/ui/Icon";
 import { btn, SectionNav } from "@/ui/kit";
+import { railList } from "@/ui/StopMedia";
 import { useCompose } from "../composer/Composer";
 import { IdeaFooter, IdeaSort, type IdeaOrder } from "../decide/Decide";
 import { TripMap } from "../map/TripMap";
 import { PostGrid, postsOf } from "../posts/Posts";
-import { ItemRow } from "../shared";
+import { AddStop, ItemRow } from "../shared";
 import { LegRow, useDayLegs } from "../travel/Travel";
 import { SyncLine } from "../SyncLine";
 import { DayWeatherLine, WeatherFootnote } from "../weather/DayWeather";
@@ -45,12 +46,12 @@ export function Plan({ section = "days", day, go }: { section?: PlanSection; day
   const lastDay = days.at(-1) ?? trip.endDate;
 
   return (
-    <div className="itinerary-view flex flex-col gap-6 px-4 pt-4 md:px-0">
+    <div className="itinerary-view mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 pt-4 md:px-0">
       <h1 className="sr-only">Plan</h1>
       <SectionNav label="Plan" items={SECTIONS} current={section} onPick={(id) => go({ tab: "plan", section: id })} />
 
       {section === "days" && (
-        <section aria-label="Days" className="flex flex-col gap-8">
+        <section aria-label="Days" className="flex flex-col gap-10">
           {trip.items.length === 0 && (
             <div className="flex flex-col gap-3">
               <h2 className="text-xl font-bold">Make this trip yours</h2>
@@ -149,41 +150,36 @@ function Day({ date, last, onOpen, onAdd }: { date: string; last: boolean; onOpe
   const n = stay ? nightOf(stay, date) : null;
   return (
     <section id={`day-${date}`} aria-labelledby={`day-${date}-title`} className="scroll-mt-4">
-      <div className="flex flex-col gap-1 border-b border-line pb-3">
+      <div className="flex flex-col gap-1.5 pb-2">
         <h2 id={`day-${date}-title`} className="text-xl leading-tight font-bold">
           {weekday(date, true)}, {monthDay(date)}
         </h2>
-        {!last &&
-          (stay ? (
-            <p className="flex items-start gap-1.5 text-sm text-muted">
-              <Icon name="bed" className="mt-0.5 size-4 shrink-0" />
-              <span className="min-w-0">
-                {stay.title}
-                {n && n.of > 1 ? `, night ${n.night} of ${n.of}` : ""}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
+          {!last &&
+            (stay ? (
+              <span className="inline-flex min-w-0 items-center gap-1.5">
+                <Icon name="bed" className="size-4 shrink-0" />
+                <span className="min-w-0">
+                  {stay.title}
+                  {n && n.of > 1 ? `, night ${n.night} of ${n.of}` : ""}
+                </span>
               </span>
-            </p>
-          ) : (
-            <p>
+            ) : (
               <StatusPill status="missing" label="No place to stay yet" />
-            </p>
-          ))}
-        {last && <p className="text-sm text-muted">Travel home</p>}
-        <DayWeatherLine date={date} />
+            ))}
+          {last && <span>Travel home</span>}
+          <DayWeatherLine date={date} />
+        </div>
       </div>
-      {rows.length > 0 && (
-        <ol className="-mx-2 mt-2 flex flex-col">
-          {rows.map((r) => (
-            <Fragment key={r.key}>
-              <LegRow shown={legs.get(r.key)} />
-              <ItemRow row={r} item={r.item} onOpen={() => onOpen(r.item)} />
-            </Fragment>
-          ))}
-        </ol>
-      )}
-      <button type="button" onClick={onAdd} className={`${btn.quiet} mt-1 -ml-3`}>
-        <Icon name="plus" />
-        Add to {weekday(date, true)}
-      </button>
+      <ol className={railList(true)}>
+        {rows.map((r) => (
+          <Fragment key={r.key}>
+            <LegRow shown={legs.get(r.key)} />
+            <ItemRow row={r} item={r.item} onOpen={() => onOpen(r.item)} />
+          </Fragment>
+        ))}
+        <AddStop label={`Add to ${weekday(date, true)}`} onAdd={onAdd} />
+      </ol>
     </section>
   );
 }
