@@ -14,6 +14,7 @@ import type { Essentials, Item, Trip, When } from "@/domain/types";
 import type { TempUnit } from "@/domain/weather";
 import { actionClass } from "@/ui/action";
 import { KindChip, StatusPill } from "@/ui/badges";
+import { railList, StopMedia } from "@/ui/StopMedia";
 import { Brand } from "@/ui/Brand";
 import { Icon, LINK_ICON } from "@/ui/Icon";
 import { ShareDriver } from "@/features/share/ShareDriver";
@@ -264,7 +265,7 @@ function Day({ trip, date, today, last, legs, access, unit }: { trip: Trip; date
   const n = stay ? nightOf(stay, date) : null;
   return (
     <section id={`day-${date}`} aria-labelledby={`day-${date}-title`} className="flex scroll-mt-4 flex-col gap-2">
-      <div className="flex flex-col gap-1 border-b border-line pb-3">
+      <div className="flex flex-col gap-1 pb-2">
         <h3 id={`day-${date}-title`} className="text-xl font-bold">
           {weekday(date, true)}, {monthDay(date)}
           {date === today && <span className="ml-2 text-base font-semibold text-muted">Today</span>}
@@ -282,7 +283,7 @@ function Day({ trip, date, today, last, legs, access, unit }: { trip: Trip; date
         <ShareWeatherLine tripId={access.tripId} token={access.token} date={date} unit={unit} />
       </div>
       {rows.length ? (
-        <ol className="-mx-2 flex flex-col">
+        <ol className={railList(false)}>
           {rows.map((r) => (
             <FragmentRow key={r.key} leg={legs.get(`${date}:${r.key}`)}>
               <Stop trip={trip} item={r.item} row={r} access={access} />
@@ -312,15 +313,18 @@ function FragmentRow({ leg, children }: { leg?: Shown; children: ReactNode }) {
  */
 function Stop({ trip, item, row, access }: { trip: Trip; item: Item; row?: Row; access: Access }) {
   const ending = row?.part === "end";
-  const time = row ? timeWords(row.when, trip) : null;
+  const zone = row?.when.time && row.when.tz && row.when.tz !== trip.tz ? zoneName(row.when.tz).replace(/ Time$/, "") : null;
   const place = item.place?.name || item.place?.address;
   const summary = (
     <>
-      {row && <span className="w-18 shrink-0 pt-1.5 text-sm leading-snug">{time ? <time className="block font-bold text-ink">{time}</time> : <span className="block text-muted">Anytime</span>}</span>}
-      <span className={ending ? "opacity-60" : ""}>
-        <KindChip kind={item.kind} />
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-1 pt-1">
+      {row && (
+        <span className="w-18 shrink-0 pt-1.5 text-sm leading-snug">
+          {row.when.time ? <time className="block font-bold whitespace-nowrap text-ink">{formatTime(row.when.time)}</time> : <span className="block text-muted">Anytime</span>}
+          {zone && <span className="block text-muted">{zone}</span>}
+        </span>
+      )}
+      <StopMedia kind={item.kind} src={ending ? null : withAccess(itemPhotoUrl(item, trip), access)} dim={ending} />
+      <span className="flex min-w-0 flex-1 flex-col gap-1 pt-0.5">
         <span className={`text-base leading-snug font-semibold ${ending ? "text-muted" : ""}`}>{row ? rowTitle(row) : item.title}</span>
         {place && !ending && <span className="truncate text-sm text-muted">{place}</span>}
         {!ending && statusOf(item) && <span className="flex flex-wrap gap-1.5">{statusOf(item)}</span>}

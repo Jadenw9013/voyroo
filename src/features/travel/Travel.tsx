@@ -69,26 +69,29 @@ function TightLine({ info, className = "" }: { info: LegInfo; className?: string
   );
 }
 
-/** One connector between two rows of a day: an <li>, to sit in the day's list. */
+/**
+ * The drive between two stops, on the day's rail: the car (or walker) sits on
+ * the rail between the two pictures, the words in the text column. An <li>,
+ * to sit in the day's list (see railList in src/ui/StopMedia.tsx).
+ */
 export function LegRow({ shown }: { shown?: Shown }) {
   if (!shown) return null;
   const { leg, info } = shown;
   return (
-    // Lines up under the kind icons of the rows it joins (time column + gap), a dotted path between two stops.
-    <li className="ml-27 border-l-2 border-dotted border-line py-1.5 pl-4 text-sm text-muted">
-      <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-        <Icon name={info.mode === "walk" ? "walk" : "car"} className="size-4 shrink-0" />
-        <span>
-          {leg.fromKey === null && <>From {leg.from.title}: </>}
-          {info.summary}
-          {info.estimate && " (estimate)"}
-          {info.leaveBy && (
-            <>
-              <Dot />
-              <span className="font-semibold text-ink">Leave by {info.leaveBy}</span>
-            </>
-          )}
-        </span>
+    <li className="relative flex min-h-10 flex-col justify-center py-1 pr-2 pl-40 text-sm text-muted">
+      <span aria-hidden="true" className="absolute top-1/2 left-30 flex size-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-canvas text-ink">
+        <Icon name={info.mode === "walk" ? "walk" : "car"} className="size-4" />
+      </span>
+      <span>
+        {leg.fromKey === null && <>From {leg.from.title}: </>}
+        {info.summary}
+        {info.estimate && " (estimate)"}
+        {info.leaveBy && (
+          <>
+            <Dot />
+            <span className="font-semibold text-ink">Leave by {info.leaveBy}</span>
+          </>
+        )}
       </span>
       <TightLine info={info} className="mt-0.5" />
     </li>

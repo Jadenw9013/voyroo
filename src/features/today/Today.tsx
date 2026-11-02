@@ -11,11 +11,12 @@ import { useTrip } from "@/client/store";
 import { KindChip, StatusPill } from "@/ui/badges";
 import { Icon } from "@/ui/Icon";
 import { ActionChip, btn, useCopy } from "@/ui/kit";
+import { railList } from "@/ui/StopMedia";
 import { useCompose } from "../composer/Composer";
 import { DriverChip, DriverSheet } from "../essentials/Driver";
 import { drivable } from "@/domain/essentials";
 import { DayWeatherCard } from "../weather/DayWeather";
-import { ItemRow, rowTitle, timeLabel } from "../shared";
+import { AddStop, ItemRow, rowTitle, timeLabel } from "../shared";
 import { LegRow, useDayLegs } from "../travel/Travel";
 import { SyncLine } from "../SyncLine";
 
@@ -97,22 +98,16 @@ export function Today({ day: chosen, go, serverNow }: { day?: string; go: (v: Vi
           <DayWeatherCard date={day} />
 
           <div aria-label={`Everything on ${formatDay(day)}`} role="group">
-            {rows.length === 0 ? (
-              <p className="py-2 text-base text-muted">Nothing planned yet for this day.</p>
-            ) : (
-              <ol className="-mx-2 flex flex-col">
-                {[...timed, ...untimed].map((r) => (
-                  <Fragment key={r.key}>
-                    <LegRow shown={legs.get(r.key)} />
-                    <ItemRow row={r} item={r.item} onOpen={() => open(r.item)} />
-                  </Fragment>
-                ))}
-              </ol>
-            )}
-            <button type="button" onClick={() => compose({ day })} className={`${btn.quiet} -ml-3`}>
-              <Icon name="plus" />
-              Add to {weekday(day, true)}
-            </button>
+            {rows.length === 0 && <p className="py-2 text-base text-muted">Nothing planned yet for this day.</p>}
+            <ol className={railList(true)}>
+              {[...timed, ...untimed].map((r) => (
+                <Fragment key={r.key}>
+                  <LegRow shown={legs.get(r.key)} />
+                  <ItemRow row={r} item={r.item} onOpen={() => open(r.item)} />
+                </Fragment>
+              ))}
+              <AddStop label={`Add to ${weekday(day, true)}`} onAdd={() => compose({ day })} />
+            </ol>
           </div>
 
           <SyncLine />
