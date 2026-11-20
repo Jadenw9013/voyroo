@@ -38,6 +38,8 @@ export type BookingState = "todo" | "booked";
 export interface Booking {
   state: BookingState;
   confirmation?: string;
+  /** Booking provider, e.g. Expedia.com or booked direct. */
+  source?: string;
   /** Where it was booked (manage link) or where to book it. */
   url?: string;
   price?: Money;
@@ -180,6 +182,8 @@ export interface Expense {
   itemId?: string;
   note?: string;
   fx?: Fx;
+  /** Private receipt photo, fetched through the trip-authenticated endpoint. */
+  receiptId?: string;
   /** Paying someone back ("Ana paid Ben Q350"), not spending: left out of totals. */
   settlement?: true;
   addedBy?: string;

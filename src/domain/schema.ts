@@ -54,6 +54,7 @@ export const BookingSchema = z
   .object({
     state: z.enum(["todo", "booked"]),
     confirmation: z.string().trim().max(100).optional(),
+    source: z.string().trim().max(200).optional(),
     url: Url.optional(),
     price: MoneySchema.optional(),
     by: FirstName.optional(),
@@ -182,6 +183,7 @@ export const ExpenseSchema = z
     itemId: Id.optional(),
     note: Line.optional(),
     fx: FxSchema.optional(),
+    receiptId: Id.optional(),
     settlement: z.literal(true).optional(),
     addedBy: FirstName.optional(),
     addedAt: z.number().int().nonnegative(),
@@ -301,6 +303,7 @@ export const BookingPatch = z
   .object({
     state: z.enum(["todo", "booked"]),
     confirmation: z.string().trim().max(100).nullable(),
+    source: z.string().trim().max(200).nullable(),
     url: Url.nullable(),
     price: MoneySchema.nullable(),
     by: FirstName.nullable(),
@@ -371,7 +374,7 @@ export const TripPatch = z
 
 /* The split is replaced whole, never merged: "equal among three" and "Ana's exact Q300" don't mix. */
 export const ExpensePatch = z
-  .object({ ...ExpenseFields, itemId: Id.nullable(), note: Line.nullable(), fx: FxSchema.nullable() })
+  .object({ ...ExpenseFields, itemId: Id.nullable(), note: Line.nullable(), fx: FxSchema.nullable(), receiptId: Id.nullable() })
   .partial()
   .strict()
   .refine((p) => Object.keys(p).length > 0, "No fields to change");

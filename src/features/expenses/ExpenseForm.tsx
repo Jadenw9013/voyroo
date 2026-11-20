@@ -14,6 +14,7 @@ import { Avatar } from "@/ui/badges";
 import { Icon } from "@/ui/Icon";
 import { btn, field, label } from "@/ui/kit";
 import { Sheet } from "@/ui/Sheet";
+import { ReceiptUpload } from "./ReceiptUpload";
 
 /*
  * Logging or editing one expense: what, how much, who paid, who shares it.
@@ -23,6 +24,7 @@ import { Sheet } from "@/ui/Sheet";
  */
 
 export interface ExpenseStart {
+  receiptId?: string;
   title?: string;
   amount?: number;
   currency?: string;
@@ -56,7 +58,7 @@ export function ExpenseForm({ expense, start = {}, onDone, primaryId, autoFocus 
   const saved = useRates(tripId);
   const home = homeCurrency(trip);
   const group = everyone(trip, me);
-  const base: Required<Omit<ExpenseStart, "itemId">> & { itemId: string; note: string; how: How; split?: Split } = {
+  const base: Required<Omit<ExpenseStart, "itemId" | "receiptId">> & { itemId: string; note: string; how: How; split?: Split } = {
     title: expense?.title ?? start.title ?? "",
     amount: expense?.amount ?? start.amount ?? NaN,
     currency: expense?.currency ?? start.currency ?? trip.currency,
@@ -73,8 +75,10 @@ export function ExpenseForm({ expense, start = {}, onDone, primaryId, autoFocus 
   const [among, setAmong] = useState<string[] | null>(null);
   const [weights, setWeights] = useState<Record<string, string>>(() => (base.split?.how === "shares" ? Object.fromEntries(base.split.among.map((p) => [p.name, String(p.shares)])) : {}));
   const [exact, setExact] = useState<Record<string, string>>(() => (base.split?.how === "exact" ? Object.fromEntries(base.split.among.map((p) => [p.name, String(p.amount)])) : {}));
+  const [receiptId, setReceiptId] = useState(expense?.receiptId ?? start.receiptId);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [readingReceipt, setReadingReceipt] = useState(false);
 
   const title = edit.title ?? base.title;
   const amountStr = edit.amount ?? amountText(Number.isNaN(base.amount) ? undefined : base.amount);
@@ -113,6 +117,7 @@ export function ExpenseForm({ expense, start = {}, onDone, primaryId, autoFocus 
   }
 
   async function save() {
+    if (readingReceipt || busy) return;
     setError(null);
     if (!title.trim()) return setError("Say what it was for, like “Dinner”.");
     if (!valid) return setError("Enter the amount, like 420.");
@@ -130,6 +135,7 @@ export function ExpenseForm({ expense, start = {}, onDone, primaryId, autoFocus 
       ...(itemId ? { itemId } : {}),
       ...(note.trim() ? { note: note.trim().slice(0, 300) } : {}),
       ...(fx ? { fx } : {}),
+      ...(receiptId ? { receiptId } : {}),
       ...(expense?.settlement ? { settlement: true as const } : {}),
       addedBy: expense?.addedBy ?? me,
       addedAt: expense?.addedAt ?? now(),
@@ -140,7 +146,7 @@ export function ExpenseForm({ expense, start = {}, onDone, primaryId, autoFocus 
     if (!expense) ops = [{ op: "expense.add", expense: next }];
     else {
       const set: Record<string, unknown> = {};
-      for (const k of ["title", "amount", "currency", "paidBy", "split", "date", "itemId", "note", "fx"] as const) {
+      for (const k of ["title", "amount", "currency", "paidBy", "split", "date", "itemId", "note", "fx", "receiptId"] as const) {
         if (JSON.stringify(expense[k]) !== JSON.stringify(next[k])) set[k] = next[k] ?? null;
       }
       if (!Object.keys(set).length) return onDone();
@@ -161,6 +167,16 @@ export function ExpenseForm({ expense, start = {}, onDone, primaryId, autoFocus 
       }}
       className="flex flex-col gap-4"
     >
+      {!expense?.settlement && <ReceiptUpload onBusy={setReadingReceipt} onRead={(draft) => {
+        setReceiptId(draft.receiptId);
+        setEdit((prev) => ({ ...prev, ...(draft.title ? { title: draft.title } : {}), ...(draft.amount !== undefined ? { amount: String(draft.amount) } : {}), ...(draft.currency ? { currency: draft.currency } : {}), ...(draft.date ? { date: draft.date } : {}) }));
+      }} />}
+      {receiptId && <div className="flex flex-col gap-2">
+        <a href={`/api/t/${tripId}/receipts/${receiptId}`} target="_blank" rel="noreferrer" className="text-accent underline">Open attached receipt photo</a>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={`/api/t/${tripId}/receipts/${receiptId}`} alt="Attached receipt" className="max-h-64 w-full rounded-xl object-contain bg-sunken" />
+        <button type="button" className={`${btn.quiet} self-start`} onClick={() => setReceiptId(undefined)}>Remove attachment</button>
+      </div>}
       <label className={label}>
         What for
         <input value={title} onChange={(e) => setEdit({ ...edit, title: e.target.value })} maxLength={200} placeholder="Dinner, taxi, park fees" data-autofocus={autoFocus && !title ? true : undefined} className={field} />
@@ -296,7 +312,7 @@ export function ExpenseForm({ expense, start = {}, onDone, primaryId, autoFocus 
         </p>
       )}
       <div className="flex flex-wrap gap-2">
-        <button id={primaryId} type="submit" disabled={busy} className={btn.primary}>
+        <button id={primaryId} type="submit" disabled={busy || readingReceipt} className={btn.primary}>
           <Icon name={expense ? "check" : "receipt"} />
           {expense ? "Save changes" : "Log expense"}
         </button>

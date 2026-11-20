@@ -23,14 +23,30 @@ export function sameSite(request: Request): NextResponse | null {
 }
 
 export async function readJson(request: Request, maxBytes = MAX_BODY_BYTES): Promise<{ ok: true; body: Record<string, unknown> } | { ok: false; res: NextResponse }> {
-  const text = await request.text();
-  if (text.length > maxBytes) return { ok: false, res: jsonError(413, "That's too much to send at once.") };
+  const tooLarge = () => ({ ok: false as const, res: jsonError(413, "That's too much to send at once.") });
+  if (Number(request.headers.get("content-length")) > maxBytes) return tooLarge();
+  const reader = request.body?.getReader();
+  if (!reader) return { ok: false, res: jsonError(400, "body must be a JSON object") };
+  const chunks: Uint8Array[] = [];
+  let received = 0;
   try {
-    const body = JSON.parse(text);
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      received += value.byteLength;
+      if (received > maxBytes) {
+        void reader.cancel().catch(() => {});
+        return tooLarge();
+      }
+      chunks.push(value);
+    }
+    const body = JSON.parse(Buffer.concat(chunks, received).toString("utf8"));
     if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error();
     return { ok: true, body };
   } catch {
     return { ok: false, res: jsonError(400, "body must be a JSON object") };
+  } finally {
+    reader.releaseLock();
   }
 }
 

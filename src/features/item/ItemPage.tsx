@@ -160,8 +160,9 @@ export function ItemPage({ itemId, back, go }: { itemId: string; back: () => voi
 
         <Section title="Reservation" onEdit={() => setEdit("booking")}>
           <BookingState item={item} onSet={(state) => update(state === null ? { booking: null } : { booking: { state } })} />
-          {b && (b.confirmation || b.url || b.price || b.by || b.note) && (
+          {b && (b.source || b.confirmation || b.url || b.price || b.by || b.note) && (
             <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-base">
+              {b.source && <><dt className="text-muted">Booked through</dt><dd className="min-w-0 break-words font-semibold">{b.source}</dd></>}
               {b.confirmation && (
                 <>
                   <dt className="text-muted">Confirmation</dt>
@@ -821,6 +822,7 @@ function BookingSheet({ item, onClose }: { item: Item; onClose: () => void }) {
   const save = useSave(item);
   const b = item.booking;
   const [state, setState] = useState<Booking["state"]>(b?.state ?? "todo");
+  const [source, setSource] = useState(b?.source ?? "");
   const [conf, setConf] = useState(b?.confirmation ?? "");
   const [url, setUrl] = useState(b?.url ?? "");
   const [amount, setAmount] = useState(b?.price ? String(b.price.amount) : "");
@@ -836,6 +838,7 @@ function BookingSheet({ item, onClose }: { item: Item; onClose: () => void }) {
         const n = Number(amount.replace(/[^\d.]/g, ""));
         const next: Partial<Booking> = {
           state,
+          source: source.trim(),
           confirmation: conf.trim(),
           url: url.trim(),
           price: amount.trim() && Number.isFinite(n) ? { amount: n, currency } : undefined,
@@ -853,6 +856,10 @@ function BookingSheet({ item, onClose }: { item: Item; onClose: () => void }) {
           </button>
         ))}
       </div>
+      <label className={label}>
+        Booking source
+        <input value={source} onChange={(e) => setSource(e.target.value)} maxLength={200} placeholder="Expedia.com, Airbnb, direct" className={field} />
+      </label>
       <label className={label}>
         Confirmation number
         <input value={conf} onChange={(e) => setConf(e.target.value)} maxLength={100} autoCapitalize="characters" className={`${field} tnum`} />

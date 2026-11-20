@@ -32,6 +32,12 @@ Open **Share trip** in the navigation:
 - **Share invite / Copy invite** sends the group-editing invitation. New collaborators use the trip passcode; returning members use their remembered account.
 - **Copy itinerary** makes a readable text version for a group chat or email.
 
+### Booking emails, receipt photos and offline copies
+
+Open **Plan → Import booking email** to paste a confirmation or forward it to the trip’s private address when forwarding is configured. Open **Expenses → Log expense** to attach a receipt, check the suggested amount and choose who paid and who shares it. Before travelling, use **Plan → Save bookings offline** to download a copy of your reservation details.
+
+See the [booking and receipt setup guide](docs/booking-imports.md) for production configuration and supported inputs.
+
 ### Paste an itinerary without AI into an existing trip
 
 Choose **Paste a travel plan**, paste one item per line, and review the result before adding anything. Use `Day 1`, `Day 2`, etc. relative to the trip's first day, or an ISO date such as `2027-03-01` as a heading. Start an undated section with `Ideas`.

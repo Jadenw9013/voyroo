@@ -1,7 +1,7 @@
 import "server-only";
 import { prepareChange, type ChangeEntry, type ChangeMeta, type OpIssue } from "@/domain/change";
 import { isV1, upgradeTrip } from "@/domain/migrate";
-import type { Trip, TripState } from "@/domain/types";
+import type { Item, Trip, TripState } from "@/domain/types";
 import { seedTrip, SEED_TRIP_ID } from "./seed";
 
 /*
@@ -14,6 +14,10 @@ import { seedTrip, SEED_TRIP_ID } from "./seed";
  */
 
 export const HISTORY_LIMIT = 200;
+export const RECEIPT_DRAFT_SECONDS = 7 * 24 * 60 * 60;
+export const RECEIPT_UNDO_SECONDS = 30 * 24 * 60 * 60;
+
+const receiptKey = (tripId: string, receiptId: string) => `receipt:${tripId}:${receiptId}`;
 
 export interface TripSummary {
   id: string;
@@ -23,11 +27,25 @@ export interface TripSummary {
   cover?: string;
 }
 
+export interface BookingImportResult {
+  added: number;
+  skipped: number;
+  replayed?: boolean;
+}
+
+type CasResult = boolean | "missing_receipt";
+
+interface CasOptions {
+  receipts?: { attach: string[]; detach: string[] };
+  /** A provider delivery is complete exactly when its itinerary change is durable. */
+  completion?: { key: string; value: string };
+}
+
 /** The few storage primitives TripStore needs. */
 export interface Backend {
   read(id: string): Promise<{ state: string; version: number } | null>;
   /** Writes state and log entry only if the version is still `expected`. Returns false if someone wrote first. */
-  cas(id: string, expected: number, state: string, entry: string, logLimit: number): Promise<boolean>;
+  cas(id: string, expected: number, state: string, entry: string, logLimit: number, options?: CasOptions): Promise<CasResult>;
   /** Writes a trip only if none exists under the id. */
   init(id: string, state: string): Promise<boolean>;
   log(id: string, limit: number): Promise<string[]>;
@@ -52,6 +70,11 @@ export interface Backend {
   /** A small cached value (photo lookups, geocoder answers), or null when unset or expired. */
   getCache(key: string): Promise<string | null>;
   setCache(key: string, value: string, ttlSeconds: number): Promise<void>;
+  getDocument(key: string): Promise<string | null>;
+  /** Immutable, first writer wins. */
+  putDocument(key: string, value: string): Promise<void>;
+  /** Stage an upload for a limited time. A saved photo stays persistent on re-upload. */
+  stageReceipt(key: string, base64: string): Promise<void>;
   /** The Google account that created the trip, if one did. */
   owner(id: string): Promise<string | null>;
   setOwner(id: string, accountId: string): Promise<void>;
@@ -68,6 +91,18 @@ export type ApplyResult =
 const parse = <T>(raw: unknown): T => (typeof raw === "string" ? JSON.parse(raw) : raw) as T;
 
 const summaryOf = (t: Trip): TripSummary => ({ id: t.id, name: t.name, startDate: t.startDate, endDate: t.endDate, ...(t.cover ? { cover: t.cover } : {}) });
+
+/** Diff the distinct references so a shared photo stays saved until the last expense releases it. */
+function receiptChanges(before: Trip, after: Trip): CasOptions["receipts"] {
+  if (before.expenses === after.expenses) return undefined;
+  const keys = (trip: Trip) => new Set((trip.expenses ?? []).flatMap((e) => e.receiptId ? [receiptKey(trip.id, e.receiptId)] : []));
+  const previous = keys(before);
+  const current = keys(after);
+  return {
+    attach: [...current].filter((key) => !previous.has(key)),
+    detach: [...previous].filter((key) => !current.has(key)),
+  };
+}
 
 export class TripStore {
   constructor(private db: Backend) {}
@@ -115,7 +150,13 @@ export class TripStore {
       }
       const prepared = prepareChange(state, ops, meta);
       if (!prepared.ok) return { ok: false, reason: "invalid", issues: prepared.issues, state };
-      const written = await this.db.cas(id, state.version, JSON.stringify(prepared.trip), JSON.stringify(prepared.entry), HISTORY_LIMIT);
+      const written = await this.db.cas(id, state.version, JSON.stringify(prepared.trip), JSON.stringify(prepared.entry), HISTORY_LIMIT, {
+        receipts: receiptChanges(state.trip, prepared.trip),
+      });
+      if (written === "missing_receipt") return {
+        ok: false, reason: "invalid", state,
+        issues: [{ index: -1, code: "missing", message: "The receipt photo is no longer available. Upload it again before saving the expense." }],
+      };
       if (written) {
         const before = state.trip;
         const t = prepared.trip;
@@ -126,6 +167,34 @@ export class TripStore {
       }
     }
     return { ok: false, reason: "busy" };
+  }
+
+  /** Recheck reservations against the same trip version the import will write. */
+  async applyBookingImport(id: string, completionKey: string, items: Item[], author: string, matches: (a: Item, b: Item) => boolean): Promise<BookingImportResult> {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const previous = await this.getDocument(completionKey);
+      if (previous) return { ...parse<BookingImportResult>(previous), replayed: true };
+      const state = await this.get(id);
+      if (!state) throw new Error("Trip no longer exists.");
+      const seen = [...state.trip.items];
+      const fresh = items.filter((item) => {
+        if (seen.some((existing) => existing.id === item.id || matches(existing, item))) return false;
+        seen.push(item);
+        return true;
+      });
+      const outcome = { added: fresh.length, skipped: items.length - fresh.length };
+      if (!fresh.length) {
+        await this.putDocument(completionKey, JSON.stringify(outcome));
+        return parse<BookingImportResult>(await this.getDocument(completionKey));
+      }
+      const prepared = prepareChange(state, fresh.map((item) => ({ op: "item.add", item })), { author });
+      if (!prepared.ok) throw new Error("Could not apply the booking details.");
+      const saved = await this.db.cas(id, state.version, JSON.stringify(prepared.trip), JSON.stringify(prepared.entry), HISTORY_LIMIT, {
+        completion: { key: completionKey, value: JSON.stringify(outcome) },
+      });
+      if (saved === true) return outcome;
+    }
+    throw new Error("Trip was being edited. Retry the email import.");
   }
 
   /** Undoes one change by applying its inverse to the latest trip. A person asked, so booked items need no extra confirmation. */
@@ -156,6 +225,14 @@ export class TripStore {
   }
   getCache(key: string) { return this.db.getCache(key); }
   setCache(key: string, value: string, ttlSeconds: number) { return this.db.setCache(key, value, ttlSeconds); }
+  getDocument(key: string) { return this.db.getDocument(key); }
+  putDocument(key: string, value: string) { return this.db.putDocument(key, value); }
+  stageReceipt(tripId: string, receiptId: string, base64: string) {
+    return this.db.stageReceipt(receiptKey(tripId, receiptId), base64);
+  }
+  getReceipt(tripId: string, receiptId: string) {
+    return this.db.getDocument(receiptKey(tripId, receiptId));
+  }
   owner(id: string) { return this.db.owner(id); }
   accountTrips(accountId: string) { return this.db.accountTrips(accountId); }
   tripAccounts(tripId: string) { return this.db.tripAccounts(tripId); }
@@ -181,6 +258,8 @@ export class MemoryBackend implements Backend {
   private previews = new Map<string, string>();
   private counters = new Map<string, { n: number; until: number }>();
   private kv = new Map<string, { value: string; until: number }>();
+  private documents = new Map<string, string>();
+  private receiptExpirations = new Map<string, number>();
   private owners = new Map<string, string>();
 
   constructor(private legacyTrip: string | null = null) {}
@@ -188,9 +267,19 @@ export class MemoryBackend implements Backend {
   async read(id: string) {
     return this.states.get(id) ?? null;
   }
-  async cas(id: string, expected: number, state: string, entry: string, logLimit: number) {
+  async cas(id: string, expected: number, state: string, entry: string, logLimit: number, options?: CasOptions): Promise<CasResult> {
     const cur = this.states.get(id);
     if (!cur || cur.version !== expected) return false;
+    const completion = options?.completion;
+    if (completion && this.documents.has(completion.key)) return false;
+    const receipts = options?.receipts;
+    if (receipts) {
+      this.expireReceipts();
+      if (receipts.attach.some((key) => !this.documents.has(key))) return "missing_receipt";
+      for (const key of receipts.attach) this.receiptExpirations.delete(key);
+      for (const key of receipts.detach) this.receiptExpirations.set(key, Date.now() + RECEIPT_UNDO_SECONDS * 1000);
+    }
+    if (completion) this.documents.set(completion.key, completion.value);
     this.states.set(id, { state, version: expected + 1 });
     const log = [entry, ...(this.logs.get(id) ?? [])].slice(0, logLimit);
     this.logs.set(id, log);
@@ -254,6 +343,25 @@ export class MemoryBackend implements Backend {
   async setCache(key: string, value: string, ttlSeconds: number) {
     this.kv.set(key, { value, until: Date.now() + ttlSeconds * 1000 });
   }
+  private expireReceipts() {
+    const now = Date.now();
+    for (const [key, until] of this.receiptExpirations) {
+      if (until > now) continue;
+      this.receiptExpirations.delete(key);
+      this.documents.delete(key);
+    }
+  }
+  async stageReceipt(key: string, base64: string) {
+    this.expireReceipts();
+    if (this.documents.has(key) && !this.receiptExpirations.has(key)) return;
+    this.documents.set(key, base64);
+    this.receiptExpirations.set(key, Math.max(this.receiptExpirations.get(key) ?? 0, Date.now() + RECEIPT_DRAFT_SECONDS * 1000));
+  }
+  async getDocument(key: string) {
+    if (this.receiptExpirations.has(key)) this.expireReceipts();
+    return this.documents.get(key) ?? null;
+  }
+  async putDocument(key: string, value: string) { if (!this.documents.has(key)) this.documents.set(key, value); }
   async owner(id: string) { return this.owners.get(id) ?? null; }
   async setOwner(id: string, accountId: string) { this.owners.set(id, accountId); }
   async legacy() {
@@ -286,10 +394,19 @@ function redisHash(raw: Record<string, string> | string[] | null): Record<string
   return Object.fromEntries(Object.entries(raw).map(([key, value]) => [key, typeof value === "string" ? value : JSON.stringify(value)]));
 }
 
-/** KEYS: state, version, log. ARGV: expected version, new state, log entry, log limit. */
+/** First four keys: state, version, log, optional import completion. Remaining keys
+ * are receipt documents to attach, then to release. Validate before any writes. */
 const CAS = `
 local current = redis.call('GET', KEYS[2])
 if current ~= ARGV[1] then return 0 end
+if ARGV[5] ~= '' and redis.call('EXISTS', KEYS[4]) == 1 then return 0 end
+local last_attach = 4 + tonumber(ARGV[6])
+for i = 5, last_attach do
+  if redis.call('EXISTS', KEYS[i]) == 0 then return -1 end
+end
+for i = 5, last_attach do redis.call('PERSIST', KEYS[i]) end
+for i = last_attach + 1, #KEYS do redis.call('EXPIRE', KEYS[i], ARGV[7]) end
+if ARGV[5] ~= '' then redis.call('SET', KEYS[4], ARGV[5]) end
 redis.call('SET', KEYS[1], ARGV[2])
 redis.call('SET', KEYS[2], tostring(tonumber(ARGV[1]) + 1))
 redis.call('LPUSH', KEYS[3], ARGV[3])
@@ -312,6 +429,16 @@ if n == 1 then redis.call('EXPIRE', KEYS[1], tonumber(ARGV[1])) end
 return n
 `;
 
+const STAGE_RECEIPT = `
+local ttl = redis.call('TTL', KEYS[1])
+if ttl == -2 then
+  redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2])
+elseif ttl >= 0 and ttl < tonumber(ARGV[2]) then
+  redis.call('EXPIRE', KEYS[1], ARGV[2])
+end
+return 1
+`;
+
 export class RedisBackend implements Backend {
   constructor(private redis: RedisLike) {}
 
@@ -319,9 +446,16 @@ export class RedisBackend implements Backend {
     const [state, version] = await this.redis.mget(k(id).state, k(id).version);
     return state === null || version === null ? null : { state: typeof state === "string" ? state : JSON.stringify(state), version: Number(version) };
   }
-  async cas(id: string, expected: number, state: string, entry: string, logLimit: number) {
+  async cas(id: string, expected: number, state: string, entry: string, logLimit: number, options?: CasOptions): Promise<CasResult> {
     const keys = k(id);
-    return Number(await this.redis.eval(CAS, [keys.state, keys.version, keys.log], [String(expected), state, entry, String(logLimit)])) === 1;
+    const completion = options?.completion;
+    const casKeys = [keys.state, keys.version, keys.log, completion ? `document:${completion.key}` : keys.state];
+    const attach = options?.receipts?.attach ?? [];
+    const detach = options?.receipts?.detach ?? [];
+    casKeys.push(...[...attach, ...detach].map((key) => `document:${key}`));
+    const args = [String(expected), state, entry, String(logLimit), completion?.value ?? "", String(attach.length), String(RECEIPT_UNDO_SECONDS)];
+    const result = Number(await this.redis.eval(CAS, casKeys, args));
+    return result === -1 ? "missing_receipt" : result === 1;
   }
   async init(id: string, state: string) {
     return Number(await this.redis.eval(INIT, [k(id).state, k(id).version], [state])) === 1;
@@ -370,6 +504,12 @@ export class RedisBackend implements Backend {
   async setCache(key: string, value: string, ttlSeconds: number) {
     await this.redis.set(`cache:${key}`, value, { ex: ttlSeconds });
   }
+  async stageReceipt(key: string, base64: string) {
+    // An existing durable key has TTL -1. Never shorten it or the undo grace period.
+    await this.redis.eval(STAGE_RECEIPT, [`document:${key}`], [base64, String(RECEIPT_DRAFT_SECONDS)]);
+  }
+  async getDocument(key: string) { return this.redis.get(`document:${key}`); }
+  async putDocument(key: string, value: string) { await this.redis.set(`document:${key}`, value, { nx: true }); }
   async owner(id: string) { return this.redis.get(k(id).owner); }
   async setOwner(id: string, accountId: string) { await this.redis.set(k(id).owner, accountId); }
   async legacy() {

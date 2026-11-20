@@ -83,3 +83,26 @@ test("the production worker never caches a viewing link, so revocation takes eff
     expect((await context.request.get("http://localhost:3300/api/t/guatemala")).status()).toBe(401);
   } finally { await context.close(); }
 });
+
+
+test("a saved reservation can be reopened on the same device with no Wi-Fi", async ({ page, context }) => {
+  await openControlledPage(page);
+  const created = await page.request.post("/api/trips", { data: {
+    name: "Offline test", destination: "Oaxaca", startDate: "2026-12-01", endDate: "2026-12-05",
+    tz: "America/Mexico_City", currency: "MXN", me: "Ana", passcode: "offline-test",
+  } });
+  expect(created.ok()).toBe(true);
+  const { id } = await created.json();
+  const tripPath = `/t/${id}`;
+  const added = await page.request.post(`/api${tripPath}/ops`, { data: { ops: [{ op: "item.add", item: {
+    id: "hotel", title: "Offline hotel", kind: "stay", booking: { state: "booked", source: "Expedia.com", confirmation: "OFF123" },
+  } }] } });
+  expect(added.ok()).toBe(true);
+  await page.goto(`${tripPath}/item/hotel`);
+  await expect(page.getByText("Expedia.com", { exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(async () => !!await (await caches.open("pages")).match(location.href))).toBe(true);
+  await context.setOffline(true);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(page.getByText("Expedia.com", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Copy confirmation OFF123" })).toBeVisible();
+});

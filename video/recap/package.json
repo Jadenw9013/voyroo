@@ -20,12 +20,12 @@
     "verify": "tsx scripts/verify.ts"
   },
   "dependencies": {
-    "@remotion/bundler": "4.0.538",
-    "@remotion/player": "4.0.538",
-    "@remotion/renderer": "4.0.538",
+    "@remotion/bundler": "4.0.545",
+    "@remotion/player": "4.0.545",
+    "@remotion/renderer": "4.0.545",
     "react": "19.3.1",
     "react-dom": "19.3.1",
-    "remotion": "4.0.538",
+    "remotion": "4.0.545",
     "zod": "4.6.7"
   },
   "devDependencies": {
