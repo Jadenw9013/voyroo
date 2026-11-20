@@ -24,7 +24,7 @@ const publicRoute = await import("@/app/api/p/[tripId]/[token]/route");
 const { previewTrip, publicTrip } = await import("./preview");
 const { getStore } = await import("./db");
 const { ACCOUNT_COOKIE, hashPasscode, seal } = await import("./auth");
-const { requester } = await import("./http");
+const { readJson, requester } = await import("./http");
 
 const ctx = (tripId = "guatemala") => ({ params: Promise.resolve({ tripId }) });
 const post = (body: unknown, headers: Record<string, string> = {}) =>
@@ -334,4 +334,14 @@ describe("rate limits", () => {
     for (let i = 0; i < 120; i++) await getStore().hit(`unfurl:${who}`, 3600);
     expect((await unfurlRoute.POST(post({ url: "https://example.com" }, from("203.0.113.9")), ctx())).status).toBe(429);
   });
+});
+
+
+it("enforces JSON byte limits without trusting the declared length", async () => {
+  const body = { text: "旅".repeat(10) };
+  const bytes = Buffer.byteLength(JSON.stringify(body));
+  const accepted = await readJson(post(body), bytes);
+  expect(accepted).toEqual({ ok: true, body });
+  const rejected = await readJson(post(body, { "content-length": "1" }), bytes - 1);
+  expect(!rejected.ok && rejected.res.status).toBe(413);
 });

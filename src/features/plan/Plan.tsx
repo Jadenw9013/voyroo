@@ -19,6 +19,8 @@ import { AddStop, ItemRow } from "../shared";
 import { LegRow, useDayLegs } from "../travel/Travel";
 import { SyncLine } from "../SyncLine";
 import { DayWeatherLine, WeatherFootnote } from "../weather/DayWeather";
+import { BookingImport } from "../bookings/BookingImport";
+import { OfflineBookings } from "../bookings/OfflineBookings";
 import { PastePlan } from "./PastePlan";
 
 const SECTIONS: { id: PlanSection; label: string }[] = [
@@ -52,6 +54,7 @@ export function Plan({ section = "days", day, go }: { section?: PlanSection; day
 
       {section === "days" && (
         <section aria-label="Days" className="flex flex-col gap-10">
+          <div className="flex flex-col gap-3"><BookingImport /><OfflineBookings /></div>
           {trip.items.length === 0 && (
             <div className="flex flex-col gap-3">
               <h2 className="text-xl font-bold">Make this trip yours</h2>

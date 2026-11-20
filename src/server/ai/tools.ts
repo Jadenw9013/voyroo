@@ -44,6 +44,7 @@ const Details = {
   website: z.string().optional(),
   instagram: z.string().optional(),
   booking: z.enum(["none", "todo", "booked"]).optional().describe("todo: needs reserving. booked: reserved."),
+  bookingSource: z.string().max(200).optional().describe("Booking provider, e.g. Expedia.com, Airbnb or direct. Only when known."),
   bookingUrl: z.string().optional().describe("Where it was booked, or where to book it."),
   confirmation: z.string().optional().describe("Confirmation or booking reference, only if the person gave it."),
   priceAmount: z.number().optional(),
@@ -123,6 +124,7 @@ export function toItem(input: NewItemT, trip: Trip, author: string): Item {
       ? {
           booking: {
             state,
+            ...(clean(input.bookingSource) ? { source: clean(input.bookingSource) } : {}),
             ...(clean(input.confirmation) ? { confirmation: clean(input.confirmation) } : {}),
             ...(isUrl(input.bookingUrl) ? { url: input.bookingUrl!.trim() } : {}),
             ...(input.priceAmount !== undefined && clean(input.priceCurrency) ? { price: { amount: input.priceAmount, currency: input.priceCurrency!.trim().toUpperCase() } } : {}),
@@ -164,6 +166,7 @@ export function toUpdateOps(u: ItemUpdateT, item: Item, trip: Trip, author: stri
   else {
     const booking: Record<string, unknown> = {};
     if (u.booking) booking.state = u.booking;
+    if (clean(u.bookingSource)) booking.source = u.bookingSource!.trim();
     if (clean(u.confirmation)) booking.confirmation = u.confirmation!.trim();
     if (isUrl(u.bookingUrl)) booking.url = u.bookingUrl!.trim();
     if (u.priceAmount !== undefined && clean(u.priceCurrency)) booking.price = { amount: u.priceAmount, currency: u.priceCurrency!.trim().toUpperCase() };

@@ -41,9 +41,10 @@ const tripFallback = {
     const cache = await caches.open(PAGES);
     const trip = /^\/t\/([^/]+)/.exec(new URL(request.url).pathname)?.[1];
     if (trip) {
-      const hit = await cache.match(`/t/${trip}`, { ignoreSearch: true });
-      if (hit) return hit;
+      // A private trip address must never fall back to another trip’s cached HTML.
+      return (await cache.match(`/t/${trip}`, { ignoreSearch: true })) || undefined;
     }
+    if (new URL(request.url).pathname !== "/") return undefined;
     const keys = (await cache.keys()).filter((k) => /^\/t\/[^/]+$/.test(new URL(k.url).pathname));
     const last = keys.at(-1);
     return (last && (await cache.match(last))) || undefined;

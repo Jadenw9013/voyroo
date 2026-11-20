@@ -14,6 +14,7 @@ import { KindChip } from "@/ui/badges";
 import { Icon, LINK_ICON, type IconName } from "@/ui/Icon";
 import { btn, field } from "@/ui/kit";
 import { Sheet } from "@/ui/Sheet";
+import { BookingImport } from "../bookings/BookingImport";
 import { Assistant } from "../assistant/Assistant";
 import { ExpenseForm } from "../expenses/ExpenseForm";
 import { unfurl, type Preview } from "../links/unfurl";
@@ -138,6 +139,7 @@ function ComposerBody({ req, serverNow, onDone }: { req: ComposeRequest; serverN
           <ScreenshotButton className="self-start" />
           <p className="text-sm text-muted">Up to {MAX_SCREENSHOTS} at once: confirmation emails, Airbnb, airline and tour bookings. Each one becomes a booking with its dates, confirmation number and address.</p>
           <ReceiptsToggle />
+          <BookingImport />
         </div>
       )}
 
@@ -217,6 +219,7 @@ function ItemPreview({ draft, kindHint, onDone, onAsk }: { draft: Draft; kindHin
   const [kindEdit, setKind] = useState<ItemKind>();
   const kind = kindEdit ?? kindHint ?? draft.kind;
   const [booking, setBooking] = useState<"none" | "todo" | "booked">("none");
+  const [bookingSource, setBookingSource] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [titleEdit, setTitle] = useState<string>();
   const [dayEdit, setDay] = useState<string>();
@@ -245,7 +248,7 @@ function ItemPreview({ draft, kindHint, onDone, onAsk }: { draft: Draft; kindHin
       ...(start ? { start } : {}),
       ...(endDay && start ? { end: { date: endDay, ...(endTime ? { time: endTime } : {}), ...(draft.end?.tz ? { tz: draft.end.tz } : {}) } } : {}),
       ...(draft.placeName ? { place: { name: draft.placeName } } : {}),
-      ...(booking !== "none" ? { booking: { state: booking, ...(booking === "booked" && confirmation.trim() ? { confirmation: confirmation.trim() } : {}) } } : {}),
+      ...(booking !== "none" ? { booking: { state: booking, ...(bookingSource.trim() ? { source: bookingSource.trim() } : {}), ...(booking === "booked" && confirmation.trim() ? { confirmation: confirmation.trim() } : {}) } } : {}),
     };
     const ops: Op[] = [{ op: "item.add", item }];
     const effectiveEnd = endDay || day;
@@ -323,6 +326,7 @@ function ItemPreview({ draft, kindHint, onDone, onAsk }: { draft: Draft; kindHin
           <option value="booked">Already booked</option>
         </select>
       </label>
+      {booking !== "none" && <label className="flex flex-col gap-1 text-sm font-semibold text-muted">Booking source<input value={bookingSource} onChange={(e) => setBookingSource(e.target.value)} maxLength={200} placeholder="Expedia.com, Airbnb, direct" className={field} /></label>}
       {booking === "booked" && <label className="flex flex-col gap-1 text-sm font-semibold text-muted">
         Confirmation number (optional)
         <input value={confirmation} onChange={(e) => setConfirmation(e.target.value)} maxLength={100} className={field} />

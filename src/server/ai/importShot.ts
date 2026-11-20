@@ -17,7 +17,7 @@ const RULES = `
 The person is adding bookings from screenshots, one at a time. For this one:
 - If it shows a booking or reservation (flight, stay, tour, transport, restaurant, ticket), record it. Use update_items when it matches an item already in the trip (same place and overlapping dates, same flight number and date, same operator and day, including one you added from an earlier screenshot); otherwise add_items.
 - A confirmation, receipt or itinerary means booking "booked". A quote, cart, search result or listing means "todo".
-- Copy what's visible: the confirmation number, dates and times, address, phone, price with its currency, check-in and check-out times, the booking site's link if shown. Leave out anything blurry or cut off.
+- Copy what's visible: the booking source/provider (bookingSource, e.g. Expedia.com), confirmation number, dates and times, address, phone, price with its currency, check-in and check-out times, the booking site's link if shown. Leave out anything blurry or cut off.
 - Never copy guests', passengers' or hosts' full names. Never copy card numbers.
 - If it isn't a booking, or you can't read it, don't call any tool.
 - Then reply with one short line saying what you recorded, or what the screenshot shows if you recorded nothing.`;
