@@ -33,19 +33,22 @@ export function isRetryable(error: unknown): boolean {
   return e?.statusCode === 429 || (typeof e?.statusCode === "number" && e.statusCode >= 500);
 }
 
-/** 400 (a model that doesn't take the tool) or 429 (no grounding quota: Google lists grounding as paid-tier only). */
-const builtinsRefused = (error: unknown) => [400, 429].includes((error as { statusCode?: number })?.statusCode ?? 0);
+/** The model, project permissions or grounding quota may reject a tool while plain chat still works. */
+const builtinsRefused = (error: unknown) => [400, 403, 429].includes((error as { statusCode?: number })?.statusCode ?? 0);
 
 /** Said to the model when it has to answer without Maps or Search, so it doesn't make up what it couldn't check. */
 const NO_LOOKUPS =
-  "\n\nGoogle Maps and Google Search aren't available for this answer. Only name places you're confident exist, say you couldn't check current hours or prices, and leave out addresses, phone numbers and links you didn't get from the person or the trip data. Don't call show_options with details you couldn't check.";
+  "\n\nLive Google Maps and Google Search are unavailable. Say that clearly for nearby or current recommendations. Offer places recorded in the itinerary, naming the source. For other suggestions, ask for a landmark or offer an activity type. Do not invent specific venues, live travel times, addresses, links, hours, availability, or prices. Only offer option cards backed by the trip or user-provided information.";
 
 /** The same call with only our own (function) tools: for keys or models that refuse Maps or Search. */
 function withoutBuiltins(params: CallParams): CallParams | null {
   const tools = params.tools ?? [];
   if (!tools.some((t) => t.type !== "function")) return null;
+  const googleOptions = { ...params.providerOptions?.google };
+  delete googleOptions.retrievalConfig;
   return {
     ...params,
+    providerOptions: { ...params.providerOptions, google: googleOptions },
     tools: tools.filter((t) => t.type === "function"),
     prompt: params.prompt.map((m, i) => (i === 0 && m.role === "system" ? { ...m, content: m.content + NO_LOOKUPS } : m)),
   };

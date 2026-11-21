@@ -59,7 +59,7 @@ export function ComposerProvider({ children, serverNow }: { children: ReactNode;
       {/* Screenshot reading lives out here, so it carries on when the sheet is closed. */}
       <ImportProvider>
         {children}
-        <Sheet open={!!req} onClose={() => setReq(null)} title={req?.ask || req?.itemId ? "Ask" : "Add or ask"} wide>
+        <Sheet open={!!req} onClose={() => setReq(null)} title={req?.ask || req?.itemId ? "Ask Voyroo" : "Add or ask"} wide>
           {req && <ComposerBody key={session} req={req} serverNow={serverNow} onDone={() => setReq(null)} />}
         </Sheet>
       </ImportProvider>
@@ -144,7 +144,12 @@ function ComposerBody({ req, serverNow, onDone }: { req: ComposeRequest; serverN
       )}
 
       {(parsed.type === "empty" || parsed.type === "ask") && (
-        <button type="button" onClick={() => setManual(true)} className={`${btn.secondary} self-start`}>Add details manually</button>
+        <div className="flex flex-wrap gap-2">
+          {parsed.type === "empty" && (
+            <button type="button" onClick={() => setAsking("")} className={btn.secondary}><Icon name="message" className="size-4" />Ask Voyroo</button>
+          )}
+          <button type="button" onClick={() => setManual(true)} className={btn.secondary}>Add details manually</button>
+        </div>
       )}
       {parsed.type === "empty" && <Hints day={req.day ?? null} onPick={setText} onAsk={(t) => setAsking(t)} />}
       {parsed.type === "ask" && (

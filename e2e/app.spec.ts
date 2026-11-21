@@ -234,6 +234,88 @@ test("the assistant suggests places and asks before removing anything", async ({
   await expect(page.getByText("Left as it was.")).toBeVisible();
 });
 
+test("Ask Voyroo shares an approximate location only for the question it was attached to", async ({ page, context }) => {
+  await context.grantPermissions(["geolocation"]);
+  await context.setGeolocation({ latitude: 14.556789, longitude: -90.733456, accuracy: 12 });
+  await join(page);
+  await tab(page, "Plan").click();
+  await page.getByRole("button", { name: "Ask Voyroo", exact: true }).click();
+  const sheet = page.getByRole("dialog", { name: "Ask Voyroo" });
+  const box = sheet.getByRole("textbox", { name: "Message the assistant" });
+  const locate = sheet.getByRole("button", { name: "Use my location" });
+  const send = sheet.getByRole("button", { name: "Send", exact: true });
+  async function sendAndRead() {
+    const request = page.waitForRequest((r) => new URL(r.url()).pathname === "/api/t/guatemala/chat" && r.method() === "POST");
+    await send.click();
+    return (await request).postDataJSON();
+  }
+
+  await sheet.getByRole("button", { name: "What’s next?" }).click();
+  const first = await sendAndRead();
+  expect(first).not.toHaveProperty("location");
+  expect(first.context.timeZone).toBe(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone));
+  await locate.click();
+  await expect(sheet.getByRole("status")).toContainText("Location ready");
+  await box.fill("Where can I buy groceries near me?");
+  const nearby = await sendAndRead();
+  expect(nearby.location).toMatchObject({ latitude: 14.557, longitude: -90.733, accuracy: 100, timestamp: expect.any(Number) });
+  expect(JSON.stringify(nearby.messages)).not.toContain("14.557");
+  await box.fill("How much free time do we have?");
+  expect(await sendAndRead()).not.toHaveProperty("location");
+
+  await locate.click();
+  await sheet.getByRole("button", { name: "Remove location" }).click();
+  await box.fill("Look near Antigua's central market instead.");
+  expect(await sendAndRead()).not.toHaveProperty("location");
+});
+
+test("a traveler can ask about a named area after denying location", async ({ page, context }) => {
+  await join(page);
+  const cdp = await context.newCDPSession(page);
+  const { targetInfo } = await cdp.send("Target.getTargetInfo");
+  await cdp.send("Browser.setPermission", { permission: { name: "geolocation" }, setting: "denied", origin: new URL(page.url()).origin, browserContextId: targetInfo.browserContextId });
+  await page.getByRole("button", { name: "Ask Voyroo", exact: true }).click();
+  const sheet = page.getByRole("dialog", { name: "Ask Voyroo" });
+  await sheet.getByRole("button", { name: "Use my location" }).click();
+  await expect(sheet.getByRole("status")).toContainText("type a place name");
+  await sheet.getByRole("textbox", { name: "Message the assistant" }).fill("Where should we eat near Antigua's main square?");
+  await sheet.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(sheet.getByText("Test Café Uno")).toBeVisible();
+});
+
+test("a live place answer displays Google Maps sources and the related Google search", async ({ page }) => {
+  await join(page);
+  const maps = "https://maps.google.com/?cid=123";
+  const web = "https://example.org/antigua-market";
+  const search = "https://www.google.com/search?q=Antigua+market";
+  const events = [
+    { type: "start", messageId: "market-answer" },
+    { type: "text-start", id: "answer" },
+    { type: "text-delta", id: "answer", delta: "The market is close to the square." },
+    { type: "text-end", id: "answer" },
+    { type: "source-url", sourceId: "place", url: maps, title: "Antigua Market" },
+    { type: "source-url", sourceId: "web", url: web, title: "Market hours" },
+    { type: "data-grounding", data: {
+      sources: [{ kind: "maps", url: maps, title: "Antigua Market" }, { kind: "web", url: web, title: "Market hours" }],
+      searchEntryPoint: `<div class="container"><a class="chip" href="${search}">Find Antigua markets</a></div>`,
+    } },
+    { type: "finish", finishReason: "stop" },
+  ];
+  await page.route("**/api/t/guatemala/chat", (route) => route.fulfill({
+    headers: { "content-type": "text/event-stream", "x-vercel-ai-ui-message-stream": "v1" },
+    body: events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("") + "data: [DONE]\n\n",
+  }));
+  await page.getByRole("button", { name: "Ask Voyroo", exact: true }).click();
+  const sheet = page.getByRole("dialog", { name: "Ask Voyroo" });
+  await sheet.getByRole("textbox", { name: "Message the assistant" }).fill("Where can we get groceries in Antigua?");
+  await sheet.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(sheet.getByText("The market is close to the square.")).toBeVisible();
+  await expect(sheet.getByRole("link", { name: /Antigua Market/i }).and(sheet.locator(`a[href="${maps}"]`))).toHaveCount(1);
+  await expect(sheet.getByText("Google Maps", { exact: true })).toBeVisible();
+  await expect(sheet.getByRole("link", { name: "Market hours" })).toHaveAttribute("href", web);
+  await expect(sheet.getByRole("link", { name: "Find Antigua markets" })).toHaveAttribute("href", search);
+});
+
 test("Back from an item page returns to the plan", async ({ page }) => {
   await join(page);
   await tab(page, "Plan").click();

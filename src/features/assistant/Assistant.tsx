@@ -13,7 +13,9 @@ import type { ChangeResult, Option } from "@/server/ai/tools";
 import { KindChip } from "@/ui/badges";
 import { Icon, KIND_ICON } from "@/ui/Icon";
 import { btn, field } from "@/ui/kit";
-import { chatFor, newConversation, setAssistantContext, type AssistantMessage } from "./chat";
+import { chatFor, newConversation, type AssistantMessage } from "./chat";
+import { GroundingAttribution } from "./GroundingAttribution";
+import { LocationControl, useAssistantLocation } from "./Location";
 import { shrink } from "./images";
 
 /**
@@ -23,7 +25,7 @@ import { shrink } from "./images";
 export function Assistant({ first, itemId, day }: { first: string; itemId: string | null; day: string | null }) {
   const { tripId, online, refresh, trip } = useTrip();
   // The same conversation all session, until "New conversation" (which re-renders to pick up the new one).
-  const [, setFresh] = useState(0);
+  const [conversationNumber, setConversationNumber] = useState(0);
   const chat = chatFor(tripId);
   const { messages, sendMessage, status, error, regenerate, stop, addToolOutput } = useChat<AssistantMessage>({ chat });
   const [input, setInput] = useState("");
@@ -34,13 +36,15 @@ export function Assistant({ first, itemId, day }: { first: string; itemId: strin
   const busy = status === "submitted" || status === "streaming";
   const focus = itemId ? trip.items.find((i) => i.id === itemId) : null;
 
-  setAssistantContext(day, itemId);
+  const location = useAssistantLocation();
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const context = { day, itemId };
 
   useEffect(() => {
     if (sent.current || !first.trim()) return;
     sent.current = true;
-    void sendMessage({ text: first.trim() });
-  }, [first, sendMessage]);
+    void sendMessage({ text: first.trim() }, { body: { context: { day, itemId } } });
+  }, [first, day, itemId, sendMessage]);
 
   useEffect(() => {
     end.current?.scrollIntoView({ block: "end" });
@@ -72,27 +76,33 @@ export function Assistant({ first, itemId, day }: { first: string; itemId: strin
     // The answer just finished streaming (outside React): send what was waiting.
     queueMicrotask(() => {
       setQueued(null);
-      void sendMessage({ text: q.text || "Here's a screenshot.", files: q.images.map((url, i) => ({ type: "file" as const, mediaType: "image/jpeg", url, filename: `screenshot-${i + 1}.jpg` })) });
+      void sendMessage({ text: q.text || "Here's a screenshot.", files: q.images.map((url, i) => ({ type: "file" as const, mediaType: "image/jpeg", url, filename: `screenshot-${i + 1}.jpg` })) }, { body: { context: { day, itemId } } });
     });
-  }, [busy, queued, sendMessage]);
+  }, [busy, queued, day, itemId, sendMessage]);
+
+  function requestOptions() {
+    const point = location.takePoint();
+    return { body: { context, ...(point ? { location: point } : {}) } };
+  }
 
   function send() {
     const text = input.trim();
-    if (!text && !images.length) return;
+    if (!online || location.state.status === "locating" || (!text && !images.length)) return;
     if (busy) {
       setQueued({ text, images });
       setInput("");
       setImages([]);
       return;
     }
+    const options = requestOptions();
     const waiting = messages.at(-1)?.parts.find((p) => p.type === "tool-ask_user" && p.state === "input-available");
     if (waiting && waiting.type === "tool-ask_user" && !images.length) {
-      void addToolOutput({ tool: "ask_user", toolCallId: waiting.toolCallId, output: text });
+      void addToolOutput({ tool: "ask_user", toolCallId: waiting.toolCallId, output: text, options });
     } else {
       void sendMessage({
         text: text || "Here's a screenshot.",
         files: images.map((url, i) => ({ type: "file" as const, mediaType: "image/jpeg", url, filename: `screenshot-${i + 1}.jpg` })),
-      });
+      }, options);
     }
     setInput("");
     setImages([]);
@@ -106,12 +116,21 @@ export function Assistant({ first, itemId, day }: { first: string; itemId: strin
           About <strong className="truncate">{focus.title}</strong>
         </p>
       )}
-      {messages.length === 0 && !first && (
-        <p className="text-base text-muted">Ask anything: where to eat tonight, how to get to the lake, what to pack, or paste a booking email or screenshot.</p>
+      {messages.length === 0 && (!first || conversationNumber > 0) && (
+        <div className="flex flex-col gap-2">
+          <p className="text-base text-muted">Ask about the itinerary, find a place to stop, or make a change to the plan.</p>
+          <div className="flex flex-wrap gap-2" aria-label="Suggested questions">
+            {["What’s next?", "What’s nearby?", "How much free time do I have?"].map((prompt) => (
+              <button key={prompt} type="button" className={`${btn.secondary} text-sm`} onClick={() => { setInput(prompt); inputRef.current?.focus(); }}>
+                {prompt}
+              </button>
+            ))}
+          </div>
+        </div>
       )}
       <div className="flex flex-col gap-4">
         {messages.map((m) => (
-          <Message key={m.id} m={m} onAnswer={(toolCallId, output) => void addToolOutput({ tool: "ask_user", toolCallId, output })} />
+          <Message key={m.id} m={m} onAnswer={(toolCallId, output) => void addToolOutput({ tool: "ask_user", toolCallId, output, options: requestOptions() })} />
         ))}
         {status === "submitted" && <p className="text-base text-muted">Thinking…</p>}
         {queued && (
@@ -123,7 +142,7 @@ export function Assistant({ first, itemId, day }: { first: string; itemId: strin
         {error && (
           <div role="alert" className="flex flex-col gap-2 rounded-2xl bg-todo-soft p-3">
             <p className="text-base font-semibold text-todo">{online ? friendly(error.message) : "You're offline. The assistant needs a connection; your message is kept."}</p>
-            <button type="button" onClick={() => void regenerate()} disabled={!online} className={`${btn.secondary} self-start`}>
+            <button type="button" onClick={() => void regenerate(requestOptions())} disabled={!online || location.state.status === "locating"} className={`${btn.secondary} self-start`}>
               Try again
             </button>
           </div>
@@ -132,6 +151,7 @@ export function Assistant({ first, itemId, day }: { first: string; itemId: strin
       </div>
 
       <div className="sticky bottom-0 -mx-5 mt-auto flex flex-col gap-2 border-t border-line bg-surface px-4 pt-3 pb-1">
+        <LocationControl location={location} disabled={!online || busy} />
         {images.length > 0 && (
           <ul className="flex gap-2">
             {images.map((u, i) => (
@@ -157,6 +177,7 @@ export function Assistant({ first, itemId, day }: { first: string; itemId: strin
             <Icon name="image" />
           </button>
           <textarea
+            ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
@@ -186,7 +207,7 @@ export function Assistant({ first, itemId, day }: { first: string; itemId: strin
               <span className="size-3 rounded-sm bg-ink" />
             </button>
           ) : (
-            <button type="submit" disabled={!online || (!input.trim() && !images.length)} aria-label="Send" className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-accent text-on-accent disabled:opacity-40">
+            <button type="submit" disabled={!online || location.state.status === "locating" || (!input.trim() && !images.length)} aria-label="Send" className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-accent text-on-accent disabled:opacity-40">
               <Icon name="send" />
             </button>
           )}
@@ -195,9 +216,14 @@ export function Assistant({ first, itemId, day }: { first: string; itemId: strin
           <button
             type="button"
             onClick={() => {
+              void stop();
+              location.clear();
+              setQueued(null);
+              setImages([]);
+              setInput("");
               newConversation(tripId);
               sent.current = true;
-              setFresh((k) => k + 1);
+              setConversationNumber((number) => number + 1);
             }}
             className="self-start text-sm font-semibold text-muted hover:text-ink"
           >
@@ -240,7 +266,6 @@ function Message({ m, onAnswer }: { m: AssistantMessage; onAnswer: (toolCallId: 
     );
   }
 
-  const sources = m.parts.filter((p) => p.type === "source-url");
   return (
     <div className="mr-4 flex flex-col gap-3">
       {m.parts.map((p, i) => {
@@ -269,7 +294,7 @@ function Message({ m, onAnswer }: { m: AssistantMessage; onAnswer: (toolCallId: 
         }
         return null;
       })}
-      {sources.length > 0 && <Sources sources={sources as { url: string; title?: string }[]} />}
+      <GroundingAttribution parts={m.parts} />
     </div>
   );
 }
@@ -325,36 +350,6 @@ function inline(s: string): ReactNode[] {
   }
   if (last < s.length) out.push(s.slice(last));
   return out;
-}
-
-/** Sources right under the answer, as Google's terms ask: "Google Maps" written exactly so, linked. */
-function Sources({ sources }: { sources: { url: string; title?: string }[] }) {
-  const unique = sources.filter((s, i, a) => a.findIndex((x) => x.url === s.url) === i).slice(0, 8);
-  return (
-    <div className="flex flex-col gap-1 text-sm">
-      <ul className="flex flex-wrap gap-x-3 gap-y-1">
-        {unique.map((s) => {
-          const maps = /google\.[a-z.]+\/maps|maps\.google\.|goo\.gl\/maps|maps\.app\.goo\.gl/.test(s.url);
-          return (
-            <li key={s.url}>
-              <a href={s.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-muted underline underline-offset-2 hover:text-ink">
-                {maps ? (
-                  <>
-                    <span translate="no" className="whitespace-nowrap">
-                      Google Maps
-                    </span>
-                    {s.title && `: ${s.title}`}
-                  </>
-                ) : (
-                  (s.title ?? new URL(s.url).hostname.replace(/^www\./, ""))
-                )}
-              </a>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
 }
 
 function Question({ part, onAnswer }: { part: Extract<AssistantMessage["parts"][number], { type: "tool-ask_user" }>; onAnswer: (id: string, o: string) => void }) {
