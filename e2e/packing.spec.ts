@@ -21,12 +21,6 @@ async function noSeriousProblems(page: Page, what: string) {
   expect(serious.map((v) => `${v.id}: ${v.nodes[0]?.target}`), what).toEqual([]);
 }
 
-/** Toasts come and go on their own; a scan shouldn't depend on one being on screen. */
-async function dismissToast(page: Page, text: string) {
-  await page.getByRole("status").filter({ hasText: text }).getByRole("button", { name: "Dismiss" }).click();
-  await expect(page.getByRole("status").getByRole("button", { name: "Dismiss" })).toHaveCount(0);
-}
-
 test.use({ viewport: PHONE, hasTouch: true, isMobile: true });
 
 test("who brings what: quick add, claim and pack, and your own list stays yours", async ({ page, browser }) => {
@@ -126,21 +120,22 @@ for (const scheme of ["light", "dark"] as const) {
   test(`the packing list has no serious accessibility problems (${scheme})`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: scheme });
     await join(page, "Eli");
+    // Open the same saved states on every scan, including when CI retries this test.
+    const seeded = await page.request.post("/api/t/guatemala/ops", { data: {
+      key: `packing-screen-${scheme}`,
+      ops: [
+        { op: "pack.add", entry: { id: `cards-${scheme}`, text: `Cards ${scheme}`, kind: "shared" } },
+        { op: "pack.add", entry: { id: `charger-${scheme}`, text: `Charger ${scheme}`, kind: "personal", owner: "Eli" } },
+        { op: "pack.add", entry: { id: `swimsuit-${scheme}`, text: `Swimsuit ${scheme}`, kind: "personal", owner: "Eli", packedBy: ["Eli"] } },
+      ],
+    } });
+    expect(seeded.ok()).toBe(true);
     await page.goto("/t/guatemala/todo/packing");
     const panel = page.getByRole("tabpanel");
-    await panel.getByLabel("Add to the shared list").fill(`Cards ${scheme}`);
-    await panel.getByRole("button", { name: "Add", exact: true }).click();
     await expect(panel.getByText(`Cards ${scheme}`)).toBeVisible();
-    await dismissToast(page, `Cards ${scheme}`);
     await noSeriousProblems(page, `Shared (${scheme})`);
 
     await page.getByRole("tab", { name: /^Mine/ }).click();
-    await panel.getByLabel("Add to your list").fill(`Charger ${scheme}`);
-    await panel.getByRole("button", { name: "Add", exact: true }).click();
-    await panel.getByLabel(`Add to your list`).fill(`Swimsuit ${scheme}`);
-    await panel.getByRole("button", { name: "Add", exact: true }).click();
-    await panel.getByRole("checkbox", { name: `Packed: Swimsuit ${scheme}` }).click();
-    await dismissToast(page, `Packed “Swimsuit ${scheme}”`);
     await panel.getByText(/^Packed \(\d+\)$/).click();
     await expect(panel.getByRole("checkbox", { name: `Packed: Swimsuit ${scheme}` })).toBeChecked();
     await noSeriousProblems(page, `Mine (${scheme})`);
