@@ -220,12 +220,7 @@ function Sidebar({ active, view, onPick, onGo }: { active: Tab; view: View; onPi
   );
 }
 
-/**
- * The brand and the trip's outward actions. Phones keep only Share: asking and
- * adding live in the + below, the avatar only led to the Trip tab, and New trip
- * is on the home page behind the logo, so nothing up here looks like a second +.
- * On phones it scrolls away with the page; wider screens keep it fixed.
- */
+/** Trip-wide actions. The header scrolls with the page on phones. */
 function TopBar({ onShare, onGo }: { onShare: () => void; onGo: (v: View) => void }) {
   const { me } = useTrip();
   const compose = useCompose();
@@ -244,6 +239,14 @@ function TopBar({ onShare, onGo }: { onShare: () => void; onGo: (v: View) => voi
         </button>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => compose({ ask: true })}
+            className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-accent-soft px-3 text-sm font-semibold text-accent hover:bg-sunken"
+          >
+            <Icon name="message" className="size-4" />
+            Ask Voyroo
+          </button>
           <button
             type="button"
             aria-label="Share trip"

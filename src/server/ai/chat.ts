@@ -1,10 +1,14 @@
 import "server-only";
+import type { GoogleProviderMetadata } from "@ai-sdk/google";
 import { convertToModelMessages, createUIMessageStreamResponse, isStepCount, streamText, toUIMessageStream, type UIMessage } from "ai";
+import { approximateLocation } from "@/domain/assistantLocation";
+import { isDate, isZone } from "@/domain/time";
 import { readSession } from "../auth";
 import { getStore } from "../db";
 import { jsonError, rateLimit, readJson, sameSite, TRIP_ID } from "../http";
 import { assistantModel, errorMessage, googleProvider, isMock, SETTINGS } from "./models";
-import { buildInstructions } from "./prompt";
+import { googleAttribution, groundingDataParts } from "./grounding";
+import { buildInstructions, type SharedLocation } from "./prompt";
 import { buildTools } from "./tools";
 
 /*
@@ -24,6 +28,15 @@ const LIMITS = {
 
 const IMAGE_DATA_URL = /^data:image\/(png|jpe?g|webp|gif|heic|heif);base64,[A-Za-z0-9+/=]+$/;
 
+/** A one-turn location fix. Discard stale/unusable readings and round coordinates
+ * before passing them to a provider. The itinerary remains usable without GPS. */
+export function readSharedLocation(raw: unknown, nowMs: number): SharedLocation | null {
+  const point = approximateLocation(raw, nowMs);
+  if (!point) return null;
+  const { latitude, longitude, accuracy } = point;
+  return { latitude, longitude, accuracy };
+}
+
 /** Keeps only what the model should see: text, images we accept, and tool parts from earlier turns. */
 export function sanitize(raw: unknown): UIMessage[] | null {
   if (!Array.isArray(raw) || raw.length === 0) return null;
@@ -34,6 +47,7 @@ export function sanitize(raw: unknown): UIMessage[] | null {
     if ((role !== "user" && role !== "assistant") || !Array.isArray(parts)) return null;
     let images = 0;
     const kept = parts.filter((p) => {
+      if (!p || typeof p !== "object" || typeof p.type !== "string") return false;
       if (p.type === "text") return typeof p.text === "string" && p.text.length <= LIMITS.textChars;
       if (p.type === "file") {
         if (role !== "user" || ++images > LIMITS.imagesPerMessage) return false;
@@ -70,9 +84,12 @@ export async function handleChat(request: Request, tripId: string): Promise<Resp
   const trip = state.trip;
 
   const ctx = parsed.body.context && typeof parsed.body.context === "object" ? (parsed.body.context as Record<string, unknown>) : {};
-  const day = typeof ctx.day === "string" && ctx.day >= trip.startDate && ctx.day <= trip.endDate ? ctx.day : null;
+  const day = typeof ctx.day === "string" && isDate(ctx.day) && ctx.day >= trip.startDate && ctx.day <= trip.endDate ? ctx.day : null;
   const itemId = typeof ctx.itemId === "string" && trip.items.some((i) => i.id === ctx.itemId) ? ctx.itemId : null;
 
+  const nowMs = Date.now();
+  const location = readSharedLocation(parsed.body.location, nowMs);
+  const deviceZone = typeof ctx.timeZone === "string" && ctx.timeZone.length > 0 && ctx.timeZone.length <= 64 && isZone(ctx.timeZone) ? ctx.timeZone : undefined;
   const tools = {
     ...buildTools({ store, tripId, me: session.name, trip: async () => (await store.get(tripId))!.trip }),
     // Google's own tools: real places, current facts, and the pages behind pasted links.
@@ -87,21 +104,36 @@ export async function handleChat(request: Request, tripId: string): Promise<Resp
 
   const result = streamText({
     model,
-    instructions: buildInstructions(trip, { me: session.name, nowMs: Date.now(), day, itemId }),
+    instructions: buildInstructions(trip, { me: session.name, nowMs, day, itemId, live: { location, deviceZone } }),
     messages: await convertToModelMessages(messages, { tools, ignoreIncompleteToolCalls: true }),
     tools,
     stopWhen: isStepCount(SETTINGS.maxSteps),
     maxOutputTokens: SETTINGS.maxOutputTokens,
     maxRetries: 1,
     abortSignal: request.signal,
-    providerOptions: { google: { thinkingConfig: { thinkingLevel: SETTINGS.thinkingLevel } } },
+    providerOptions: {
+      google: {
+        thinkingConfig: { thinkingLevel: SETTINGS.thinkingLevel },
+        ...(location && !isMock() ? { retrievalConfig: { latLng: { latitude: location.latitude, longitude: location.longitude } } } : {}),
+      },
+    },
     onError: ({ error }) => {
-      const e = error as { name?: string; statusCode?: number; message?: string };
-      console.error("assistant error", { name: e?.name, statusCode: e?.statusCode, message: (e?.message ?? "").slice(0, 300) });
+      const e = error as { name?: string; statusCode?: number };
+      console.error("assistant error", { name: e?.name, statusCode: e?.statusCode });
     },
   });
 
   return createUIMessageStreamResponse({
-    stream: toUIMessageStream({ stream: result.stream, tools, sendSources: true, onError: errorMessage }),
+    stream: toUIMessageStream({
+      stream: result.stream,
+      tools,
+      sendReasoning: false,
+      onError: errorMessage,
+      messageMetadata: ({ part }) => {
+        if (part.type !== "finish-step") return;
+        const google = part.providerMetadata?.google as Partial<GoogleProviderMetadata> | undefined;
+        return googleAttribution(google?.groundingMetadata);
+      },
+    }).pipeThrough(groundingDataParts()),
   });
 }
