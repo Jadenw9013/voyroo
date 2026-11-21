@@ -1,0 +1,49 @@
+.assistant-answer {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  color: var(--ink);
+  font-size: 1rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.assistant-answer > * + * { margin-block-start: .75rem; }
+.assistant-answer :is(h2, h3, h4, h5, h6) {
+  color: var(--ink);
+  font-weight: 700;
+  line-height: 1.3;
+  text-wrap: pretty;
+}
+.assistant-answer h2 { font-size: 1.125rem; }
+.assistant-answer :is(h3, h4, h5, h6) { font-size: 1rem; }
+.assistant-answer > * + :is(h2, h3, h4, h5, h6) { margin-block-start: 1.3rem; }
+.assistant-answer :is(h2, h3, h4, h5, h6) + :is(p, ul, ol) { margin-block-start: .35rem; }
+.assistant-answer strong { font-weight: 700; }
+
+.assistant-answer :is(ul, ol) { padding-inline-start: 1.45em; }
+.assistant-answer ul { list-style-type: disc; }
+.assistant-answer ol { list-style-type: decimal; }
+.assistant-answer li { padding-inline-start: .13em; }
+.assistant-answer li + li, .assistant-answer li > * + *, .assistant-answer li > :is(ul, ol) { margin-block-start: .38em; }
+.assistant-answer li ul { list-style-type: circle; }
+.assistant-answer li::marker { color: var(--muted); font-weight: 600; }
+
+.assistant-answer a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: .17em;
+}
+.assistant-answer a:focus-visible, .assistant-answer-table:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.assistant-answer blockquote { border-inline-start: .17rem solid var(--line-strong); padding-inline-start: .85rem; color: var(--muted); }
+.assistant-answer blockquote > * + * { margin-block-start: .6em; }
+.assistant-answer hr { border: 0; border-block-start: 1px solid var(--line); }
+.assistant-answer code { border-radius: .25rem; background: var(--sunken); padding: .08em .22em; font-size: .9em; }
+.assistant-answer pre { max-inline-size: 100%; overflow-x: auto; border-radius: .5rem; background: var(--sunken); padding: .7rem .85rem; }
+.assistant-answer pre code { padding: 0; }
+
+.assistant-answer-table { max-inline-size: 100%; overflow-x: auto; }
+.assistant-answer table { width: max-content; min-width: 100%; border-collapse: collapse; text-align: start; font-size: .94rem; }
+.assistant-answer :is(td, th) { max-inline-size: 20rem; padding: .45rem .6rem; border-block-end: 1px solid var(--line); text-align: start; vertical-align: top; }
+.assistant-answer th { background: var(--sunken); font-weight: 700; }

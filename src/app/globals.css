@@ -245,6 +245,23 @@
   font-variant-numeric: tabular-nums;
 }
 
+.conversation-sheet {
+  --visible-height: 100dvh;
+  --visible-top: 0px;
+  --sheet-height: min(46rem, calc(var(--visible-height) * .94));
+  height: var(--sheet-height);
+  max-height: none;
+  margin: 0 auto;
+  top: calc(var(--visible-top) + var(--visible-height) - var(--sheet-height));
+  bottom: auto;
+}
+
+@media (min-width: 40rem) {
+  .conversation-sheet {
+    top: calc(var(--visible-top) + (var(--visible-height) - var(--sheet-height)) / 2);
+  }
+}
+
 /* The perforation between the Next ticket and its stub of actions. */
 .perforation {
   position: relative;

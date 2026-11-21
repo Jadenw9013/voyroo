@@ -1,7 +1,7 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { newId } from "@/domain/ids";
 import { directionsUrl, mapsSearchUrl, telUrl } from "@/domain/links";
 import { formatDay, formatTime } from "@/domain/time";
@@ -14,9 +14,12 @@ import { KindChip } from "@/ui/badges";
 import { Icon, KIND_ICON } from "@/ui/Icon";
 import { btn, field } from "@/ui/kit";
 import { chatFor, newConversation, type AssistantMessage } from "./chat";
+import { Answer } from "./Answer";
 import { GroundingAttribution } from "./GroundingAttribution";
 import { LocationControl, useAssistantLocation } from "./Location";
 import { shrink } from "./images";
+import { ReadAloud } from "./ReadAloud";
+import { VoiceInput } from "./VoiceInput";
 
 /**
  * The assistant: answers with real places and sources, changes the trip
@@ -31,7 +34,11 @@ export function Assistant({ first, itemId, day }: { first: string; itemId: strin
   const [input, setInput] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const sent = useRef(false);
-  const end = useRef<HTMLDivElement>(null);
+  const transcript = useRef<HTMLDivElement>(null);
+  const transcriptBody = useRef<HTMLDivElement>(null);
+  const follow = useRef<"reply" | "end" | null>("reply");
+  const autoScrollTop = useRef<number | null>(null);
+  const [voiceBusy, setVoiceBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const busy = status === "submitted" || status === "streaming";
   const focus = itemId ? trip.items.find((i) => i.id === itemId) : null;
@@ -47,8 +54,28 @@ export function Assistant({ first, itemId, day }: { first: string; itemId: strin
   }, [first, day, itemId, sendMessage]);
 
   useEffect(() => {
-    end.current?.scrollIntoView({ block: "end" });
-  }, [messages, status]);
+    const pane = transcript.current;
+    const body = transcriptBody.current;
+    if (!pane || !body) return;
+    const position = () => {
+      if (!follow.current) return;
+      const last = body.lastElementChild;
+      const end = pane.scrollHeight - pane.clientHeight;
+      // Move the current turn into view as it grows, then leave its first line on screen.
+      const top = follow.current === "reply" && last?.hasAttribute("data-assistant-reply")
+        ? Math.min(end, pane.scrollTop + last.getBoundingClientRect().top - pane.getBoundingClientRect().top - 16)
+        : end;
+      const target = Math.max(0, top);
+      if (Math.abs(pane.scrollTop - target) < 1) return;
+      autoScrollTop.current = target;
+      pane.scrollTop = target;
+    };
+    position();
+    const observer = new ResizeObserver(position);
+    observer.observe(body);
+    observer.observe(pane);
+    return () => observer.disconnect();
+  }, []);
 
   // The assistant changed the trip on the server: fetch it so the screens catch up.
   const seen = useRef(new Set<string>());
@@ -71,14 +98,14 @@ export function Assistant({ first, itemId, day }: { first: string; itemId: strin
   // Typed while an answer is still coming in: kept, and sent the moment it's done.
   const [queued, setQueued] = useState<{ text: string; images: string[] } | null>(null);
   useEffect(() => {
-    if (busy || !queued) return;
+    if (busy || voiceBusy || !queued) return;
     const q = queued;
     // The answer just finished streaming (outside React): send what was waiting.
     queueMicrotask(() => {
       setQueued(null);
       void sendMessage({ text: q.text || "Here's a screenshot.", files: q.images.map((url, i) => ({ type: "file" as const, mediaType: "image/jpeg", url, filename: `screenshot-${i + 1}.jpg` })) }, { body: { context: { day, itemId } } });
     });
-  }, [busy, queued, day, itemId, sendMessage]);
+  }, [busy, voiceBusy, queued, day, itemId, sendMessage]);
 
   function requestOptions() {
     const point = location.takePoint();
@@ -87,7 +114,8 @@ export function Assistant({ first, itemId, day }: { first: string; itemId: strin
 
   function send() {
     const text = input.trim();
-    if (!online || location.state.status === "locating" || (!text && !images.length)) return;
+    if (!online || voiceBusy || location.state.status === "locating" || (!text && !images.length)) return;
+    follow.current = "reply";
     if (busy) {
       setQueued({ text, images });
       setInput("");
@@ -109,51 +137,74 @@ export function Assistant({ first, itemId, day }: { first: string; itemId: strin
   }
 
   return (
-    <div className="flex min-h-[50dvh] flex-col gap-4 pt-1">
-      {focus && (
-        <p className="flex items-center gap-2 rounded-xl bg-sunken px-3 py-2 text-sm">
-          <Icon name={KIND_ICON[focus.kind]} className="size-4" />
-          About <strong className="truncate">{focus.title}</strong>
-        </p>
-      )}
-      {messages.length === 0 && (!first || conversationNumber > 0) && (
-        <div className="flex flex-col gap-2">
-          <p className="text-base text-muted">Ask about the itinerary, find a place to stop, or make a change to the plan.</p>
-          <div className="flex flex-wrap gap-2" aria-label="Suggested questions">
-            {["What’s next?", "What’s nearby?", "How much free time do I have?"].map((prompt) => (
-              <button key={prompt} type="button" className={`${btn.secondary} text-sm`} onClick={() => { setInput(prompt); inputRef.current?.focus(); }}>
-                {prompt}
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div
+        ref={transcript}
+        role="region"
+        aria-label="Conversation"
+        tabIndex={0}
+        onScroll={(event) => {
+          const pane = event.currentTarget;
+          const target = autoScrollTop.current;
+          autoScrollTop.current = null;
+          if (target !== null && Math.abs(pane.scrollTop - target) < 1) return;
+          follow.current = pane.scrollHeight - pane.clientHeight - pane.scrollTop < 48 ? "end" : null;
+        }}
+        className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain [overflow-anchor:none] focus-visible:-outline-offset-3"
+      >
+        <div ref={transcriptBody} className="flex min-w-0 flex-col gap-4 px-4 py-4 [overflow-wrap:anywhere] sm:px-5">
+          {focus && (
+            <p className="flex items-center gap-2 rounded-xl bg-sunken px-3 py-2 text-sm">
+              <Icon name={KIND_ICON[focus.kind]} className="size-4" />
+              About <strong className="truncate">{focus.title}</strong>
+            </p>
+          )}
+          {messages.length === 0 && (!first || conversationNumber > 0) && (
+            <div className="flex flex-col gap-2">
+              <p className="text-base text-muted">Ask about the itinerary, find a place to stop, or make a change to the plan.</p>
+              <div className="flex flex-wrap gap-2" aria-label="Suggested questions">
+                {["What’s next?", "What’s nearby?", "How much free time do I have?"].map((prompt) => (
+                  <button key={prompt} type="button" className={`${btn.secondary} text-sm`} onClick={() => { setInput(prompt); inputRef.current?.focus(); }}>
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {messages.map((m) => (
+            <Message
+              key={m.id}
+              m={m}
+              answerDisabled={voiceBusy}
+              canReadAloud={!busy && !voiceBusy && m === messages.at(-1)}
+              onAnswer={(toolCallId, output) => {
+                if (voiceBusy) return;
+                follow.current = "reply";
+                void addToolOutput({ tool: "ask_user", toolCallId, output, options: requestOptions() });
+              }}
+            />
+          ))}
+          {status === "submitted" && <p className="text-base text-muted">Thinking…</p>}
+          {queued && (
+            <div className="ml-10 flex flex-col items-end gap-1 self-end opacity-70">
+              <p className="rounded-2xl rounded-br-md bg-accent px-4 py-2.5 text-base whitespace-pre-wrap text-on-accent">{queued.text}</p>
+              <p className="text-sm text-muted">Sends when this answer finishes</p>
+            </div>
+          )}
+          {error && (
+            <div role="alert" className="flex flex-col gap-2 rounded-2xl bg-todo-soft p-3">
+              <p className="text-base font-semibold text-todo">{online ? friendly(error.message) : "You're offline. The assistant needs a connection; your message is kept."}</p>
+              <button type="button" onClick={() => void regenerate(requestOptions())} disabled={!online || voiceBusy || location.state.status === "locating"} className={`${btn.secondary} self-start`}>
+                Try again
               </button>
-            ))}
-          </div>
+            </div>
+          )}
         </div>
-      )}
-      <div className="flex flex-col gap-4">
-        {messages.map((m) => (
-          <Message key={m.id} m={m} onAnswer={(toolCallId, output) => void addToolOutput({ tool: "ask_user", toolCallId, output, options: requestOptions() })} />
-        ))}
-        {status === "submitted" && <p className="text-base text-muted">Thinking…</p>}
-        {queued && (
-          <div className="ml-10 flex flex-col items-end gap-1 self-end opacity-70">
-            <p className="rounded-2xl rounded-br-md bg-accent px-4 py-2.5 text-base whitespace-pre-wrap text-on-accent">{queued.text}</p>
-            <p className="text-sm text-muted">Sends when this answer finishes</p>
-          </div>
-        )}
-        {error && (
-          <div role="alert" className="flex flex-col gap-2 rounded-2xl bg-todo-soft p-3">
-            <p className="text-base font-semibold text-todo">{online ? friendly(error.message) : "You're offline. The assistant needs a connection; your message is kept."}</p>
-            <button type="button" onClick={() => void regenerate(requestOptions())} disabled={!online || location.state.status === "locating"} className={`${btn.secondary} self-start`}>
-              Try again
-            </button>
-          </div>
-        )}
-        <div ref={end} />
       </div>
 
-      <div className="sticky bottom-0 -mx-5 mt-auto flex flex-col gap-2 border-t border-line bg-surface px-4 pt-3 pb-1">
-        <LocationControl location={location} disabled={!online || busy} />
+      <div className="max-h-[65%] shrink-0 overflow-y-auto overscroll-contain border-t border-line bg-surface px-4 pt-3 pb-[max(0.25rem,env(safe-area-inset-bottom))] sm:px-5">
         {images.length > 0 && (
-          <ul className="flex gap-2">
+          <ul className="mb-3 flex flex-wrap gap-3">
             {images.map((u, i) => (
               <li key={i} className="relative">
                 {/* eslint-disable-next-line @next/next/no-img-element -- in-memory screenshot */}
@@ -166,11 +217,26 @@ export function Assistant({ first, itemId, day }: { first: string; itemId: strin
           </ul>
         )}
         <form
+          id="assistant-composer"
+          onReset={(event) => {
+            event.preventDefault();
+            void stop();
+            location.clear();
+            setVoiceBusy(false);
+            setQueued(null);
+            setImages([]);
+            setInput("");
+            newConversation(tripId);
+            sent.current = true;
+            follow.current = "reply";
+            setConversationNumber((number) => number + 1);
+            inputRef.current?.focus({ preventScroll: true });
+          }}
           onSubmit={(e) => {
             e.preventDefault();
             send();
           }}
-          className="flex items-end gap-2"
+          className="flex min-w-0 flex-wrap items-end gap-1.5"
         >
           <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => void attach(e.target.files).then(() => (e.target.value = ""))} />
           <button type="button" onClick={() => fileRef.current?.click()} disabled={images.length >= 4} aria-label="Add a screenshot" className="flex size-11 shrink-0 items-center justify-center rounded-xl text-muted hover:bg-sunken">
@@ -196,40 +262,34 @@ export function Assistant({ first, itemId, day }: { first: string; itemId: strin
               }
             }}
             rows={Math.min(5, Math.max(1, input.split("\n").length))}
-            placeholder={online ? "Ask or tell it what to change" : "Needs a connection"}
+            placeholder={online ? "Ask Voyroo…" : "Needs a connection"}
             aria-label="Message the assistant"
             data-autofocus
             maxLength={6000}
-            className={`${field} min-w-0 flex-1 resize-none`}
+            className={`${field} max-h-24 min-h-11 min-w-0 flex-1 resize-none overflow-y-auto [field-sizing:content]`}
+          />
+          <VoiceInput
+            key={conversationNumber}
+            tripId={tripId}
+            online={online}
+            disabled={busy}
+            onBusyChange={setVoiceBusy}
+            onTranscript={(text) => {
+              setInput((draft) => [draft.trimEnd(), text].filter(Boolean).join(" ").slice(0, 6000));
+              if (window.matchMedia("(pointer: fine)").matches) inputRef.current?.focus({ preventScroll: true });
+            }}
           />
           {busy ? (
             <button type="button" onClick={() => void stop()} aria-label="Stop" className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-sunken">
               <span className="size-3 rounded-sm bg-ink" />
             </button>
           ) : (
-            <button type="submit" disabled={!online || location.state.status === "locating" || (!input.trim() && !images.length)} aria-label="Send" className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-accent text-on-accent disabled:opacity-40">
+            <button type="submit" disabled={!online || voiceBusy || location.state.status === "locating" || (!input.trim() && !images.length)} aria-label="Send" className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-accent text-on-accent disabled:opacity-40">
               <Icon name="send" />
             </button>
           )}
         </form>
-        {messages.length > 0 && (
-          <button
-            type="button"
-            onClick={() => {
-              void stop();
-              location.clear();
-              setQueued(null);
-              setImages([]);
-              setInput("");
-              newConversation(tripId);
-              sent.current = true;
-              setConversationNumber((number) => number + 1);
-            }}
-            className="self-start text-sm font-semibold text-muted hover:text-ink"
-          >
-            New conversation
-          </button>
-        )}
+        <LocationControl location={location} disabled={!online || busy} />
       </div>
     </div>
   );
@@ -245,18 +305,18 @@ function friendly(message: string): string {
   return message || "The assistant didn't answer. Try again.";
 }
 
-function Message({ m, onAnswer }: { m: AssistantMessage; onAnswer: (toolCallId: string, output: string) => void }) {
+function Message({ m, onAnswer, answerDisabled, canReadAloud }: { m: AssistantMessage; answerDisabled: boolean; canReadAloud: boolean; onAnswer: (toolCallId: string, output: string) => void }) {
   if (m.role === "user") {
     const text = m.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
     const pics = m.parts.filter((p) => p.type === "file");
     return (
-      <div className="ml-10 flex flex-col items-end gap-1.5 self-end">
+      <div className="ml-6 flex min-w-0 max-w-[calc(100%-1.5rem)] flex-col items-end gap-1.5 self-end">
         {pics.length > 0 && (
-          <div className="flex gap-1.5">
+          <div className="flex max-w-full flex-wrap justify-end gap-1.5">
             {pics.map((p, i) =>
               p.type === "file" ? (
                 // eslint-disable-next-line @next/next/no-img-element -- in-memory screenshot
-                <img key={i} src={p.url} alt={`Screenshot ${i + 1}`} className="h-20 rounded-lg object-cover" />
+                <img key={i} src={p.url} alt={`Screenshot ${i + 1}`} className="h-20 max-w-28 rounded-lg object-cover" />
               ) : null,
             )}
           </div>
@@ -267,12 +327,12 @@ function Message({ m, onAnswer }: { m: AssistantMessage; onAnswer: (toolCallId: 
   }
 
   return (
-    <div className="mr-4 flex flex-col gap-3">
+    <div data-assistant-reply className="flex min-w-0 flex-col gap-3">
       {m.parts.map((p, i) => {
         const key = `${m.id}-${i}`;
-        if (p.type === "text") return p.text.trim() ? <Prose key={key} text={p.text} /> : null;
+        if (p.type === "text") return p.text.trim() ? <Answer key={key} text={p.text} streaming={p.state === "streaming"} /> : null;
         if (p.type === "tool-show_options") return p.input ? <Options key={key} heading={p.input.heading} options={(p.input.options ?? []) as Option[]} /> : null;
-        if (p.type === "tool-ask_user") return <Question key={key} part={p} onAnswer={onAnswer} />;
+        if (p.type === "tool-ask_user") return <Question key={key} part={p} onAnswer={onAnswer} disabled={answerDisabled} />;
         if (p.type === "tool-add_items" || p.type === "tool-update_items" || p.type === "tool-remove_items" || p.type === "tool-add_todos" || p.type === "tool-add_expenses" || p.type === "tool-add_comment") {
           if (p.state === "output-available") return <ChangeCard key={key} result={p.output as ChangeResult} expenses={p.type === "tool-add_expenses"} />;
           if (p.state === "output-error") return <p key={key} className="text-base text-danger">That change didn&apos;t work: {p.errorText}</p>;
@@ -295,79 +355,27 @@ function Message({ m, onAnswer }: { m: AssistantMessage; onAnswer: (toolCallId: 
         return null;
       })}
       <GroundingAttribution parts={m.parts} />
+      {canReadAloud && m.parts.some((p) => (p.type === "text" && p.text.trim()) || p.type === "tool-show_options" || p.type === "tool-ask_user") && <ReadAloud />}
     </div>
   );
 }
 
-/** Light formatting for the assistant's text: paragraphs, "- " lists, **bold**, links. */
-function Prose({ text }: { text: string }) {
-  const blocks = text.trim().split(/\n{2,}/);
-  return (
-    <div className="flex flex-col gap-2 text-base leading-relaxed">
-      {blocks.map((b, i) => {
-        const lines = b.split("\n");
-        if (lines.every((l) => /^\s*([-*•]|\d+\.)\s+/.test(l))) {
-          return (
-            <ul key={i} className="flex list-disc flex-col gap-1 pl-5">
-              {lines.map((l, j) => (
-                <li key={j}>{inline(l.replace(/^\s*([-*•]|\d+\.)\s+/, ""))}</li>
-              ))}
-            </ul>
-          );
-        }
-        return (
-          <p key={i}>
-            {lines.map((l, j) => (
-              <Fragment key={j}>
-                {j > 0 && <br />}
-                {inline(l)}
-              </Fragment>
-            ))}
-          </p>
-        );
-      })}
-    </div>
-  );
-}
-
-function inline(s: string): ReactNode[] {
-  const out: ReactNode[] = [];
-  const re = /\*\*([^*]+)\*\*|\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)|(https?:\/\/[^\s)]+)/g;
-  let last = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(s))) {
-    if (m.index > last) out.push(s.slice(last, m.index));
-    if (m[1]) out.push(<strong key={m.index}>{m[1]}</strong>);
-    else {
-      const href = m[3] ?? m[4];
-      out.push(
-        <a key={m.index} href={href} target="_blank" rel="noreferrer" className="font-semibold text-accent underline underline-offset-2">
-          {m[2] ?? href.replace(/^https?:\/\/(www\.)?/, "").slice(0, 40)}
-        </a>,
-      );
-    }
-    last = m.index + m[0].length;
-  }
-  if (last < s.length) out.push(s.slice(last));
-  return out;
-}
-
-function Question({ part, onAnswer }: { part: Extract<AssistantMessage["parts"][number], { type: "tool-ask_user" }>; onAnswer: (id: string, o: string) => void }) {
+function Question({ part, onAnswer, disabled }: { disabled: boolean; part: Extract<AssistantMessage["parts"][number], { type: "tool-ask_user" }>; onAnswer: (id: string, o: string) => void }) {
   if (!part.input) return null;
   if (part.state === "output-available") {
     return (
       <p className="text-base">
-        <span className="text-muted">{part.input.question}</span> {String(part.output)}
+        <span className="text-muted" data-spoken-answer>{part.input.question}</span> {String(part.output)}
       </p>
     );
   }
   if (part.state !== "input-available") return null;
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-base font-semibold">{part.input.question}</p>
-      <div className="flex flex-wrap gap-2">
+      <p className="text-base font-semibold" data-spoken-answer>{part.input.question}</p>
+      <div className="flex flex-wrap gap-2" data-spoken-answer>
         {(part.input.options ?? []).map((o) => (
-          <button key={o} type="button" onClick={() => onAnswer(part.toolCallId, o!)} className={btn.secondary}>
+          <button key={o} type="button" disabled={disabled} onClick={() => onAnswer(part.toolCallId, o!)} className={btn.secondary}>
             {o}
           </button>
         ))}
@@ -531,7 +539,7 @@ function Options({ heading, options }: { heading?: string; options: Option[] }) 
   const [added, setAdded] = useState<Record<string, string>>({});
   return (
     <div className="flex flex-col gap-2">
-      {heading && <p className="text-base font-bold">{heading}</p>}
+      {heading && <p className="text-base font-bold" data-spoken-answer>{heading}</p>}
       <ul className="flex flex-col gap-2">
         {options.map((o) => {
           if (!o?.name) return null;
@@ -540,7 +548,7 @@ function Options({ heading, options }: { heading?: string; options: Option[] }) 
             <li key={o.name} className="flex flex-col gap-2 rounded-2xl border border-line bg-surface p-3">
               <div className="flex items-start gap-3">
                 <KindChip kind={o.kind ?? "activity"} size="sm" />
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1" data-spoken-answer>
                   <p className="text-base leading-snug font-bold">{o.name}</p>
                   {o.why && <p className="text-base">{o.why}</p>}
                   <p className="text-sm text-muted">{[o.address, o.priceHint, o.date && `${formatDay(o.date)}${o.time ? `, ${formatTime(o.time)}` : ""}`].filter(Boolean).join(". ")}</p>

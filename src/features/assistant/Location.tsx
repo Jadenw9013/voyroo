@@ -63,7 +63,7 @@ export function LocationControl({ location, disabled }: { location: ReturnType<t
   const ready = state.status === "ready";
   const locating = state.status === "locating";
   const buttonText = ready ? "Remove location" : locating ? "Cancel lookup" : "Use my location";
-  let explanation = "Share your approximate location with Voyroo and Google (Gemini and Maps) for this question.";
+  let explanation = "Shares approximate location with Google for this question.";
   if (ready) {
     const { accuracy, timestamp } = state.point;
     const distance = accuracy < 1000 ? `${accuracy} m` : `${(accuracy / 1000).toFixed(1)} km`;
@@ -72,10 +72,10 @@ export function LocationControl({ location, disabled }: { location: ReturnType<t
   } else if (locating) explanation = "Finding your location…";
   else if (state.status === "unavailable") explanation = state.message;
 
-  return <div className="flex flex-wrap items-center gap-x-3 rounded-xl bg-sunken px-3 py-1">
+  return <div className="flex min-w-0 flex-wrap items-center gap-x-3">
     <button type="button" aria-describedby={descriptionId} onClick={ready || locating ? clear : locate} disabled={disabled && !ready && !locating} className="inline-flex min-h-11 shrink-0 items-center gap-1.5 text-sm font-semibold text-accent disabled:opacity-50">
       <Icon name="pin" className="size-4" />{buttonText}
     </button>
-    <p id={descriptionId} role="status" className="min-w-36 flex-1 py-1 text-sm text-muted">{explanation}</p>
+    <p id={descriptionId} role="status" className="min-w-32 flex-1 text-xs leading-snug text-muted">{explanation}</p>
   </div>;
 }

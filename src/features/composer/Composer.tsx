@@ -50,6 +50,7 @@ export function useCompose() {
 export function ComposerProvider({ children, serverNow }: { children: ReactNode; serverNow: number }) {
   const [req, setReq] = useState<ComposeRequest | null>(null);
   const [session, setSession] = useState(0);
+  const asking = !!(req?.ask || req?.itemId);
   const compose = useCallback((r: ComposeRequest = {}) => {
     setReq(r);
     setSession((s) => s + 1);
@@ -59,8 +60,18 @@ export function ComposerProvider({ children, serverNow }: { children: ReactNode;
       {/* Screenshot reading lives out here, so it carries on when the sheet is closed. */}
       <ImportProvider>
         {children}
-        <Sheet open={!!req} onClose={() => setReq(null)} title={req?.ask || req?.itemId ? "Ask Voyroo" : "Add or ask"} wide>
-          {req && <ComposerBody key={session} req={req} serverNow={serverNow} onDone={() => setReq(null)} />}
+        <Sheet
+          open={!!req}
+          onClose={() => setReq(null)}
+          title={asking ? "Ask Voyroo" : "Add or ask"}
+          wide
+          conversation={asking}
+          headerAction={asking && <button type="reset" form="assistant-composer" className="min-h-11 rounded-lg px-2 text-sm font-semibold text-muted hover:bg-sunken hover:text-ink">New conversation</button>}
+        >
+          {req && (asking
+            ? <Assistant key={session} first={req.text ?? ""} itemId={req.itemId ?? null} day={req.day ?? null} />
+            : <ComposerBody key={session} req={req} serverNow={serverNow} onAsk={(text) => setReq({ ...req, ask: true, text })} onDone={() => setReq(null)} />
+          )}
         </Sheet>
       </ImportProvider>
     </Ctx.Provider>
@@ -69,7 +80,7 @@ export function ComposerProvider({ children, serverNow }: { children: ReactNode;
 
 const KIND_WORD: Record<ItemKind, string> = { stay: "Place to stay", flight: "Flight", transport: "Getting around", activity: "Activity", food: "Food and drink", other: "Other" };
 
-function ComposerBody({ req, serverNow, onDone }: { req: ComposeRequest; serverNow: number; onDone: () => void }) {
+function ComposerBody({ req, serverNow, onAsk, onDone }: { req: ComposeRequest; serverNow: number; onAsk: (text: string) => void; onDone: () => void }) {
   const { trip, notify, me } = useTrip();
   const { start } = useImport();
   const nowMs = useClock(serverNow);
@@ -80,14 +91,12 @@ function ComposerBody({ req, serverNow, onDone }: { req: ComposeRequest; serverN
     const left = start(files);
     if (left > 0) notify(`Reading the first ${MAX_SCREENSHOTS}. Add the other ${left} after.`);
   };
-  const [asking, setAsking] = useState<string | null>(req.ask || req.itemId ? (req.text ?? "") : null);
   const parsed = useMemo(() => parseLine(text, { trip, nowMs, day: req.day, me }), [text, trip, nowMs, req.day, me]);
 
-  if (asking !== null) return <Assistant first={asking} itemId={req.itemId ?? null} day={req.day ?? null} />;
   if (manual) return (
     <div className="flex flex-col gap-3 pt-1">
       <button type="button" onClick={() => setManual(false)} className={`${btn.quiet} self-start`}>Use quick add instead</button>
-      <ItemPreview draft={parsed.type === "item" ? parsed.draft : { title: text.trim(), kind: req.kind ?? "activity", ...(req.day ? { start: { date: req.day } } : {}), dayFrom: req.day ? "selected" : null, guessedTime: false, outsideTrip: false }} kindHint={req.kind} onDone={onDone} onAsk={() => setAsking(text.trim())} />
+      <ItemPreview draft={parsed.type === "item" ? parsed.draft : { title: text.trim(), kind: req.kind ?? "activity", ...(req.day ? { start: { date: req.day } } : {}), dayFrom: req.day ? "selected" : null, guessedTime: false, outsideTrip: false }} kindHint={req.kind} onDone={onDone} onAsk={() => onAsk(text.trim())} />
     </div>
   );
 
@@ -123,7 +132,7 @@ function ComposerBody({ req, serverNow, onDone }: { req: ComposeRequest; serverN
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
             e.preventDefault();
-            if (parsed.type === "ask") setAsking(text.trim());
+            if (parsed.type === "ask") onAsk(text.trim());
             else (document.getElementById("composer-primary") as HTMLButtonElement | null)?.click();
           }
         }}
@@ -146,23 +155,23 @@ function ComposerBody({ req, serverNow, onDone }: { req: ComposeRequest; serverN
       {(parsed.type === "empty" || parsed.type === "ask") && (
         <div className="flex flex-wrap gap-2">
           {parsed.type === "empty" && (
-            <button type="button" onClick={() => setAsking("")} className={btn.secondary}><Icon name="message" className="size-4" />Ask Voyroo</button>
+            <button type="button" onClick={() => onAsk("")} className={btn.secondary}><Icon name="message" className="size-4" />Ask Voyroo</button>
           )}
           <button type="button" onClick={() => setManual(true)} className={btn.secondary}>Add details manually</button>
         </div>
       )}
-      {parsed.type === "empty" && <Hints day={req.day ?? null} onPick={setText} onAsk={(t) => setAsking(t)} />}
+      {parsed.type === "empty" && <Hints day={req.day ?? null} onPick={setText} onAsk={onAsk} />}
       {parsed.type === "ask" && (
         <div className="flex flex-col gap-2">
-          <button id="composer-primary" type="button" onClick={() => setAsking(text.trim())} className={`${btn.primary} self-start`}>
+          <button id="composer-primary" type="button" onClick={() => onAsk(text.trim())} className={`${btn.primary} self-start`}>
             <Icon name="message" />
             Ask the assistant
           </button>
           <p className="text-sm text-muted">It can find places, check hours, plan a day, or add things for you.</p>
         </div>
       )}
-      {parsed.type === "item" && <ItemPreview draft={parsed.draft} kindHint={req.kind} onDone={onDone} onAsk={() => setAsking(text.trim())} />}
-      {parsed.type === "expense" && <ExpensePreview draft={parsed.draft} onDone={onDone} onAsk={() => setAsking(text.trim())} />}
+      {parsed.type === "item" && <ItemPreview draft={parsed.draft} kindHint={req.kind} onDone={onDone} onAsk={() => onAsk(text.trim())} />}
+      {parsed.type === "expense" && <ExpensePreview draft={parsed.draft} onDone={onDone} onAsk={() => onAsk(text.trim())} />}
       {parsed.type === "pack" && <PackPreview draft={parsed.pack} onDone={onDone} onPlan={() => setManual(true)} />}
       {parsed.type === "links" && <LinkSaver urls={parsed.urls} rest={parsed.rest} itemId={req.itemId ?? null} day={req.day ?? null} onDone={onDone} />}
     </div>
