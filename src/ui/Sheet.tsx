@@ -12,30 +12,55 @@ export function Sheet({
   open,
   onClose,
   title,
+  headerAction,
   children,
   footer,
   wide,
+  conversation = false,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
+  headerAction?: ReactNode;
   children: ReactNode;
   /** Pinned under the scrolling content: the composer's input, a Save button. */
   footer?: ReactNode;
   wide?: boolean;
+  /** The assistant owns a scrollable transcript and a separate composer. */
+  conversation?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
-    if (open && !d.open) {
-      d.showModal();
+    if (open) {
+      if (!d.open) d.showModal();
       // showModal focuses the first button (Close); the field the sheet is for should have it, so the keyboard comes up.
-      d.querySelector<HTMLElement>("[data-autofocus]")?.focus();
+      d.querySelector<HTMLElement>("[data-autofocus]")?.focus({ preventScroll: true });
     }
     if (!open && d.open) d.close();
-  }, [open]);
+  }, [open, conversation]);
+
+  // On iOS the keyboard shrinks the visual viewport while the layout viewport stays tall.
+  useEffect(() => {
+    const dialog = ref.current;
+    const viewport = window.visualViewport;
+    if (!open || !conversation || !dialog || !viewport) return;
+    const fit = () => {
+      dialog.style.setProperty("--visible-height", `${viewport.height}px`);
+      dialog.style.setProperty("--visible-top", `${viewport.offsetTop}px`);
+    };
+    fit();
+    viewport.addEventListener("resize", fit);
+    viewport.addEventListener("scroll", fit);
+    return () => {
+      viewport.removeEventListener("resize", fit);
+      viewport.removeEventListener("scroll", fit);
+      dialog.style.removeProperty("--visible-height");
+      dialog.style.removeProperty("--visible-top");
+    };
+  }, [open, conversation]);
 
   const headingId = `sheet-${title.replace(/\W+/g, "-").toLowerCase()}`;
   return (
@@ -47,23 +72,24 @@ export function Sheet({
         // A tap on the backdrop lands on the dialog itself.
         if (e.target === e.currentTarget) onClose();
       }}
-      className={`m-0 mt-auto max-h-[92dvh] w-full max-w-none rounded-t-3xl p-0 text-ink shadow-lift sm:m-auto sm:rounded-3xl ${
+      className={`${conversation ? "conversation-sheet overflow-hidden" : "m-0 mt-auto max-h-[92dvh] sm:m-auto"} w-full max-w-none rounded-t-3xl p-0 text-ink shadow-lift sm:rounded-3xl ${
         wide ? "sm:w-[min(40rem,calc(100vw-2rem))]" : "sm:w-[min(30rem,calc(100vw-2rem))]"
       }`}
     >
       {open && (
-        <div className="flex max-h-[92dvh] flex-col">
-          <div className="flex items-center justify-between gap-2 py-1.5 pr-1.5 pl-5">
-            <h2 id={headingId} className="min-w-0 truncate text-lg font-bold">
+        <div className={`flex flex-col ${conversation ? "h-full" : "max-h-[92dvh]"}`}>
+          <div className={`flex shrink-0 items-center justify-between gap-2 py-1.5 pr-1.5 pl-5 ${conversation ? "border-b border-line" : ""}`}>
+            <h2 id={headingId} className="min-w-0 flex-1 truncate text-lg font-bold">
               {title}
             </h2>
+            {headerAction}
             <button type="button" onClick={onClose} aria-label="Close" className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted hover:bg-sunken">
               <Icon name="close" />
             </button>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4">{children}</div>
+          <div className={conversation ? "flex min-h-0 flex-1 flex-col" : "min-h-0 flex-1 overflow-y-auto px-5 pb-4"}>{children}</div>
           {footer && <div className="border-t border-line px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">{footer}</div>}
-          {!footer && <div className="pb-[env(safe-area-inset-bottom)]" />}
+          {!footer && !conversation && <div className="pb-[env(safe-area-inset-bottom)]" />}
         </div>
       )}
     </dialog>

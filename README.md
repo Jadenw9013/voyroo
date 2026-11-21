@@ -153,6 +153,8 @@ Each trip has its own link and a passcode the group shares. Joining asks for you
 
 Open **Ask Voyroo** from any trip tab to ask about the next activity, its address, or ideas that fit before the next booking. The assistant uses the current time, the device’s time zone, and the itinerary. For groceries, restaurants, or things to do nearby, type a neighborhood or tap **Use my location** before sending. That button attaches an approximate position to one question for Voyroo and Google Maps. Voyroo does not store the position in the trip. Distances to saved pins are labeled as straight-line estimates. Live searches need an internet connection.
 
+To ask by voice, tap the microphone beside the message field and allow microphone access. Record up to one minute, then tap **Stop and transcribe** to send the audio to Gemini. Review or edit the text and tap **Send**. **Cancel voice** discards a recording before transcription. Tap **Listen** beneath the latest answer to hear it when your browser has an installed voice.
+
 The assistant runs on Gemini 3.8 Flash through the Vercel AI SDK. It has Google Maps grounding (real places, hours, links), Google Search and URL reading, plus its own tools:
 
 | Tool | Does |
