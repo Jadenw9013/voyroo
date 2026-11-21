@@ -66,6 +66,8 @@ for (const [name, viewport] of [
 
     for (const size of name === "phone" ? [viewport, { width: 360, height: 430 }] : [viewport]) {
       await page.setViewportSize(size);
+      // visualViewport sends its resize event after the browser has resized the layout viewport.
+      await expect.poll(() => field.evaluate((el) => el.getBoundingClientRect().bottom)).toBeLessThanOrEqual(size.height);
       await expect.poll(() => transcript.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
       const composerY = await field.evaluate((el) => el.getBoundingClientRect().top);
       const headerY = await sheet.getByRole("heading", { name: "Ask Voyroo" }).evaluate((el) => el.getBoundingClientRect().top);
