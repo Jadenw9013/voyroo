@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { POST as speech } from "@/app/api/t/[tripId]/speech/route";
 import { POST as transcribe } from "@/app/api/t/[tripId]/transcribe/route";
 import { MAX_VOICE_BYTES, VOICE_SAMPLE_RATE, VOICE_SECONDS, validVoiceWav, voiceWav } from "@/domain/voiceAudio";
 import { cookieName, encodeSession } from "./auth";
@@ -14,8 +15,34 @@ function post(audio: string) {
   return new Request("http://localhost/api/transcribe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ audio }) });
 }
 const join = () => jar.set(cookieName(tripId), encodeSession({ tripId, name: "Ana" }));
+
+function speechRequest(text: string) {
+  return new Request("http://localhost/api/speech", { method: "POST", body: JSON.stringify({ text }) });
+}
 beforeEach(() => { setStoreForTests(new TripStore(new MemoryBackend())); vi.stubEnv("CHAT_MOCK", "0"); vi.stubEnv("GEMINI_API_KEY", "test-only"); });
 afterEach(() => { jar.clear(); setStoreForTests(undefined); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+
+it("speaks a bounded reply with Gemini and returns private WAV audio", async () => {
+  const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => Response.json({
+    steps: [{ type: "model_output", content: [{ type: "audio", data: bytes.toString("base64") }] }],
+  }));
+  vi.stubGlobal("fetch", fetchMock);
+  expect((await speech(speechRequest("Leave by nine."), ctx)).status).toBe(401);
+  join();
+  expect((await speech(speechRequest("a".repeat(1600)), ctx)).status).toBe(400);
+  expect(fetchMock).not.toHaveBeenCalled();
+
+  const response = await speech(speechRequest("Leave by nine."), ctx);
+  expect(response.headers.get("Content-Type")).toBe("audio/wav");
+  expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+  expect(Buffer.from(await response.arrayBuffer())).toEqual(bytes);
+  expect(JSON.parse(String(fetchMock.mock.calls[0][1].body))).toMatchObject({
+    model: "gemini-3.8-flash-tts",
+    store: false,
+    input: [{ content: [{ text: "Leave by nine." }] }],
+    generation_config: { speech_config: [{ voice: "Sulafat" }] },
+  });
+});
 
 it("encodes and bounds mono PCM so duration is known before calling Gemini", () => {
   expect(bytes.readUInt32LE(24)).toBe(VOICE_SAMPLE_RATE);

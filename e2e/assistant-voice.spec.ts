@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import { voiceWav, VOICE_SAMPLE_RATE } from "../src/domain/voiceAudio";
 import { expect, test } from "./fixtures";
 
 test.use({
@@ -120,7 +121,25 @@ test("cancel discards audio, stop transcribes into the draft, and Send submits t
   expect(requests).toEqual(["transcribe", "chat"]);
 });
 
-test("Listen reads the visible reply with a local voice and can be stopped", async ({ page }) => {
+test("Listen plays Gemini audio for the visible reply and can be stopped", async ({ page }) => {
+  const wav = Buffer.from(voiceWav(new Float32Array(4 * VOICE_SAMPLE_RATE)));
+  await page.route("**/api/t/guatemala/speech", (route) => route.fulfill({ contentType: "audio/wav", body: wav }));
+  await replyWith(page, "### Next activity\nYour **walking tour** starts at 2 PM.");
+  const sheet = await openAssistant(page);
+  await sheet.getByRole("textbox", { name: "Message the assistant" }).fill("What’s next?");
+  await sheet.getByRole("button", { name: "Send", exact: true }).click();
+  const speech = page.waitForResponse("**/api/t/guatemala/speech");
+  await sheet.getByRole("button", { name: "Listen to answer" }).click();
+  expect((await speech).request().postDataJSON()).toMatchObject({ text: "Next activity\n\nYour walking tour starts at 2 PM." });
+  await expect(sheet.getByText("Preparing audio…")).toBeHidden();
+  const stop = sheet.getByRole("button", { name: "Stop reading" });
+  await expect(stop).toBeVisible();
+  await stop.click();
+  await expect(sheet.getByRole("button", { name: "Listen to answer" })).toBeVisible();
+});
+
+test("Listen uses a local voice when Gemini speech is unavailable", async ({ page }) => {
+  await page.route("**/api/t/guatemala/speech", (route) => route.fulfill({ status: 503 }));
   await page.addInitScript(() => {
     const synth = Object.assign(new EventTarget(), {
       getVoices: () => [{ localService: true, default: true, lang: "en-US" }],
