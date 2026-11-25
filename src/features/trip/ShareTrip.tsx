@@ -6,6 +6,7 @@ import { formatDay, formatTime } from "@/domain/time";
 import { Icon } from "@/ui/Icon";
 import { Sheet } from "@/ui/Sheet";
 import { btn, field, label } from "@/ui/kit";
+import { ChangePasscode } from "./ChangePasscode";
 
 /** Share the live workspace or a readable copy for the group chat. */
 export function ShareTrip({ onClose }: { onClose: () => void }) {
@@ -77,7 +78,11 @@ export function ShareTrip({ onClose }: { onClose: () => void }) {
       <h3 className="font-bold">Plan together</h3>
       <p className="my-2 text-sm text-muted">Everyone joins the same trip and sees the latest changes. Send your trip passcode separately. Once they join with Google, the trip stays in their account.</p>
       <label className={label}>Trip invite link<input className={`${field} mt-1`} readOnly value={invite} onFocus={(event) => event.currentTarget.select()} /></label>
-      <div className="mt-3 flex flex-wrap gap-2"><button type="button" className={btn.primary} onClick={() => void share()}><Icon name="share" />Share invite</button><button type="button" className={btn.secondary} onClick={() => void copy(invitation, "Invite copied. Paste it into your group chat.")}><Icon name="copy" />Copy invite</button></div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" className={btn.primary} onClick={() => void share()}><Icon name="share" />Share invite</button>
+        <button type="button" className={btn.secondary} onClick={() => void copy(invitation, "Invite copied. Paste it into your group chat.")}><Icon name="copy" />Copy invite</button>
+        <ChangePasscode />
+      </div>
     </section>
     <section className="mt-4 rounded-2xl border border-line p-4">
       <h3 className="font-bold">Send the itinerary</h3><p className="my-2 text-sm text-muted">Copy the current plan with dates, times, places and booking status into a message or email.</p>

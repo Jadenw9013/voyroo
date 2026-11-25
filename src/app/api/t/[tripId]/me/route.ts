@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { checkPasscode, hashPasscode, writeSession } from "@/server/auth";
+import { checkPasscode, hashPasscode, passcodeAccess, writeSession } from "@/server/auth";
 import { firstName, getStore, jsonError, readJson, requester, requireSession } from "@/server/http";
 
 const MAX_TRIES = 10;
@@ -16,14 +16,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ tri
 
   if (newPasscode !== undefined) {
     if (typeof newPasscode !== "string" || newPasscode.trim().length < 4 || newPasscode.length > 100) {
-      return jsonError(400, "The new passcode needs at least 4 characters.", { field: "newPasscode" });
+      return jsonError(400, "Use 4–100 characters for the new passcode.", { field: "newPasscode" });
     }
     const store = getStore();
+    const access = await passcodeAccess(auth.session);
+    if (access === "member") return jsonError(403, "Only the trip owner can change the passcode.");
     const stored = await store.getPass(tripId);
-    // Changing it locks out anyone who hasn't joined yet, so it takes the current passcode, from
-    // everyone but the Google account that made the trip (a planner trip's passcode is generated).
-    const owner = !!auth.session.accountId && (await store.owner(tripId)) === auth.session.accountId;
-    if (stored && !owner) {
+    if (!stored) return jsonError(409, "The trip passcode isn’t set. Reopen the invite link to set it first.");
+    if (access === "current-passcode") {
       const failKey = `passcode:${tripId}:${await requester(request)}`;
       if ((await store.count(failKey)) >= MAX_TRIES) return jsonError(429, "Too many wrong passcodes. Wait 15 minutes and try again.");
       if (typeof passcode !== "string" || !(await checkPasscode(passcode.trim(), stored))) {
@@ -31,7 +31,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ tri
         return jsonError(403, "The current passcode doesn't match.", { field: "passcode" });
       }
     }
-    await store.setPass(tripId, await hashPasscode(newPasscode.trim()));
+    if (!(await store.replacePass(tripId, stored, await hashPasscode(newPasscode.trim())))) {
+      return jsonError(409, "Someone just changed the passcode. Check with the group and try again.");
+    }
     return NextResponse.json({ ok: true });
   }
 

@@ -35,6 +35,8 @@ export interface BookingImportResult {
 
 type CasResult = boolean | "missing_receipt";
 
+type InitialAccess = { passHash: string; owner?: string };
+
 interface CasOptions {
   receipts?: { attach: string[]; detach: string[] };
   /** A provider delivery is complete exactly when its itinerary change is durable. */
@@ -46,13 +48,13 @@ export interface Backend {
   read(id: string): Promise<{ state: string; version: number } | null>;
   /** Writes state and log entry only if the version is still `expected`. Returns false if someone wrote first. */
   cas(id: string, expected: number, state: string, entry: string, logLimit: number, options?: CasOptions): Promise<CasResult>;
-  /** Writes a trip only if none exists under the id. */
-  init(id: string, state: string): Promise<boolean>;
+  /** Writes a trip and its access settings only if none exists under the id. */
+  init(id: string, state: string, access?: InitialAccess): Promise<boolean>;
   log(id: string, limit: number): Promise<string[]>;
   getPass(id: string): Promise<string | null>;
   /** Sets the passcode hash only if there is none yet. */
   claimPass(id: string, hash: string): Promise<boolean>;
-  setPass(id: string, hash: string): Promise<void>;
+  replacePass(id: string, expected: string, hash: string): Promise<boolean>;
   index(): Promise<Record<string, string>>;
   putIndex(id: string, summary: string): Promise<void>;
   accountTrips(accountId: string): Promise<Record<string, string>>;
@@ -77,7 +79,6 @@ export interface Backend {
   stageReceipt(key: string, base64: string): Promise<void>;
   /** The Google account that created the trip, if one did. */
   owner(id: string): Promise<string | null>;
-  setOwner(id: string, accountId: string): Promise<void>;
   /** The v1 trip, if the old single-trip keys exist. */
   legacy(): Promise<string | null>;
 }
@@ -123,9 +124,7 @@ export class TripStore {
 
   /** `owner`: the Google account creating it, which may later change the passcode without knowing it. */
   async create(trip: Trip, passHash: string, owner?: string): Promise<boolean> {
-    if (!(await this.db.init(trip.id, JSON.stringify(trip)))) return false;
-    await this.db.setPass(trip.id, passHash);
-    if (owner) await this.db.setOwner(trip.id, owner);
+    if (!(await this.db.init(trip.id, JSON.stringify(trip), { passHash, owner }))) return false;
     await this.db.putIndex(trip.id, JSON.stringify(summaryOf(trip)));
     return true;
   }
@@ -214,8 +213,8 @@ export class TripStore {
   claimPass(id: string, hash: string) {
     return this.db.claimPass(id, hash);
   }
-  setPass(id: string, hash: string) {
-    return this.db.setPass(id, hash);
+  replacePass(id: string, expected: string, hash: string) {
+    return this.db.replacePass(id, expected, hash);
   }
   hit(key: string, ttlSeconds: number) {
     return this.db.hit(key, ttlSeconds);
@@ -285,9 +284,11 @@ export class MemoryBackend implements Backend {
     this.logs.set(id, log);
     return true;
   }
-  async init(id: string, state: string) {
+  async init(id: string, state: string, access?: InitialAccess) {
     if (this.states.has(id)) return false;
     this.states.set(id, { state, version: 1 });
+    if (access) this.passes.set(id, access.passHash);
+    if (access?.owner) this.owners.set(id, access.owner);
     return true;
   }
   async log(id: string, limit: number) {
@@ -301,8 +302,10 @@ export class MemoryBackend implements Backend {
     this.passes.set(id, hash);
     return true;
   }
-  async setPass(id: string, hash: string) {
+  async replacePass(id: string, expected: string, hash: string) {
+    if (this.passes.get(id) !== expected) return false;
     this.passes.set(id, hash);
+    return true;
   }
   async index() {
     return Object.fromEntries(this.idx);
@@ -363,7 +366,6 @@ export class MemoryBackend implements Backend {
   }
   async putDocument(key: string, value: string) { if (!this.documents.has(key)) this.documents.set(key, value); }
   async owner(id: string) { return this.owners.get(id) ?? null; }
-  async setOwner(id: string, accountId: string) { this.owners.set(id, accountId); }
   async legacy() {
     return this.legacyTrip;
   }
@@ -414,11 +416,19 @@ redis.call('LTRIM', KEYS[3], 0, tonumber(ARGV[4]) - 1)
 return 1
 `;
 
-/** KEYS: state, version. ARGV: state. */
+/** KEYS: state, version, passcode, owner. ARGV: state, optional passcode hash and owner. */
 const INIT = `
 if redis.call('EXISTS', KEYS[2]) == 1 then return 0 end
 redis.call('SET', KEYS[1], ARGV[1])
 redis.call('SET', KEYS[2], '1')
+if ARGV[2] ~= '' then redis.call('SET', KEYS[3], ARGV[2]) end
+if ARGV[3] ~= '' then redis.call('SET', KEYS[4], ARGV[3]) end
+return 1
+`;
+
+const REPLACE_PASS = `
+if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
+redis.call('SET', KEYS[1], ARGV[2])
 return 1
 `;
 
@@ -457,8 +467,9 @@ export class RedisBackend implements Backend {
     const result = Number(await this.redis.eval(CAS, casKeys, args));
     return result === -1 ? "missing_receipt" : result === 1;
   }
-  async init(id: string, state: string) {
-    return Number(await this.redis.eval(INIT, [k(id).state, k(id).version], [state])) === 1;
+  async init(id: string, state: string, access?: InitialAccess) {
+    const { state: stateKey, version, pass, owner } = k(id);
+    return Number(await this.redis.eval(INIT, [stateKey, version, pass, owner], [state, access?.passHash ?? "", access?.owner ?? ""])) === 1;
   }
   async log(id: string, limit: number) {
     const rows = await this.redis.lrange(k(id).log, 0, limit - 1);
@@ -470,8 +481,8 @@ export class RedisBackend implements Backend {
   async claimPass(id: string, hash: string) {
     return (await this.redis.set(k(id).pass, hash, { nx: true })) !== null;
   }
-  async setPass(id: string, hash: string) {
-    await this.redis.set(k(id).pass, hash);
+  async replacePass(id: string, expected: string, hash: string) {
+    return Number(await this.redis.eval(REPLACE_PASS, [k(id).pass], [expected, hash])) === 1;
   }
   async index() {
     return redisHash(await this.redis.hgetall("trips"));
@@ -511,7 +522,6 @@ export class RedisBackend implements Backend {
   async getDocument(key: string) { return this.redis.get(`document:${key}`); }
   async putDocument(key: string, value: string) { await this.redis.set(`document:${key}`, value, { nx: true }); }
   async owner(id: string) { return this.redis.get(k(id).owner); }
-  async setOwner(id: string, accountId: string) { await this.redis.set(k(id).owner, accountId); }
   async legacy() {
     const v = await this.redis.get("trip:v1:state");
     return v === null ? null : typeof v === "string" ? v : JSON.stringify(v);

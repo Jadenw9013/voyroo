@@ -49,6 +49,14 @@ export interface Session {
   accountId?: string;
 }
 
+export type PasscodeAccess = "owner" | "current-passcode" | "member";
+
+export async function passcodeAccess({ tripId, accountId }: Session): Promise<PasscodeAccess> {
+  const owner = await getStore().owner(tripId);
+  if (!owner) return "current-passcode";
+  return owner === accountId ? "owner" : "member";
+}
+
 export function encodeSession(s: Session): string {
   const payload = Buffer.from(JSON.stringify({ t: s.tripId, n: s.name, a: s.accountId, i: Date.now() })).toString("base64url");
   return `${payload}.${sign(payload)}`;
