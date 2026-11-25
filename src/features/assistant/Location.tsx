@@ -76,6 +76,6 @@ export function LocationControl({ location, disabled }: { location: ReturnType<t
     <button type="button" aria-describedby={descriptionId} onClick={ready || locating ? clear : locate} disabled={disabled && !ready && !locating} className="inline-flex min-h-11 shrink-0 items-center gap-1.5 text-sm font-semibold text-accent disabled:opacity-50">
       <Icon name="pin" className="size-4" />{buttonText}
     </button>
-    <p id={descriptionId} role="status" className="min-w-32 flex-1 text-xs leading-snug text-muted">{explanation}</p>
+    <p id={descriptionId} role="status" aria-label="Location status" className="min-w-32 flex-1 text-xs leading-snug text-muted">{explanation}</p>
   </div>;
 }

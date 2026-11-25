@@ -255,7 +255,7 @@ test("Ask Voyroo shares an approximate location only for the question it was att
   expect(first).not.toHaveProperty("location");
   expect(first.context.timeZone).toBe(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone));
   await locate.click();
-  await expect(sheet.getByRole("status")).toContainText("Location ready");
+  await expect(sheet.getByRole("status", { name: "Location status" })).toContainText("Location ready");
   await box.fill("Where can I buy groceries near me?");
   const nearby = await sendAndRead();
   expect(nearby.location).toMatchObject({ latitude: 14.557, longitude: -90.733, accuracy: 100, timestamp: expect.any(Number) });
@@ -277,7 +277,7 @@ test("a traveler can ask about a named area after denying location", async ({ pa
   await page.getByRole("button", { name: "Ask Voyroo", exact: true }).click();
   const sheet = page.getByRole("dialog", { name: "Ask Voyroo" });
   await sheet.getByRole("button", { name: "Use my location" }).click();
-  await expect(sheet.getByRole("status")).toContainText("type a place name");
+  await expect(sheet.getByRole("status", { name: "Location status" })).toContainText("type a place name");
   await sheet.getByRole("textbox", { name: "Message the assistant" }).fill("Where should we eat near Antigua's main square?");
   await sheet.getByRole("button", { name: "Send", exact: true }).click();
   await expect(sheet.getByText("Test Café Uno")).toBeVisible();

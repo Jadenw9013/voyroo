@@ -1,9 +1,10 @@
 "use client";
 
 import { Chat } from "@ai-sdk/react";
-import { DefaultChatTransport, type InferUITools, type UIMessage } from "ai";
+import type { InferUITools, UIMessage } from "ai";
 import type { AssistantTools } from "@/server/ai/tools";
 import type { Grounding } from "@/server/ai/grounding";
+import { ProgressTransport, ReplyActivity } from "./replyActivity";
 
 export type AssistantMessage = UIMessage<unknown, { grounding: Grounding }, InferUITools<AssistantTools>>;
 
@@ -12,7 +13,7 @@ export type AssistantMessage = UIMessage<unknown, { grounding: Grounding }, Infe
  * sheet to look at something and coming back picks up where you were.
  */
 
-const chats = new Map<string, Chat<AssistantMessage>>();
+const chats = new Map<string, { chat: Chat<AssistantMessage>; activity: ReplyActivity }>();
 
 /** Sends again on its own only after the person answers one of the assistant's questions. */
 function answeredQuestion({ messages }: { messages: AssistantMessage[] }): boolean {
@@ -22,12 +23,13 @@ function answeredQuestion({ messages }: { messages: AssistantMessage[] }): boole
   return part?.type === "tool-ask_user" && part.state === "output-available";
 }
 
-export function chatFor(tripId: string): Chat<AssistantMessage> {
-  let chat = chats.get(tripId);
-  if (!chat) {
-    chat = new Chat<AssistantMessage>({
+export function chatFor(tripId: string) {
+  let conversation = chats.get(tripId);
+  if (!conversation) {
+    const activity = new ReplyActivity();
+    const chat = new Chat<AssistantMessage>({
       id: `trip-${tripId}`,
-      transport: new DefaultChatTransport({
+      transport: new ProgressTransport({
         api: `/api/t/${tripId}/chat`,
         // Screenshots go once, with the message they came with: earlier ones aren't resent every turn.
         prepareSendMessagesRequest: ({ id, messages, body }) => {
@@ -45,12 +47,14 @@ export function chatFor(tripId: string): Chat<AssistantMessage> {
             },
           };
         },
-      }),
+      }, activity),
+      onFinish: ({ isAbort }) => activity.finish(isAbort),
       sendAutomaticallyWhen: answeredQuestion,
     });
-    chats.set(tripId, chat);
+    conversation = { chat, activity };
+    chats.set(tripId, conversation);
   }
-  return chat;
+  return conversation;
 }
 
 export function newConversation(tripId: string) {
