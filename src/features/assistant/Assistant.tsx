@@ -1,7 +1,7 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { newId } from "@/domain/ids";
 import { directionsUrl, mapsSearchUrl, telUrl } from "@/domain/links";
 import { formatDay, formatTime } from "@/domain/time";
@@ -19,7 +19,10 @@ import { GroundingAttribution } from "./GroundingAttribution";
 import { LocationControl, useAssistantLocation } from "./Location";
 import { shrink } from "./images";
 import { ReadAloud } from "./ReadAloud";
+import { ReplyStatus } from "./ReplyStatus";
 import { VoiceInput } from "./VoiceInput";
+
+type QueuedMessage = { text: string; images: string[]; afterTurn: number };
 
 /**
  * The assistant: answers with real places and sources, changes the trip
@@ -29,7 +32,8 @@ export function Assistant({ first, itemId, day }: { first: string; itemId: strin
   const { tripId, online, refresh, trip } = useTrip();
   // The same conversation all session, until "New conversation" (which re-renders to pick up the new one).
   const [conversationNumber, setConversationNumber] = useState(0);
-  const chat = chatFor(tripId);
+  const { chat, activity } = chatFor(tripId);
+  const progress = useSyncExternalStore(activity.subscribe, activity.getSnapshot, activity.getServerSnapshot);
   const { messages, sendMessage, status, error, regenerate, stop, addToolOutput } = useChat<AssistantMessage>({ chat });
   const [input, setInput] = useState("");
   const [images, setImages] = useState<string[]>([]);
@@ -96,16 +100,23 @@ export function Assistant({ first, itemId, day }: { first: string; itemId: strin
   }
 
   // Typed while an answer is still coming in: kept, and sent the moment it's done.
-  const [queued, setQueued] = useState<{ text: string; images: string[] } | null>(null);
+  const [queued, setQueued] = useState<QueuedMessage | null>(null);
+  const sendQueued = useCallback((message: QueuedMessage) => {
+    follow.current = "reply";
+    setQueued(null);
+    void sendMessage({
+      text: message.text || "Here's a screenshot.",
+      files: message.images.map((url, i) => ({ type: "file" as const, mediaType: "image/jpeg", url, filename: `screenshot-${i + 1}.jpg` })),
+    }, { body: { context: { day, itemId } } });
+  }, [day, itemId, sendMessage, setQueued]);
   useEffect(() => {
-    if (busy || voiceBusy || !queued) return;
-    const q = queued;
-    // The answer just finished streaming (outside React): send what was waiting.
+    if (status !== "ready" || !online || voiceBusy || !queued || progress.stage !== "idle" || queued.afterTurn !== progress.turn) return;
+    let cancelled = false;
     queueMicrotask(() => {
-      setQueued(null);
-      void sendMessage({ text: q.text || "Here's a screenshot.", files: q.images.map((url, i) => ({ type: "file" as const, mediaType: "image/jpeg", url, filename: `screenshot-${i + 1}.jpg` })) }, { body: { context: { day, itemId } } });
+      if (!cancelled && chat.status === "ready") sendQueued(queued);
     });
-  }, [busy, voiceBusy, queued, day, itemId, sendMessage]);
+    return () => { cancelled = true; };
+  }, [chat, online, progress, queued, sendQueued, status, voiceBusy]);
 
   function requestOptions() {
     const point = location.takePoint();
@@ -117,7 +128,8 @@ export function Assistant({ first, itemId, day }: { first: string; itemId: strin
     if (!online || voiceBusy || location.state.status === "locating" || (!text && !images.length)) return;
     follow.current = "reply";
     if (busy) {
-      setQueued({ text, images });
+      if (queued) return;
+      setQueued({ text, images, afterTurn: progress.turn });
       setInput("");
       setImages([]);
       return;
@@ -175,26 +187,27 @@ export function Assistant({ first, itemId, day }: { first: string; itemId: strin
             <Message
               key={m.id}
               m={m}
-              answerDisabled={voiceBusy}
+              answerDisabled={busy || voiceBusy}
               canReadAloud={!busy && !voiceBusy && m === messages.at(-1)}
               onAnswer={(toolCallId, output) => {
-                if (voiceBusy) return;
+                if (busy || voiceBusy) return;
                 follow.current = "reply";
                 void addToolOutput({ tool: "ask_user", toolCallId, output, options: requestOptions() });
               }}
             />
           ))}
-          {status === "submitted" && <p className="text-base text-muted">Thinking…</p>}
           {queued && (
             <div className="ml-10 flex flex-col items-end gap-1 self-end opacity-70">
-              <p className="rounded-2xl rounded-br-md bg-accent px-4 py-2.5 text-base whitespace-pre-wrap text-on-accent">{queued.text}</p>
-              <p className="text-sm text-muted">Sends when this answer finishes</p>
+              <p className="rounded-2xl rounded-br-md bg-accent px-4 py-2.5 text-base whitespace-pre-wrap text-on-accent">{queued.text || "Screenshot queued"}</p>
+              {busy && queued.afterTurn === progress.turn
+                ? <p className="text-sm text-muted">Sends when this answer finishes</p>
+                : <button type="button" className={`${btn.quiet} text-sm`} disabled={busy || !online || voiceBusy} onClick={() => sendQueued(queued)}>Send queued message</button>}
             </div>
           )}
           {error && (
             <div role="alert" className="flex flex-col gap-2 rounded-2xl bg-todo-soft p-3">
               <p className="text-base font-semibold text-todo">{online ? friendly(error.message) : "You're offline. The assistant needs a connection; your message is kept."}</p>
-              <button type="button" onClick={() => void regenerate(requestOptions())} disabled={!online || voiceBusy || location.state.status === "locating"} className={`${btn.secondary} self-start`}>
+              <button type="button" onClick={() => { follow.current = "reply"; void regenerate(requestOptions()); }} disabled={!online || voiceBusy || location.state.status === "locating"} className={`${btn.secondary} self-start`}>
                 Try again
               </button>
             </div>
@@ -202,6 +215,7 @@ export function Assistant({ first, itemId, day }: { first: string; itemId: strin
         </div>
       </div>
 
+      <ReplyStatus progress={progress} busy={busy} online={online} />
       <div className="max-h-[65%] shrink-0 overflow-y-auto overscroll-contain border-t border-line bg-surface px-4 pt-3 pb-[max(0.25rem,env(safe-area-inset-bottom))] sm:px-5">
         {images.length > 0 && (
           <ul className="mb-3 flex flex-wrap gap-3">
@@ -280,8 +294,9 @@ export function Assistant({ first, itemId, day }: { first: string; itemId: strin
             }}
           />
           {busy ? (
-            <button type="button" onClick={() => void stop()} aria-label="Stop" className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-sunken">
+            <button type="button" onClick={() => void stop()} aria-label="Stop" title="Stop reply" className="flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-sunken px-3 text-sm font-semibold text-ink">
               <span className="size-3 rounded-sm bg-ink" />
+              Stop
             </button>
           ) : (
             <button type="submit" disabled={!online || voiceBusy || location.state.status === "locating" || (!input.trim() && !images.length)} aria-label="Send" className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-accent text-on-accent disabled:opacity-40">
@@ -336,21 +351,6 @@ function Message({ m, onAnswer, answerDisabled, canReadAloud }: { m: AssistantMe
         if (p.type === "tool-add_items" || p.type === "tool-update_items" || p.type === "tool-remove_items" || p.type === "tool-add_todos" || p.type === "tool-add_expenses" || p.type === "tool-add_comment") {
           if (p.state === "output-available") return <ChangeCard key={key} result={p.output as ChangeResult} expenses={p.type === "tool-add_expenses"} />;
           if (p.state === "output-error") return <p key={key} className="text-base text-danger">That change didn&apos;t work: {p.errorText}</p>;
-          return (
-            <p key={key} className="text-base text-muted">
-              Updating the trip…
-            </p>
-          );
-        }
-        // Google's own tools aren't in our tool types: they arrive as provider-run parts.
-        const t = p.type as string;
-        if (t.startsWith("tool-google_") || t === "tool-url_context") {
-          const what = t === "tool-google_maps" ? "Checking Google Maps…" : t === "tool-url_context" ? "Reading the link…" : "Searching Google…";
-          return "state" in p && p.state !== "output-available" ? (
-            <p key={key} className="text-sm text-muted">
-              {what}
-            </p>
-          ) : null;
         }
         return null;
       })}

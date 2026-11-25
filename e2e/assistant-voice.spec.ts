@@ -44,6 +44,118 @@ async function replyWith(page: Page, answer: string) {
   }));
 }
 
+declare global {
+  interface Window {
+    testReplies: { open: () => void; chunk: (chunk: object) => void; close: () => void }[];
+  }
+}
+
+/** Keep the browser on the real chat transport while controlling exactly when each SSE event arrives. */
+async function controlReplies(page: Page) {
+  await page.addInitScript(() => {
+    window.testReplies = [];
+    const realFetch = window.fetch;
+    window.fetch = (input, init) => {
+      if (input !== "/api/t/guatemala/chat") return realFetch(input, init);
+      return new Promise<Response>((resolve, reject) => {
+        const encoder = new TextEncoder();
+        let controller: ReadableStreamDefaultController<Uint8Array>;
+        const body = new ReadableStream<Uint8Array>({ start: (stream) => { controller = stream; } });
+        window.testReplies.push({
+          open: () => resolve(new Response(body, { headers: { "content-type": "text/event-stream" } })),
+          chunk: (chunk) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`)),
+          close: () => controller.close(),
+        });
+        init?.signal?.addEventListener("abort", () => {
+          const error = new DOMException("Stopped", "AbortError");
+          reject(error);
+          controller.error(error);
+        }, { once: true });
+      });
+    };
+  });
+}
+
+test("live reply progress shows motion, a quiet warning, and recovery after new text arrives", async ({ page }, info) => {
+  await controlReplies(page);
+  await page.setViewportSize({ width: 390, height: 650 });
+  const sheet = await openAssistant(page);
+  await page.clock.install();
+  await sheet.getByRole("textbox", { name: "Message the assistant" }).fill("What’s nearby?");
+  await sheet.getByRole("button", { name: "Send", exact: true }).click();
+  const progress = sheet.getByRole("status", { name: "Reply progress" });
+  await expect(progress).toContainText("Sending your question");
+  const bars = progress.locator(".reply-progress-bars i");
+  await expect(bars.first()).toHaveCSS("animation-name", "reply-progress");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(bars.first()).toHaveCSS("animation-name", "none");
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.evaluate(() => window.testReplies[0].open());
+  await expect(progress).toContainText("Waiting for the assistant");
+  await page.evaluate(() => {
+    const reply = window.testReplies[0];
+    reply.chunk({ type: "start", messageId: "progress-test" });
+    reply.chunk({ type: "tool-input-available", toolCallId: "map", toolName: "google_maps", input: {}, providerExecuted: true });
+  });
+  await expect(progress).toContainText("Checking Google Maps");
+  await page.clock.fastForward(21_000);
+  await expect(progress).toContainText("No update for 20 seconds");
+  await expect(bars).toHaveCount(0);
+  await expect(sheet.getByRole("button", { name: "Stop", exact: true })).toBeInViewport();
+  await page.screenshot({ path: info.outputPath("reply-quiet.png") });
+  await page.evaluate(() => {
+    const reply = window.testReplies[0];
+    reply.chunk({ type: "tool-output-available", toolCallId: "map", output: {}, providerExecuted: true });
+    reply.chunk({ type: "text-start", id: "answer" });
+    reply.chunk({ type: "text-delta", id: "answer", delta: "There’s a market nearby." });
+  });
+  await expect(progress).toContainText("Writing your reply");
+  await page.screenshot({ path: info.outputPath("reply-writing.png") });
+  await page.evaluate(() => {
+    const reply = window.testReplies[0];
+    reply.chunk({ type: "text-end", id: "answer" });
+    reply.chunk({ type: "finish", finishReason: "stop" });
+    reply.close();
+  });
+  await expect(progress).toBeEmpty();
+  await expect(sheet.getByText("There’s a market nearby.")).toBeVisible();
+});
+
+test("a stopped reply holds a queued question, and an interrupted stream offers retry", async ({ page }) => {
+  await controlReplies(page);
+  const sheet = await openAssistant(page);
+  const field = sheet.getByRole("textbox", { name: "Message the assistant" });
+  await field.fill("What’s nearby?");
+  await sheet.getByRole("button", { name: "Send", exact: true }).click();
+  await field.fill("Is there a place for breakfast?");
+  await field.press("Enter");
+  await expect(sheet.getByText("Sends when this answer finishes")).toBeVisible();
+  await sheet.getByRole("button", { name: "Stop", exact: true }).click();
+  await expect(sheet.getByRole("status", { name: "Reply progress" })).toContainText("Reply stopped");
+  const sendQueued = sheet.getByRole("button", { name: "Send queued message" });
+  await expect(sendQueued).toBeEnabled();
+  expect(await page.evaluate(() => window.testReplies.length)).toBe(1);
+  await sendQueued.click();
+  await page.evaluate(() => {
+    const reply = window.testReplies[1];
+    reply.open();
+    reply.chunk({ type: "start", messageId: "interrupted-test" });
+    reply.close();
+  });
+  await expect(sheet.getByRole("alert")).toContainText("The connection closed before the reply finished");
+  await sheet.getByRole("button", { name: "Try again" }).click();
+  await page.evaluate(() => {
+    const reply = window.testReplies[2];
+    reply.open();
+    reply.chunk({ type: "text-start", id: "retry" });
+    reply.chunk({ type: "text-delta", id: "retry", delta: "The market opens at eight." });
+    reply.chunk({ type: "text-end", id: "retry" });
+    reply.chunk({ type: "finish" });
+    reply.close();
+  });
+  await expect(sheet.getByText("The market opens at eight.")).toBeVisible();
+});
+
 for (const [name, viewport] of [
   ["phone", { width: 390, height: 650 }],
   ["desktop", { width: 1000, height: 760 }],
