@@ -13,6 +13,7 @@ import { btn, field, label, SectionTitle } from "@/ui/kit";
 import { Sheet } from "@/ui/Sheet";
 import { AccountPanel } from "../account/AccountPanel";
 import { Essentials } from "../essentials/Essentials";
+import { ChangePasscode } from "./ChangePasscode";
 import { ShareTrip } from "./ShareTrip";
 
 /** Trip: essentials, details, people and invites, trip-wide notes, costs, what changed, and display settings. */
@@ -29,10 +30,13 @@ export function TripSettings({ section }: { section?: "essentials" } = {}) {
             {formatRange(trip.startDate, trip.endDate)} in {trip.destination}
           </p>
         </div>
-        <button type="button" onClick={() => setEditing(true)} className={btn.secondary}>
-          <Icon name="pencil" className="size-4" />
-          Edit trip details
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => setEditing(true)} className={btn.secondary}>
+            <Icon name="pencil" className="size-4" />
+            Edit trip details
+          </button>
+          <ChangePasscode />
+        </div>
       </header>
 
       <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-2">
@@ -67,7 +71,6 @@ export function TripSettings({ section }: { section?: "essentials" } = {}) {
 function People() {
   const { trip, me, apply, setMe, verified } = useTrip();
   const [renaming, setRenaming] = useState(false);
-  const [passOpen, setPassOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
   const everyone = [...new Set([me, ...trip.people])];
 
@@ -108,14 +111,10 @@ function People() {
           <Icon name="share" />
           Invite someone
         </button>
-        <button type="button" onClick={() => setPassOpen(true)} className={btn.quiet}>
-          Change passcode
-        </button>
       </div>
       <p className="mt-2 text-sm text-muted">The link alone doesn&apos;t open the trip. They also need the passcode, so send it another way.</p>
 
       {renaming && <RenameSheet onClose={() => setRenaming(false)} setMe={setMe} me={me} />}
-      {passOpen && <PasscodeSheet onClose={() => setPassOpen(false)} />}
       {sharing && <ShareTrip onClose={() => setSharing(false)} />}
     </section>
   );
@@ -143,46 +142,6 @@ function RenameSheet({ me, setMe, onClose }: { me: string; setMe: (n: string) =>
         {error && <p className="font-semibold text-danger">{error}</p>}
         <button type="submit" className={`${btn.primary} self-start`}>
           Save
-        </button>
-      </form>
-    </Sheet>
-  );
-}
-
-function PasscodeSheet({ onClose }: { onClose: () => void }) {
-  const { tripId, notify } = useTrip();
-  const [cur, setCur] = useState("");
-  const [next, setNext] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  return (
-    <Sheet open onClose={onClose} title="Change passcode">
-      <form
-        onSubmit={async (e) => {
-          e.preventDefault();
-          try {
-            const res = await fetch(`/api/t/${tripId}/me`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ passcode: cur, newPasscode: next }) });
-            const body = await res.json();
-            if (!res.ok) return setError(body.error);
-            notify("Passcode changed. Anyone already in stays in.");
-            onClose();
-          } catch {
-            setError("Changing the passcode needs a connection.");
-          }
-        }}
-        className="flex flex-col gap-3 pt-1"
-      >
-        <label className={label}>
-          Current passcode
-          <input type="password" value={cur} onChange={(e) => setCur(e.target.value)} autoComplete="current-password" className={field} />
-          <span className="text-sm text-muted">If you made this trip while signed in with Google, you can leave this blank.</span>
-        </label>
-        <label className={label}>
-          New passcode
-          <input type="password" value={next} onChange={(e) => setNext(e.target.value)} minLength={4} autoComplete="new-password" className={field} />
-        </label>
-        {error && <p className="font-semibold text-danger">{error}</p>}
-        <button type="submit" disabled={next.length < 4} className={`${btn.primary} self-start`}>
-          Change passcode
         </button>
       </form>
     </Sheet>

@@ -8,6 +8,7 @@ import { tripCoverUrl } from "@/domain/links";
 import { formatRange } from "@/domain/time";
 import { useView, type View } from "@/client/router";
 import { TripProvider, useTrip } from "@/client/store";
+import type { PasscodeAccess } from "@/server/auth";
 import { Avatar } from "@/ui/badges";
 import { Icon, type IconName } from "@/ui/Icon";
 import { ToastBar } from "@/ui/kit";
@@ -22,9 +23,11 @@ import { Brand } from "@/ui/Brand";
 import { ShareTrip } from "./trip/ShareTrip";
 import { HeldEdits } from "./HeldEdits";
 
-export function TripApp({ tripId, initial, me, serverNow, verified }: { tripId: string; initial: TripState; me: string; serverNow: number; verified?: string[] }) {
+export function TripApp({ tripId, initial, me, serverNow, verified, passcodeAccess }: {
+  tripId: string; initial: TripState; me: string; serverNow: number; verified?: string[]; passcodeAccess: PasscodeAccess;
+}) {
   return (
-    <TripProvider tripId={tripId} initial={initial} me={me} serverNow={serverNow} verified={verified}>
+    <TripProvider tripId={tripId} initial={initial} me={me} serverNow={serverNow} verified={verified} passcodeAccess={passcodeAccess}>
       <ComposerProvider serverNow={serverNow}>
         <Screens tripId={tripId} serverNow={serverNow} />
       </ComposerProvider>

@@ -5,6 +5,7 @@ import { prepareChange, type ChangeEntry } from "@/domain/change";
 import { newId } from "@/domain/ids";
 import { itemsTouched, type Op } from "@/domain/ops";
 import type { Trip, TripState } from "@/domain/types";
+import type { PasscodeAccess } from "@/server/auth";
 import { useOnline } from "./hooks";
 import { drain, nextRetryAt, release, settle, verdictFor, type Pending, type Verdict } from "./outbox";
 
@@ -45,6 +46,7 @@ interface StoreValue {
   resolveHeld(key: string, choice: "send" | "discard"): void;
   /** Names in the group who joined with a Google account. */
   verified: string[];
+  passcodeAccess: PasscodeAccess;
   /** When the copy on screen last came from the server, epoch ms. */
   syncedAt: number;
   apply(ops: Op[], opts?: { confirmed?: boolean; message?: string }): Promise<ApplyOutcome>;
@@ -100,7 +102,9 @@ interface Sent {
 
 const NO_NAMES: string[] = [];
 
-export function TripProvider({ tripId, initial, me: initialMe, serverNow, verified = NO_NAMES, children }: { tripId: string; initial: TripState; me: string; serverNow: number; verified?: string[]; children: ReactNode }) {
+export function TripProvider({ tripId, initial, me: initialMe, serverNow, verified = NO_NAMES, passcodeAccess, children }: {
+  tripId: string; initial: TripState; me: string; serverNow: number; verified?: string[]; passcodeAccess: PasscodeAccess; children: ReactNode;
+}) {
   const online = useOnline();
   const [server, setServer] = useState<TripState>(initial);
   const [syncedAt, setSyncedAt] = useState(serverNow);
@@ -326,6 +330,7 @@ export function TripProvider({ tripId, initial, me: initialMe, serverNow, verifi
     held,
     resolveHeld,
     verified,
+    passcodeAccess,
     syncedAt,
     apply,
     undo,

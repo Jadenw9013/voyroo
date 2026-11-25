@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { connection } from "next/server";
 import { TripApp } from "@/features/TripApp";
-import { readSession } from "@/server/auth";
+import { passcodeAccess, readSession } from "@/server/auth";
 import { getStore } from "@/server/db";
 import { TRIP_ID } from "@/server/http";
 import { googleConfigured } from "@/server/google";
@@ -38,7 +38,10 @@ export default async function TripPage({ params }: { params: Promise<{ tripId: s
   const { state, readAt } = await load(tripId);
   if (!state) notFound();
   // Names that joined with Google get a badge; everyone else is still in the group.
-  const verified = googleConfigured() ? Object.keys(await getStore().tripAccounts(tripId)) : [];
+  const [passcode, accounts] = await Promise.all([
+    passcodeAccess(session),
+    googleConfigured() ? getStore().tripAccounts(tripId) : {},
+  ]);
 
-  return <TripApp tripId={tripId} initial={state} me={session.name} serverNow={readAt} verified={verified} />;
+  return <TripApp tripId={tripId} initial={state} me={session.name} serverNow={readAt} verified={Object.keys(accounts)} passcodeAccess={passcode} />;
 }

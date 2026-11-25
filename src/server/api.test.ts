@@ -289,7 +289,7 @@ describe("joining from one address", () => {
 describe("changing the passcode", () => {
   const change = (body: Record<string, unknown>) => meRoute.POST(post(body), ctx());
 
-  it("needs the current passcode, even from a Google member who didn't make the trip", async () => {
+  it("requires the current passcode on an ownerless trip", async () => {
     await join("Sam", "volcano");
     expect((await change({ newPasscode: "lava-rocks" })).status).toBe(403);
     expect((await change({ passcode: "wrong", newPasscode: "lava-rocks" })).status).toBe(403);
@@ -305,16 +305,32 @@ describe("changing the passcode", () => {
     expect((await change({ passcode: "volcano", newPasscode: "lava-rocks" })).status).toBe(429);
   });
 
-  it("lets the Google account that made the trip change it without the old one", async () => {
+  it("only lets the Google account that created an owned trip change its passcode", async () => {
     const store = getStore();
     const trip = { schema: 2 as const, id: "owned-trip", name: "Owned", destination: "Lima", startDate: "2027-03-01", endDate: "2027-03-03", tz: "America/Lima", currency: "PEN", people: ["Ana"], items: [], todos: [] };
     await store.create(trip, await hashPasscode("generated-pass"), "a".repeat(64));
     await store.rememberTrip("a".repeat(64), "owned-trip", "Ana");
     jar.set(ACCOUNT_COOKIE, seal("account", { id: "a".repeat(64), name: "Ana", email: "ana@example.com" }, 600));
-    expect((await meRoute.POST(post({ newPasscode: "new-pass" }), ctx("owned-trip"))).status).toBe(200);
+    const owned = ctx("owned-trip");
+    expect((await meRoute.POST(post({ newPasscode: "new-pass" }, { "sec-fetch-site": "cross-site" }), owned)).status).toBe(403);
+    expect((await meRoute.POST(post({ newPasscode: "new-pass" }), owned)).status).toBe(200);
     jar.set(ACCOUNT_COOKIE, seal("account", { id: "b".repeat(64), name: "Bo", email: "bo@example.com" }, 600));
     await store.rememberTrip("b".repeat(64), "owned-trip", "Bo");
-    expect((await meRoute.POST(post({ newPasscode: "bo-pass" }), ctx("owned-trip"))).status).toBe(403);
+    expect((await meRoute.POST(post({ passcode: "new-pass", newPasscode: "bo-pass" }), owned)).status).toBe(403);
+    jar.clear();
+    expect((await joinRoute.POST(post({ name: "Ana", passcode: "generated-pass" }), owned)).status).toBe(403);
+    expect((await joinRoute.POST(post({ name: "Ana", passcode: "new-pass" }), owned)).status).toBe(200);
+    expect((await meRoute.POST(post({ passcode: "new-pass", newPasscode: "guest-pass" }), owned)).status).toBe(403);
+  });
+
+  it("does not overwrite a passcode changed after the previous one was checked", async () => {
+    await join();
+    const store = getStore();
+    const oldHash = (await store.getPass("guatemala"))!;
+    const newHash = await hashPasscode("new-pass");
+    expect(await store.replacePass("guatemala", oldHash, newHash)).toBe(true);
+    expect(await store.replacePass("guatemala", oldHash, await hashPasscode("stale-change"))).toBe(false);
+    expect(await store.getPass("guatemala")).toBe(newHash);
   });
 });
 
